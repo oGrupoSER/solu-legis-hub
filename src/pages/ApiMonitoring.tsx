@@ -9,6 +9,7 @@ import { RefreshCw, TrendingUp, TrendingDown, Activity } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
+import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 
 interface ApiRequest {
   id: string;
@@ -145,6 +146,13 @@ const ApiMonitoring = () => {
 
   return (
     <div className="container py-8 space-y-6">
+      <BreadcrumbNav
+        items={[
+          { label: "Dashboard", href: "/" },
+          { label: "Monitoramento de API" },
+        ]}
+      />
+      
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Monitoramento de API</h1>

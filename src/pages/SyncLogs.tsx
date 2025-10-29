@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { RefreshCw, Clock, CheckCircle2, XCircle, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 
 interface SyncLog {
   id: string;
@@ -109,15 +110,42 @@ const SyncLogs = () => {
 
   return (
     <div className="container py-8 space-y-6">
+      <BreadcrumbNav
+        items={[
+          { label: "Dashboard", href: "/" },
+          { label: "Logs de Sincronização" },
+        ]}
+      />
+      
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Logs de Sincronização</h1>
           <p className="text-muted-foreground mt-1">Histórico de sincronizações com parceiros</p>
         </div>
-        <Button onClick={fetchLogs} variant="outline" size="sm" className="gap-2">
-          <RefreshCw className="h-4 w-4" />
-          Atualizar
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={async () => {
+              try {
+                await supabase.functions.invoke("sync-orchestrator", {
+                  body: { mode: "parallel" },
+                });
+                toast.success("Sincronização geral iniciada");
+              } catch (error) {
+                toast.error("Erro ao iniciar sincronização");
+              }
+            }}
+            variant="default"
+            size="sm"
+            className="gap-2"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Sincronizar Tudo
+          </Button>
+          <Button onClick={fetchLogs} variant="outline" size="sm" className="gap-2">
+            <RefreshCw className="h-4 w-4" />
+            Atualizar
+          </Button>
+        </div>
       </div>
 
       <Card>

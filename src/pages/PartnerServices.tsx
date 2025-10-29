@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
 import PartnerServicesTable from "@/components/partners/PartnerServicesTable";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "sonner";
+import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 
 const PartnerServices = () => {
   const navigate = useNavigate();
@@ -15,11 +14,7 @@ const PartnerServices = () => {
 
   useEffect(() => {
     if (!partnerId) {
-      toast({
-        title: "Erro",
-        description: "ID do parceiro não fornecido",
-        variant: "destructive",
-      });
+      toast.error("ID do parceiro não fornecido");
       navigate("/");
       return;
     }
@@ -41,11 +36,7 @@ const PartnerServices = () => {
       setPartnerName(data.name);
     } catch (error) {
       console.error("Error fetching partner:", error);
-      toast({
-        title: "Erro",
-        description: "Não foi possível carregar as informações do parceiro",
-        variant: "destructive",
-      });
+      toast.error("Não foi possível carregar as informações do parceiro");
       navigate("/");
     } finally {
       setIsLoading(false);
@@ -53,18 +44,21 @@ const PartnerServices = () => {
   };
 
   if (isLoading) {
-    return <div className="flex justify-center items-center h-screen">Carregando...</div>;
+    return (
+      <div className="container py-8">
+        <div className="text-center text-muted-foreground">Carregando...</div>
+      </div>
+    );
   }
 
   return (
-    <div className="container mx-auto py-8">
-      <div className="mb-6">
-        <Button variant="ghost" onClick={() => navigate("/")} className="mb-4">
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Voltar
-        </Button>
-      </div>
-
+    <div className="container py-8 space-y-6">
+      <BreadcrumbNav
+        items={[
+          { label: "Dashboard", href: "/" },
+          { label: partnerName },
+        ]}
+      />
       {partnerId && <PartnerServicesTable partnerId={partnerId} partnerName={partnerName} />}
     </div>
   );
