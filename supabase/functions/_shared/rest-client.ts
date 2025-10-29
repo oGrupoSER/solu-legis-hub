@@ -89,7 +89,8 @@ export class RestClient {
     console.log(`REST GET: ${url}`);
 
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+      'Accept': 'text/xml, application/xml, application/json, */*',
+      'User-Agent': 'Lovable-Sync/1.0',
     };
 
     // Add authentication as headers if authInQuery is false (default)
