@@ -116,34 +116,47 @@ async function createTerm(
   term: string,
   termType: string
 ): Promise<any> {
-  // Call SOAP service to register term
-  const soapMethod = termType === 'office' ? 'cadastrar' : 'cadastrar';
-  const soapParams = termType === 'office' 
-    ? { nomeEscritorio: term }
-    : { nomePesquisa: term };
+  console.log(`Creating ${termType}: ${term}`);
 
-  const soapResult = await soapClient.call(soapMethod, soapParams);
-  console.log('SOAP cadastrar result:', soapResult);
+  try {
+    // First, register with SOAP service
+    await soapClient.call('cadastrar', {});
 
-  // Insert into local database
-  const { data, error } = await supabase
-    .from('search_terms')
-    .insert({
-      partner_id: service.partner_id,
-      partner_service_id: service.id,
-      term,
-      term_type: termType,
-      is_active: true,
-    })
-    .select()
-    .single();
+    // Then set the term based on type
+    if (termType === 'office') {
+      await soapClient.call('setEscritorio', { escritorio: term });
+    } else if (termType === 'name') {
+      await soapClient.call('setNomePesquisa', { nomePesquisa: term });
+    } else {
+      throw new Error(`Invalid term type: ${termType}`);
+    }
 
-  if (error) {
-    console.error('Error inserting term:', error);
-    throw error;
+    console.log('SOAP registration successful');
+
+    // Insert into local database
+    const { data, error } = await supabase
+      .from('search_terms')
+      .insert({
+        partner_id: service.partner_id,
+        partner_service_id: service.id,
+        term,
+        term_type: termType,
+        is_active: true,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error inserting term:', error);
+      throw error;
+    }
+
+    return { local: data };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Error creating term:', message);
+    throw new Error(`Failed to create term: ${message}`);
   }
-
-  return { local: data, soap: soapResult };
 }
 
 /**
@@ -157,40 +170,57 @@ async function updateTerm(
   newTerm: string,
   termType: string
 ): Promise<any> {
-  // Get current term
-  const { data: currentTerm, error: fetchError } = await supabase
-    .from('search_terms')
-    .select('*')
-    .eq('id', termId)
-    .single();
+  console.log(`Updating term ${termId} to: ${newTerm}`);
 
-  if (fetchError || !currentTerm) {
-    throw new Error('Term not found');
+  try {
+    // Get current term
+    const { data: currentTerm, error: fetchError } = await supabase
+      .from('search_terms')
+      .select('*')
+      .eq('id', termId)
+      .single();
+
+    if (fetchError || !currentTerm) {
+      throw new Error('Term not found');
+    }
+
+    // If term changed, update in Solucionare
+    if (currentTerm.term !== newTerm) {
+      // Remove old term
+      if (termType === 'office') {
+        await soapClient.call('remover', { escritorio: currentTerm.term });
+      } else if (termType === 'name') {
+        await soapClient.call('remover', { nomePesquisa: currentTerm.term });
+      }
+
+      // Add new term
+      await soapClient.call('cadastrar', {});
+      if (termType === 'office') {
+        await soapClient.call('setEscritorio', { escritorio: newTerm });
+      } else if (termType === 'name') {
+        await soapClient.call('setNomePesquisa', { nomePesquisa: newTerm });
+      }
+    }
+
+    // Update in local database
+    const { data, error } = await supabase
+      .from('search_terms')
+      .update({ term: newTerm, updated_at: new Date().toISOString() })
+      .eq('id', termId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating term:', error);
+      throw error;
+    }
+
+    return { local: data };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Error updating term:', message);
+    throw new Error(`Failed to update term: ${message}`);
   }
-
-  // Call SOAP service to update term
-  const soapMethod = 'setEscritorio';
-  const soapParams = termType === 'office'
-    ? { nomeEscritorioAntigo: currentTerm.term, nomeEscritorioNovo: newTerm }
-    : { nomePesquisaAntigo: currentTerm.term, nomePesquisaNovo: newTerm };
-
-  const soapResult = await soapClient.call(soapMethod, soapParams);
-  console.log('SOAP setEscritorio result:', soapResult);
-
-  // Update in local database
-  const { data, error } = await supabase
-    .from('search_terms')
-    .update({ term: newTerm, updated_at: new Date().toISOString() })
-    .eq('id', termId)
-    .select()
-    .single();
-
-  if (error) {
-    console.error('Error updating term:', error);
-    throw error;
-  }
-
-  return { local: data, soap: soapResult };
 }
 
 /**
@@ -203,40 +233,48 @@ async function deleteTerm(
   termId: string,
   termType: string
 ): Promise<any> {
-  // Get current term
-  const { data: currentTerm, error: fetchError } = await supabase
-    .from('search_terms')
-    .select('*')
-    .eq('id', termId)
-    .single();
+  console.log(`Deleting term: ${termId}`);
 
-  if (fetchError || !currentTerm) {
-    throw new Error('Term not found');
+  try {
+    // Get current term
+    const { data: currentTerm, error: fetchError } = await supabase
+      .from('search_terms')
+      .select('*')
+      .eq('id', termId)
+      .single();
+
+    if (fetchError || !currentTerm) {
+      throw new Error('Term not found');
+    }
+
+    // Remove from Solucionare
+    if (termType === 'office') {
+      await soapClient.call('remover', { escritorio: currentTerm.term });
+    } else if (termType === 'name') {
+      await soapClient.call('remover', { nomePesquisa: currentTerm.term });
+    }
+
+    console.log('SOAP removal successful');
+
+    // Mark as inactive in local database (soft delete)
+    const { data, error } = await supabase
+      .from('search_terms')
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq('id', termId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error deleting term:', error);
+      throw error;
+    }
+
+    return { local: data };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Error deleting term:', message);
+    throw new Error(`Failed to delete term: ${message}`);
   }
-
-  // Call SOAP service to remove term
-  const soapMethod = 'remover';
-  const soapParams = termType === 'office'
-    ? { nomeEscritorio: currentTerm.term }
-    : { nomePesquisa: currentTerm.term };
-
-  const soapResult = await soapClient.call(soapMethod, soapParams);
-  console.log('SOAP remover result:', soapResult);
-
-  // Mark as inactive in local database (soft delete)
-  const { data, error } = await supabase
-    .from('search_terms')
-    .update({ is_active: false, updated_at: new Date().toISOString() })
-    .eq('id', termId)
-    .select()
-    .single();
-
-  if (error) {
-    console.error('Error deleting term:', error);
-    throw error;
-  }
-
-  return { local: data, soap: soapResult };
 }
 
 /**

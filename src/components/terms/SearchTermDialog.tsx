@@ -17,7 +17,7 @@ interface SearchTermDialogProps {
 export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogProps) => {
   const [formData, setFormData] = useState({
     term: "",
-    term_type: "processes",
+    term_type: "office",
     partner_id: "",
     partner_service_id: "",
     is_active: true,
@@ -32,7 +32,7 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
       if (term) {
         setFormData({
           term: term.term || "",
-          term_type: term.term_type || "processes",
+          term_type: term.term_type || "office",
           partner_id: term.partner_id || "",
           partner_service_id: term.partner_service_id || "",
           is_active: term.is_active ?? true,
@@ -126,9 +126,8 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="processes">Processos</SelectItem>
-                <SelectItem value="distributions">Distribuições</SelectItem>
-                <SelectItem value="publications">Publicações</SelectItem>
+                <SelectItem value="office">Escritório</SelectItem>
+                <SelectItem value="name">Nome de Pesquisa</SelectItem>
               </SelectContent>
             </Select>
           </div>

@@ -6,7 +6,13 @@ import { FileText, CheckCircle, Search } from "lucide-react";
 
 export const TermsStats = () => {
   const [stats, setStats] = useState<any[]>([]);
-  const [totals, setTotals] = useState({ total: 0, active: 0, withMatches: 0 });
+  const [totals, setTotals] = useState({ 
+    total: 0, 
+    active: 0, 
+    withMatches: 0,
+    offices: 0,
+    names: 0,
+  });
 
   useEffect(() => {
     fetchStats();
@@ -48,6 +54,8 @@ export const TermsStats = () => {
         total: terms?.length || 0,
         active: terms?.filter((t) => t.is_active).length || 0,
         withMatches: termStats.filter((t) => t.matches > 0).length,
+        offices: terms?.filter((t) => t.term_type === 'office').length || 0,
+        names: terms?.filter((t) => t.term_type === 'name').length || 0,
       });
     } catch (error) {
       console.error("Error fetching stats:", error);
@@ -55,7 +63,7 @@ export const TermsStats = () => {
   };
 
   return (
-    <div className="grid gap-4 md:grid-cols-3 mb-6">
+    <div className="grid gap-4 md:grid-cols-5 mb-6">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm font-medium">Total de Termos</CardTitle>
@@ -64,6 +72,28 @@ export const TermsStats = () => {
         <CardContent>
           <div className="text-2xl font-bold">{totals.total}</div>
           <p className="text-xs text-muted-foreground">{totals.active} ativos</p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Escritórios</CardTitle>
+          <FileText className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">{totals.offices}</div>
+          <p className="text-xs text-muted-foreground">Cadastrados</p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium">Nomes</CardTitle>
+          <FileText className="h-4 w-4 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">{totals.names}</div>
+          <p className="text-xs text-muted-foreground">De pesquisa</p>
         </CardContent>
       </Card>
 
@@ -92,7 +122,7 @@ export const TermsStats = () => {
       </Card>
 
       {stats.length > 0 && (
-        <Card className="md:col-span-3">
+        <Card className="md:col-span-5">
           <CardHeader>
             <CardTitle>Top 10 Termos por Matches</CardTitle>
           </CardHeader>

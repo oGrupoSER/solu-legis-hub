@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, Edit, Trash2, Download } from "lucide-react";
+import { Plus, Search, Edit, Trash2, Download, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { SearchTermDialog } from "@/components/terms/SearchTermDialog";
 import { TermsStats } from "@/components/terms/TermsStats";
@@ -33,6 +33,8 @@ const SearchTerms = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStats, setSyncStats] = useState<any>(null);
 
   useEffect(() => {
     fetchTerms();
@@ -101,6 +103,50 @@ const SearchTerms = () => {
     setDialogOpen(true);
   };
 
+  const handleSync = async () => {
+    setIsSyncing(true);
+    setSyncStats(null);
+    
+    try {
+      // Get the first publications service
+      const { data: services } = await supabase
+        .from('partner_services')
+        .select('id')
+        .eq('service_type', 'publications')
+        .eq('is_active', true)
+        .limit(1);
+
+      if (!services || services.length === 0) {
+        toast.error("Nenhum serviço de publicações ativo encontrado");
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('sync-search-terms', {
+        body: { serviceId: services[0].id }
+      });
+
+      if (error) throw error;
+
+      setSyncStats(data);
+      
+      const totalImported = data.officesImported + data.namesImported;
+      const totalUpdated = data.officesUpdated + data.namesUpdated;
+      
+      if (data.errors && data.errors.length > 0) {
+        toast.warning(`Sincronização concluída com avisos: ${totalImported} importados, ${totalUpdated} atualizados, ${data.errors.length} erros`);
+      } else {
+        toast.success(`Sincronização concluída: ${totalImported} novos termos, ${totalUpdated} atualizados`);
+      }
+      
+      fetchTerms();
+    } catch (error: any) {
+      console.error('Sync error:', error);
+      toast.error(error.message || "Erro ao sincronizar com Solucionare");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleExport = () => {
     const csv = [
       ["Termo", "Tipo", "Parceiro", "Serviço", "Status"],
@@ -126,6 +172,8 @@ const SearchTerms = () => {
 
   const getTypeLabel = (type: string) => {
     const types: Record<string, string> = {
+      office: "Escritório",
+      name: "Nome de Pesquisa",
       processes: "Processos",
       distributions: "Distribuições",
       publications: "Publicações",
@@ -158,6 +206,15 @@ const SearchTerms = () => {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={handleSync}
+            disabled={isSyncing}
+            className="gap-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+            {isSyncing ? 'Sincronizando...' : 'Sincronizar'}
+          </Button>
           <Button variant="outline" onClick={handleExport} className="gap-2">
             <Download className="h-4 w-4" />
             Exportar
@@ -170,6 +227,50 @@ const SearchTerms = () => {
       </div>
 
       <TermsStats />
+
+      {syncStats && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Última Sincronização</CardTitle>
+            <CardDescription>Estatísticas da sincronização com Solucionare</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <div className="text-sm text-muted-foreground">Escritórios Importados</div>
+                <div className="text-2xl font-bold">{syncStats.officesImported}</div>
+              </div>
+              <div>
+                <div className="text-sm text-muted-foreground">Nomes Importados</div>
+                <div className="text-2xl font-bold">{syncStats.namesImported}</div>
+              </div>
+              <div>
+                <div className="text-sm text-muted-foreground">Escritórios Atualizados</div>
+                <div className="text-2xl font-bold">{syncStats.officesUpdated}</div>
+              </div>
+              <div>
+                <div className="text-sm text-muted-foreground">Nomes Atualizados</div>
+                <div className="text-2xl font-bold">{syncStats.namesUpdated}</div>
+              </div>
+            </div>
+            {syncStats.errors && syncStats.errors.length > 0 && (
+              <div className="mt-4 p-3 bg-destructive/10 rounded-md">
+                <div className="text-sm font-medium text-destructive mb-1">
+                  {syncStats.errors.length} erro(s) durante a sincronização:
+                </div>
+                <ul className="text-xs text-muted-foreground space-y-1">
+                  {syncStats.errors.slice(0, 3).map((err: string, idx: number) => (
+                    <li key={idx}>{err}</li>
+                  ))}
+                  {syncStats.errors.length > 3 && (
+                    <li>... e mais {syncStats.errors.length - 3} erro(s)</li>
+                  )}
+                </ul>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -194,6 +295,8 @@ const SearchTerms = () => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos os Tipos</SelectItem>
+              <SelectItem value="office">Escritório</SelectItem>
+              <SelectItem value="name">Nome de Pesquisa</SelectItem>
               <SelectItem value="processes">Processos</SelectItem>
               <SelectItem value="distributions">Distribuições</SelectItem>
               <SelectItem value="publications">Publicações</SelectItem>

@@ -74,15 +74,26 @@ export class SoapClient {
         throw new Error(`No result found for method ${method}`);
       }
 
-      const resultXml = match[1];
+      const resultXml = match[1].trim();
 
       // Try to parse as JSON if it looks like JSON
-      if (resultXml.trim().startsWith('{') || resultXml.trim().startsWith('[')) {
+      if (resultXml.startsWith('{') || resultXml.startsWith('[')) {
         try {
           return JSON.parse(resultXml);
         } catch {
           return resultXml;
         }
+      }
+
+      // Parse XML arrays (escritorios, nomes)
+      if (resultXml.includes('<string>')) {
+        const items: string[] = [];
+        const stringRegex = /<string>(.*?)<\/string>/g;
+        let stringMatch;
+        while ((stringMatch = stringRegex.exec(resultXml)) !== null) {
+          items.push(stringMatch[1]);
+        }
+        return items;
       }
 
       // Otherwise return as XML string
