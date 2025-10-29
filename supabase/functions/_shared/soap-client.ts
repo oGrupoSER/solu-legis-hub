@@ -108,10 +108,11 @@ export class SoapClient {
       const bodyContent = bodyMatch[1];
       console.log('Body content (first 500 chars):', bodyContent.substring(0, 500));
 
-      // Check if response contains <retorno> array structure
-      if (bodyContent.includes('<retorno>')) {
-        console.log('Parsing complex array structure with <retorno>');
-        return this.parseComplexArray(bodyContent);
+      // Check if response contains <retorno> (with or without attributes) array structure
+      const retornoSection = bodyContent.match(/<retorno(?:\s[^>]*)?>([\s\S]*?)<\/retorno>/);
+      if (retornoSection) {
+        console.log('Parsing complex array structure within <retorno>');
+        return this.parseComplexArray(retornoSection[1]);
       }
 
       // Parse simple string arrays
