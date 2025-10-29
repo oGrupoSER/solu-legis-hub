@@ -15,6 +15,31 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Resolve correct Solucionare endpoint and namespace from a WSDL URL
+function resolveSolucionareEndpoint(serviceUrl: string): { endpoint: string; namespace: string } {
+  try {
+    const u = new URL(serviceUrl);
+    // Remove query and .wsdl
+    let base = `${u.protocol}//${u.host}`;
+    const path = u.pathname.replace(/\/NomeService(\.wsdl)?$/i, '/').replace(/\/?$/,'');
+    // Find '/recorte/webservice' root
+    const idx = path.toLowerCase().indexOf('/recorte/webservice');
+    if (idx !== -1) {
+      const root = path.substring(0, idx + '/recorte/webservice'.length);
+      const endpointPath = `${root}/20200116/service/nomes.php`;
+      const full = `${base}${endpointPath}`;
+      return { endpoint: full, namespace: full };
+    }
+    // Fallback: use original without wsdl
+    const fallback = serviceUrl.replace(/\.wsdl(\?.*)?$/i, '').replace(/\?wsdl$/i, '');
+    return { endpoint: fallback, namespace: fallback };
+  } catch {
+    const fallback = serviceUrl.replace(/\.wsdl(\?.*)?$/i, '').replace(/\?wsdl$/i, '');
+    return { endpoint: fallback, namespace: fallback };
+  }
+}
+
+
 interface SyncRequest {
   serviceId: string;
 }
@@ -65,12 +90,17 @@ Deno.serve(async (req) => {
     console.log('Nome Relacional:', service.nome_relacional);
     console.log('Token (masked):', '***' + service.token.slice(-4));
 
-    // Initialize SOAP client with proper namespace
+    // Compute correct SOAP endpoint and namespace
+    const { endpoint, namespace } = resolveSolucionareEndpoint(service.service_url);
+    console.log('Resolved SOAP endpoint:', endpoint);
+    console.log('Resolved namespace:', namespace);
+
+    // Initialize SOAP client with proper namespace and endpoint
     const soapClient = new SoapClient({
-      serviceUrl: service.service_url,
+      serviceUrl: endpoint,
       nomeRelacional: service.nome_relacional,
       token: service.token,
-      namespace: service.service_url.replace('.wsdl', '').replace('?wsdl', ''),
+      namespace,
     });
     
     console.log('SOAP Client initialized successfully');
