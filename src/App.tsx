@@ -8,6 +8,7 @@ import Dashboard from "./pages/Dashboard";
 import Auth from "./pages/Auth";
 import PartnerServices from "./pages/PartnerServices";
 import SyncLogs from "./pages/SyncLogs";
+import Publications from "./pages/Publications";
 import ApiMonitoring from "./pages/ApiMonitoring";
 import SearchTerms from "./pages/SearchTerms";
 import ApiTesting from "./pages/ApiTesting";
@@ -32,6 +33,7 @@ const App = () => (
               <Routes>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/sync-logs" element={<SyncLogs />} />
+                <Route path="/publications" element={<Publications />} />
                 <Route path="/api-monitoring" element={<ApiMonitoring />} />
                 <Route path="/search-terms" element={<SearchTerms />} />
                 <Route path="/api-testing" element={<ApiTesting />} />
