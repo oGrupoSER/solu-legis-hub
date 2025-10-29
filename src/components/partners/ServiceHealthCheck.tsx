@@ -7,11 +7,12 @@ import { toast } from "sonner";
 
 interface ServiceHealthCheckProps {
   serviceId: string;
+  serviceName: string;
   serviceUrl: string;
   serviceType: string;
 }
 
-export const ServiceHealthCheck = ({ serviceId, serviceUrl, serviceType }: ServiceHealthCheckProps) => {
+export const ServiceHealthCheck = ({ serviceId, serviceName, serviceUrl, serviceType }: ServiceHealthCheckProps) => {
   const [status, setStatus] = useState<"idle" | "checking" | "success" | "error">("idle");
   const [responseTime, setResponseTime] = useState<number | null>(null);
 
@@ -69,7 +70,7 @@ export const ServiceHealthCheck = ({ serviceId, serviceUrl, serviceType }: Servi
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg">Status de Conectividade</CardTitle>
+        <CardTitle className="text-lg">{serviceName}</CardTitle>
         <CardDescription>Verifique se o serviço está respondendo</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

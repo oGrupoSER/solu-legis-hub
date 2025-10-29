@@ -44,6 +44,7 @@ Deno.serve(async (req) => {
     }
 
     console.log(`Starting sync for service: ${serviceId}`);
+    console.log('Fetching service:', serviceId);
 
     // Get service configuration
     const service = await getServiceById(serviceId);
@@ -57,12 +58,21 @@ Deno.serve(async (req) => {
       throw new Error('Service is not active');
     }
 
+    console.log('=== Service Configuration ===');
+    console.log('Service name:', service.service_name);
+    console.log('Service type:', service.service_type);
+    console.log('Service URL:', service.service_url);
+    console.log('Nome Relacional:', service.nome_relacional);
+    console.log('Token (masked):', '***' + service.token.slice(-4));
+
     // Initialize SOAP client
     const soapClient = new SoapClient({
       serviceUrl: service.service_url,
       nomeRelacional: service.nome_relacional,
       token: service.token,
     });
+    
+    console.log('SOAP Client initialized successfully');
 
     const result: SyncResult = {
       success: true,
@@ -75,12 +85,14 @@ Deno.serve(async (req) => {
 
     // Sync offices (escritórios)
     try {
-      console.log('Fetching offices from Solucionare...');
+      console.log('\n=== Fetching Offices (Escritórios) ===');
       const offices = await soapClient.call('buscarEscritorios', {});
-      console.log('Offices response:', offices);
+      console.log('Offices response type:', typeof offices);
+      console.log('Is array?', Array.isArray(offices));
+      console.log('Offices data:', JSON.stringify(offices).substring(0, 500));
       
       if (Array.isArray(offices) && offices.length > 0) {
-        console.log(`Found ${offices.length} offices`);
+        console.log(`✓ Found ${offices.length} offices`);
 
         for (const officeName of offices) {
           try {
@@ -127,22 +139,26 @@ Deno.serve(async (req) => {
           }
         }
       } else {
-        console.log('No offices found in Solucionare');
+        console.log('⚠ No offices found or invalid response format');
+        console.log('Response value:', offices);
       }
-    } catch (error) {
+    } catch (error: any) {
+      console.error('✗ Error fetching offices:', error);
+      console.error('Error stack:', error.stack);
       const message = error instanceof Error ? error.message : 'Unknown error';
-      console.error('Error fetching offices:', message);
       result.errors.push(`Failed to fetch offices: ${message}`);
     }
 
     // Sync search names (nomes de pesquisa)
     try {
-      console.log('Fetching search names from Solucionare...');
+      console.log('\n=== Fetching Search Names (Nomes de Pesquisa) ===');
       const names = await soapClient.call('buscarNomesPesquisa', {});
-      console.log('Names response:', names);
+      console.log('Names response type:', typeof names);
+      console.log('Is array?', Array.isArray(names));
+      console.log('Names data:', JSON.stringify(names).substring(0, 500));
       
       if (Array.isArray(names) && names.length > 0) {
-        console.log(`Found ${names.length} search names`);
+        console.log(`✓ Found ${names.length} search names`);
 
         for (const searchName of names) {
           try {
@@ -189,15 +205,18 @@ Deno.serve(async (req) => {
           }
         }
       } else {
-        console.log('No search names found in Solucionare');
+        console.log('⚠ No search names found or invalid response format');
+        console.log('Response value:', names);
       }
-    } catch (error) {
+    } catch (error: any) {
+      console.error('✗ Error fetching search names:', error);
+      console.error('Error stack:', error.stack);
       const message = error instanceof Error ? error.message : 'Unknown error';
-      console.error('Error fetching search names:', message);
       result.errors.push(`Failed to fetch search names: ${message}`);
     }
 
-    console.log('Sync completed:', result);
+    console.log('\n=== Sync Completed ===');
+    console.log('Result:', JSON.stringify(result, null, 2));
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

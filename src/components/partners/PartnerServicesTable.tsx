@@ -114,7 +114,8 @@ const PartnerServicesTable = ({ partnerId, partnerName }: PartnerServicesTablePr
     const types: Record<string, string> = {
       processes: "Andamentos",
       distributions: "Distribuições",
-      publications: "Publicações"
+      publications: "Publicações",
+      terms: "Termos e Escritórios"
     };
     return types[type] || type;
   };
@@ -264,6 +265,7 @@ const PartnerServicesTable = ({ partnerId, partnerName }: PartnerServicesTablePr
             <ServiceHealthCheck
               key={service.id}
               serviceId={service.id}
+              serviceName={service.service_name}
               serviceUrl={service.service_url}
               serviceType={service.service_type}
             />

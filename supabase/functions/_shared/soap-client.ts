@@ -60,27 +60,52 @@ export class SoapClient {
    */
   private parseResponse(xmlText: string, method: string): any {
     try {
-      // Remove namespaces for easier parsing
+      console.log('=== SOAP Response Parsing ===');
+      console.log('Method:', method);
+      console.log('Raw XML (first 500 chars):', xmlText.substring(0, 500));
+      
+      // Remove namespaces and extra attributes for easier parsing
       const cleanXml = xmlText
         .replace(/<soap:/g, '<')
         .replace(/<\/soap:/g, '</')
-        .replace(/xmlns[^>]*>/g, '>');
+        .replace(/<s:/g, '<')
+        .replace(/<\/s:/g, '</')
+        .replace(/xmlns[^>]*>/g, '>')
+        .replace(/xmlns:[^=]*="[^"]*"/g, '');
 
-      // Extract result from method response
-      const resultRegex = new RegExp(`<${method}Result>(.*?)<\/${method}Result>`, 's');
-      const match = cleanXml.match(resultRegex);
+      console.log('Clean XML (first 500 chars):', cleanXml.substring(0, 500));
 
-      if (!match) {
-        throw new Error(`No result found for method ${method}`);
+      // Try multiple patterns for the result
+      const patterns = [
+        new RegExp(`<${method}Result>(.*?)<\/${method}Result>`, 's'),
+        new RegExp(`<${method}Response[^>]*>(.*?)<\/${method}Response>`, 's'),
+        new RegExp(`<return>(.*?)<\/return>`, 's')
+      ];
+
+      let resultXml = '';
+      for (const pattern of patterns) {
+        const match = cleanXml.match(pattern);
+        if (match) {
+          resultXml = match[1].trim();
+          console.log('Match found with pattern:', pattern.source);
+          console.log('Result XML:', resultXml.substring(0, 300));
+          break;
+        }
       }
 
-      const resultXml = match[1].trim();
+      if (!resultXml) {
+        console.error('No result pattern matched. Full clean XML:', cleanXml);
+        throw new Error(`No result found for method ${method}`);
+      }
 
       // Try to parse as JSON if it looks like JSON
       if (resultXml.startsWith('{') || resultXml.startsWith('[')) {
         try {
-          return JSON.parse(resultXml);
+          const parsed = JSON.parse(resultXml);
+          console.log('Parsed as JSON:', parsed);
+          return parsed;
         } catch {
+          console.log('Failed to parse as JSON, returning as string');
           return resultXml;
         }
       }
@@ -88,18 +113,31 @@ export class SoapClient {
       // Parse XML arrays (escritorios, nomes)
       if (resultXml.includes('<string>')) {
         const items: string[] = [];
-        const stringRegex = /<string>(.*?)<\/string>/g;
+        const stringRegex = /<string>(.*?)<\/string>/gs;
         let stringMatch;
         while ((stringMatch = stringRegex.exec(resultXml)) !== null) {
-          items.push(stringMatch[1]);
+          const value = stringMatch[1].trim();
+          if (value) {
+            items.push(value);
+          }
         }
+        console.log(`Extracted ${items.length} string items:`, items.slice(0, 5));
         return items;
       }
 
+      // If it's empty or whitespace only, return empty array
+      if (!resultXml || resultXml.trim() === '') {
+        console.log('Empty result, returning empty array');
+        return [];
+      }
+
       // Otherwise return as XML string
+      console.log('Returning raw result XML');
       return resultXml;
     } catch (error) {
-      console.error('Error parsing SOAP response:', error);
+      console.error('=== SOAP Parsing Error ===');
+      console.error('Error:', error);
+      console.error('Full XML Response:', xmlText);
       const message = error instanceof Error ? error.message : 'Unknown error';
       throw new Error(`Failed to parse SOAP response: ${message}`);
     }
@@ -111,8 +149,10 @@ export class SoapClient {
   async call(method: string, params: Record<string, any> = {}): Promise<any> {
     const envelope = this.buildEnvelope(method, params);
     
-    console.log(`SOAP Request to ${this.config.serviceUrl}`);
+    console.log('=== SOAP Request ===');
+    console.log(`URL: ${this.config.serviceUrl}`);
     console.log(`Method: ${method}`);
+    console.log('Envelope (first 500 chars):', envelope.substring(0, 500));
 
     try {
       const response = await fetch(this.config.serviceUrl, {
@@ -124,14 +164,24 @@ export class SoapClient {
         body: envelope,
       });
 
+      console.log('=== SOAP HTTP Response ===');
+      console.log('Status:', response.status, response.statusText);
+      console.log('Headers:', JSON.stringify(Object.fromEntries(response.headers.entries())));
+
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error response body:', errorText.substring(0, 1000));
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       const responseText = await response.text();
+      console.log('Response length:', responseText.length);
+      
       return this.parseResponse(responseText, method);
     } catch (error) {
-      console.error(`SOAP call failed for ${method}:`, error);
+      console.error('=== SOAP Request Failed ===');
+      console.error(`Method: ${method}`);
+      console.error('Error:', error);
       throw error;
     }
   }
