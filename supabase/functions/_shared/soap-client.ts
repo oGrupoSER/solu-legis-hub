@@ -44,6 +44,25 @@ export class SoapClient {
   }
 
   /**
+   * Normalize service URL by removing .wsdl or ?wsdl
+   */
+  private getNormalizedUrl(): string {
+    let url = this.config.serviceUrl;
+    
+    // Remove .wsdl extension
+    if (url.endsWith('.wsdl')) {
+      url = url.substring(0, url.length - 5);
+    }
+    
+    // Remove ?wsdl query parameter
+    if (url.includes('?wsdl')) {
+      url = url.split('?wsdl')[0];
+    }
+    
+    return url;
+  }
+
+  /**
    * Escape XML special characters
    */
   private escapeXml(str: string): string {
@@ -66,20 +85,21 @@ export class SoapClient {
       
       // Remove namespaces and extra attributes for easier parsing
       const cleanXml = xmlText
-        .replace(/<soap:/g, '<')
-        .replace(/<\/soap:/g, '</')
-        .replace(/<s:/g, '<')
-        .replace(/<\/s:/g, '</')
-        .replace(/xmlns[^>]*>/g, '>')
-        .replace(/xmlns:[^=]*="[^"]*"/g, '');
+        .replace(/<[A-Za-z0-9_]+:/g, '<')
+        .replace(/<\/[A-Za-z0-9_]+:/g, '</')
+        .replace(/xmlns[^=]*="[^"]*"\s*/g, '')
+        .replace(/\s+>/g, '>')
+        .trim();
 
       console.log('Clean XML (first 500 chars):', cleanXml.substring(0, 500));
 
-      // Try multiple patterns for the result
+      // Try multiple patterns for the result with optional namespace prefix
       const patterns = [
-        new RegExp(`<${method}Result>(.*?)<\/${method}Result>`, 's'),
-        new RegExp(`<${method}Response[^>]*>(.*?)<\/${method}Response>`, 's'),
-        new RegExp(`<return>(.*?)<\/return>`, 's')
+        new RegExp(`<(?:\\w+:)?${method}Result>(.*?)</(?:\\w+:)?${method}Result>`, 's'),
+        new RegExp(`<(?:\\w+:)?${method}Response[^>]*>(.*?)</(?:\\w+:)?${method}Response>`, 's'),
+        new RegExp(`<(?:\\w+:)?return>(.*?)</(?:\\w+:)?return>`, 's'),
+        // Fallback: try to find any <string> elements in response
+        new RegExp(`<Body[^>]*>(.*?)</Body>`, 's')
       ];
 
       let resultXml = '';
@@ -148,14 +168,16 @@ export class SoapClient {
    */
   async call(method: string, params: Record<string, any> = {}): Promise<any> {
     const envelope = this.buildEnvelope(method, params);
+    const normalizedUrl = this.getNormalizedUrl();
     
     console.log('=== SOAP Request ===');
-    console.log(`URL: ${this.config.serviceUrl}`);
+    console.log(`Original URL: ${this.config.serviceUrl}`);
+    console.log(`Normalized URL: ${normalizedUrl}`);
     console.log(`Method: ${method}`);
     console.log('Envelope (first 500 chars):', envelope.substring(0, 500));
 
     try {
-      const response = await fetch(this.config.serviceUrl, {
+      const response = await fetch(normalizedUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'text/xml; charset=utf-8',
