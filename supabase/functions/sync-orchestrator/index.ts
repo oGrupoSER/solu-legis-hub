@@ -31,15 +31,30 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Parse request body with fallback for empty body
+    let requestBody: OrchestratorRequest = {};
+    try {
+      const text = await req.text();
+      if (text && text.trim()) {
+        requestBody = JSON.parse(text);
+      }
+    } catch (parseError) {
+      console.log('No valid JSON body, using defaults');
+    }
+
     const {
       services = ['processes', 'distributions', 'publications'],
       service_ids,
       force = false,
       parallel = true,
-    }: OrchestratorRequest = await req.json();
+    }: OrchestratorRequest = requestBody;
+
+    // Ensure services is an array
+    const servicesList = Array.isArray(services) ? services : ['processes', 'distributions', 'publications'];
 
     console.log('Starting sync orchestration...');
-    console.log(`Services to sync: ${services.join(', ')}`);
+    console.log(`Services to sync: ${servicesList.join(', ')}`);
+    console.log(`Service IDs filter: ${service_ids ? service_ids.join(', ') : 'all'}`);
     console.log(`Parallel mode: ${parallel}`);
     console.log(`Force sync: ${force}`);
 
@@ -65,12 +80,14 @@ Deno.serve(async (req) => {
       const { data, error } = await supabase
         .from('partner_services')
         .select('*')
-        .in('service_type', services)
+        .in('service_type', servicesList)
         .eq('is_active', true);
 
       if (error) throw error;
       activeServices = data || [];
     }
+
+    console.log(`Query returned ${activeServices.length} services:`, activeServices.map((s: any) => `${s.service_name} (${s.service_type})`).join(', '));
 
     if (activeServices.length === 0) {
       throw new Error('No active services found to sync');
@@ -103,10 +120,10 @@ Deno.serve(async (req) => {
     };
 
     // Sync processes and distributions in parallel
-    if (parallel && (services.includes('processes') || services.includes('distributions'))) {
+    if (parallel && (servicesList.includes('processes') || servicesList.includes('distributions'))) {
       const parallelTasks = [];
 
-      if (services.includes('processes') && servicesByType.processes.length > 0) {
+      if (servicesList.includes('processes') && servicesByType.processes.length > 0) {
         parallelTasks.push(
           invokeFunction('sync-processes', {
             force,
@@ -119,7 +136,7 @@ Deno.serve(async (req) => {
         );
       }
 
-      if (services.includes('distributions') && servicesByType.distributions.length > 0) {
+      if (servicesList.includes('distributions') && servicesByType.distributions.length > 0) {
         parallelTasks.push(
           invokeFunction('sync-distributions', {
             force,
@@ -135,7 +152,7 @@ Deno.serve(async (req) => {
       await Promise.allSettled(parallelTasks);
     } else {
       // Sequential sync
-      if (services.includes('processes') && servicesByType.processes.length > 0) {
+      if (servicesList.includes('processes') && servicesByType.processes.length > 0) {
         try {
           results.processes = await invokeFunction('sync-processes', {
             force,
@@ -147,7 +164,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      if (services.includes('distributions') && servicesByType.distributions.length > 0) {
+      if (servicesList.includes('distributions') && servicesByType.distributions.length > 0) {
         try {
           results.distributions = await invokeFunction('sync-distributions', {
             force,
@@ -161,7 +178,7 @@ Deno.serve(async (req) => {
     }
 
     // Sync publications (always after terms are ready)
-    if (services.includes('publications') && servicesByType.publications.length > 0) {
+    if (servicesList.includes('publications') && servicesByType.publications.length > 0) {
       try {
         results.publications = await invokeFunction('sync-publications', {
           force,
