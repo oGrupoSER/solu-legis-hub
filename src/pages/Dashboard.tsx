@@ -1,17 +1,15 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { StatsCard } from "@/components/dashboard/StatsCard";
 import { PartnersTable } from "@/components/partners/PartnersTable";
 import { ClientSystemsTable } from "@/components/clients/ClientSystemsTable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Database, Users, Key, Activity, Building2, FileText } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Users, Key, Activity, Building2, FileText, Clock } from "lucide-react";
 import { toast } from "sonner";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 const Dashboard = () => {
-  const navigate = useNavigate();
-  const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState({
     processes: 0,
     distributions: 0,
@@ -20,30 +18,12 @@ const Dashboard = () => {
     clientSystems: 0,
     activeTokens: 0,
   });
+  const [syncData, setSyncData] = useState<any[]>([]);
 
   useEffect(() => {
-    checkAuth();
     fetchStats();
+    fetchSyncData();
   }, []);
-
-  const checkAuth = async () => {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session) {
-      navigate("/auth");
-      return;
-    }
-
-    setIsLoading(false);
-
-    supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_OUT" || !session) {
-        navigate("/auth");
-      }
-    });
-  };
 
   const fetchStats = async () => {
     try {
@@ -76,75 +56,120 @@ const Dashboard = () => {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-muted-foreground">Carregando...</div>
-      </div>
-    );
-  }
+  const fetchSyncData = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("sync_logs")
+        .select("started_at, records_synced, status")
+        .order("started_at", { ascending: true })
+        .limit(30);
+
+      if (error) throw error;
+
+      // Group by day
+      const grouped = (data || []).reduce((acc: any[], log) => {
+        const date = new Date(log.started_at).toLocaleDateString("pt-BR");
+        const existing = acc.find((item) => item.date === date);
+        
+        if (existing) {
+          existing.records += log.records_synced || 0;
+          existing.syncs += 1;
+        } else {
+          acc.push({
+            date,
+            records: log.records_synced || 0,
+            syncs: 1,
+          });
+        }
+        
+        return acc;
+      }, []);
+
+      setSyncData(grouped.slice(-7)); // Last 7 days
+    } catch (error) {
+      console.error("Error fetching sync data:", error);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-background">
-      <DashboardHeader />
+    <div className="container py-8 space-y-8">
+      {/* Stats Cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <StatsCard
+          title="Processos Cadastrados"
+          value={stats.processes.toLocaleString()}
+          icon={FileText}
+          description="Total de processos no sistema"
+        />
+        <StatsCard
+          title="Distribuições"
+          value={stats.distributions.toLocaleString()}
+          icon={Activity}
+          description="Novos processos monitorados"
+        />
+        <StatsCard
+          title="Publicações"
+          value={stats.publications.toLocaleString()}
+          icon={FileText}
+          description="Recortes de diários oficiais"
+        />
+        <StatsCard
+          title="Parceiros"
+          value={stats.partners}
+          icon={Building2}
+          description="Integradores de APIs"
+        />
+        <StatsCard
+          title="Sistemas Clientes"
+          value={stats.clientSystems}
+          icon={Users}
+          description="Sistemas consumindo a API"
+        />
+        <StatsCard
+          title="Tokens Ativos"
+          value={stats.activeTokens}
+          icon={Key}
+          description="Tokens de autenticação válidos"
+        />
+      </div>
 
-      <main className="container py-8 space-y-8">
-        {/* Stats Cards */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <StatsCard
-            title="Processos Cadastrados"
-            value={stats.processes.toLocaleString()}
-            icon={FileText}
-            description="Total de processos no sistema"
-          />
-          <StatsCard
-            title="Distribuições"
-            value={stats.distributions.toLocaleString()}
-            icon={Activity}
-            description="Novos processos monitorados"
-          />
-          <StatsCard
-            title="Publicações"
-            value={stats.publications.toLocaleString()}
-            icon={FileText}
-            description="Recortes de diários oficiais"
-          />
-          <StatsCard
-            title="Parceiros"
-            value={stats.partners}
-            icon={Building2}
-            description="Integradores de APIs"
-          />
-          <StatsCard
-            title="Sistemas Clientes"
-            value={stats.clientSystems}
-            icon={Users}
-            description="Sistemas consumindo a API"
-          />
-          <StatsCard
-            title="Tokens Ativos"
-            value={stats.activeTokens}
-            icon={Key}
-            description="Tokens de autenticação válidos"
-          />
-        </div>
+      {/* Sync Chart */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Clock className="h-5 w-5" />
+            Sincronizações nos Últimos 7 Dias
+          </CardTitle>
+          <CardDescription>Volume de registros sincronizados por dia</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={syncData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="date" />
+              <YAxis />
+              <Tooltip />
+              <Line type="monotone" dataKey="records" stroke="hsl(var(--primary))" strokeWidth={2} name="Registros" />
+            </LineChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
 
-        {/* Management Tabs */}
-        <Tabs defaultValue="partners" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">
-            <TabsTrigger value="partners">Parceiros</TabsTrigger>
-            <TabsTrigger value="clients">Sistemas Clientes</TabsTrigger>
-          </TabsList>
+      {/* Management Tabs */}
+      <Tabs defaultValue="partners" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">
+          <TabsTrigger value="partners">Parceiros</TabsTrigger>
+          <TabsTrigger value="clients">Sistemas Clientes</TabsTrigger>
+        </TabsList>
 
-          <TabsContent value="partners" className="space-y-4">
-            <PartnersTable />
-          </TabsContent>
+        <TabsContent value="partners" className="space-y-4">
+          <PartnersTable />
+        </TabsContent>
 
-          <TabsContent value="clients" className="space-y-4">
-            <ClientSystemsTable />
-          </TabsContent>
-        </Tabs>
-      </main>
+        <TabsContent value="clients" className="space-y-4">
+          <ClientSystemsTable />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
