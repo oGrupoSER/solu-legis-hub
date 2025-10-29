@@ -147,6 +147,7 @@ Deno.serve(async (req) => {
       console.log('Names response type:', typeof names);
       console.log('Is array?', Array.isArray(names));
       console.log('Names data:', JSON.stringify(names).substring(0, 1000));
+      console.log(`⚠️ API returned: ${Array.isArray(names) ? names.length : 0} names for office code ${officeCode}`);
       
       if (Array.isArray(names) && names.length > 0) {
         console.log(`✓ Found ${names.length} search names`);
