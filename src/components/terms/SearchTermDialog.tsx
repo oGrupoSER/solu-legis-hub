@@ -138,15 +138,16 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
             <Select
               value={formData.partner_id}
               onValueChange={(value) => {
-                setFormData({ ...formData, partner_id: value, partner_service_id: "" });
-                fetchServices(value);
+                const partnerId = value === "none" ? "" : value;
+                setFormData({ ...formData, partner_id: partnerId, partner_service_id: "" });
+                fetchServices(partnerId);
               }}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Selecione um parceiro" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Nenhum</SelectItem>
+                <SelectItem value="none">Nenhum</SelectItem>
                 {partners.map((p) => (
                   <SelectItem key={p.id} value={p.id}>
                     {p.name}
@@ -162,14 +163,14 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
               <Select
                 value={formData.partner_service_id}
                 onValueChange={(value) =>
-                  setFormData({ ...formData, partner_service_id: value })
+                  setFormData({ ...formData, partner_service_id: value === "none" ? "" : value })
                 }
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione um serviço" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Nenhum</SelectItem>
+                  <SelectItem value="none">Nenhum</SelectItem>
                   {services.map((s) => (
                     <SelectItem key={s.id} value={s.id}>
                       {s.service_name}
