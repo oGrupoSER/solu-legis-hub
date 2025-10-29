@@ -101,12 +101,23 @@ export class RestClient {
       headers,
     });
 
+    console.log(`REST Response Status: ${response.status} ${response.statusText}`);
+
     if (!response.ok) {
       const errorText = await response.text();
+      console.error(`REST Error Response: ${errorText}`);
       throw new Error(`HTTP ${response.status}: ${errorText}`);
     }
 
-    return response.json();
+    const responseText = await response.text();
+    console.log(`REST Response Body (first 500 chars): ${responseText.substring(0, 500)}`);
+    
+    if (!responseText || responseText.trim() === '') {
+      console.log('Empty response body');
+      return null;
+    }
+
+    return JSON.parse(responseText);
   }
 
   /**

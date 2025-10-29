@@ -60,6 +60,10 @@ Deno.serve(async (req) => {
         });
 
         console.log(`Syncing publications for service: ${service.service_name}`);
+        console.log(`Service URL: ${service.service_url}`);
+        console.log(`Nome Relacional: ${service.nome_relacional}`);
+        console.log(`Token: ${service.token ? '***' + service.token.slice(-4) : 'NOT SET'}`);
+        console.log(`Auth in Query: true (publications API)`);
 
         // Get active search terms for this service (optional - used for local matching)
         const { data: termsData, error: termsError } = await supabase
@@ -206,8 +210,11 @@ async function syncNewPublications(
       
       const result = await restClient.get('');
       
+      console.log('API Response type:', typeof result);
+      console.log('API Response:', JSON.stringify(result, null, 2));
+      
       if (!result || typeof result !== 'object') {
-        console.log('No more publications available');
+        console.log('No more publications available (null or non-object response)');
         hasMore = false;
         break;
       }
