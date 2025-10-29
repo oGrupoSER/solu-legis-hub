@@ -49,10 +49,28 @@ Deno.serve(async (req) => {
       parallel = true,
     }: OrchestratorRequest = requestBody;
 
-    // Ensure services is an array
-    const servicesList = Array.isArray(services) ? services : ['processes', 'distributions', 'publications'];
+    // Normalize services to a valid string array
+    const allowed = new Set(['processes', 'distributions', 'publications']);
+    let servicesList: string[] = [];
+
+    if (Array.isArray(services)) {
+      servicesList = services
+        .map((s: any) => (typeof s === 'string' ? s.toLowerCase() : null))
+        .filter((s: any): s is string => !!s && allowed.has(s));
+    } else if (typeof (services as any) === 'string') {
+      const s = String(services).toLowerCase();
+      servicesList = allowed.has(s) ? [s] : [];
+    } else if (services && typeof services === 'object') {
+      servicesList = Object.keys(services as any)
+        .filter((k) => allowed.has(k) && (services as any)[k] === true);
+    }
+
+    if (servicesList.length === 0) {
+      servicesList = Array.from(allowed);
+    }
 
     console.log('Starting sync orchestration...');
+    console.log('Raw services value:', JSON.stringify(services));
     console.log(`Services to sync: ${servicesList.join(', ')}`);
     console.log(`Service IDs filter: ${service_ids ? service_ids.join(', ') : 'all'}`);
     console.log(`Parallel mode: ${parallel}`);
