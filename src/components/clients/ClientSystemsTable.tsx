@@ -15,6 +15,7 @@ interface ClientSystem {
   name: string;
   description: string | null;
   contact_email: string | null;
+  office_code: number | null;
   is_active: boolean;
   created_at: string;
 }
@@ -103,6 +104,7 @@ export const ClientSystemsTable = () => {
               <TableHead>Nome</TableHead>
               <TableHead>Descrição</TableHead>
               <TableHead>Email de Contato</TableHead>
+              <TableHead>Cód. Escritório</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
@@ -110,7 +112,7 @@ export const ClientSystemsTable = () => {
           <TableBody>
             {systems.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground">
+                <TableCell colSpan={6} className="text-center text-muted-foreground">
                   Nenhum sistema cadastrado
                 </TableCell>
               </TableRow>
@@ -120,6 +122,7 @@ export const ClientSystemsTable = () => {
                   <TableCell className="font-medium">{system.name}</TableCell>
                   <TableCell className="text-muted-foreground">{system.description || "-"}</TableCell>
                   <TableCell className="text-muted-foreground">{system.contact_email || "-"}</TableCell>
+                  <TableCell className="text-muted-foreground">{system.office_code || "-"}</TableCell>
                   <TableCell>
                     <Badge variant={system.is_active ? "default" : "secondary"}>
                       {system.is_active ? "Ativo" : "Inativo"}

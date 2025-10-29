@@ -14,6 +14,7 @@ interface ClientSystem {
   description: string | null;
   contact_email: string | null;
   is_active: boolean;
+  office_code: number | null;
 }
 
 interface ClientSystemDialogProps {
@@ -28,6 +29,7 @@ export const ClientSystemDialog = ({ open, onOpenChange, system }: ClientSystemD
     name: "",
     description: "",
     contact_email: "",
+    office_code: "",
     is_active: true,
   });
 
@@ -37,6 +39,7 @@ export const ClientSystemDialog = ({ open, onOpenChange, system }: ClientSystemD
         name: system.name,
         description: system.description || "",
         contact_email: system.contact_email || "",
+        office_code: system.office_code?.toString() || "",
         is_active: system.is_active,
       });
     } else {
@@ -44,6 +47,7 @@ export const ClientSystemDialog = ({ open, onOpenChange, system }: ClientSystemD
         name: "",
         description: "",
         contact_email: "",
+        office_code: "",
         is_active: true,
       });
     }
@@ -54,15 +58,20 @@ export const ClientSystemDialog = ({ open, onOpenChange, system }: ClientSystemD
     setIsLoading(true);
 
     try {
+      const dataToSave = {
+        ...formData,
+        office_code: formData.office_code ? parseInt(formData.office_code) : null,
+      };
+
       if (system) {
         const { error } = await supabase
           .from("client_systems")
-          .update(formData)
+          .update(dataToSave)
           .eq("id", system.id);
         if (error) throw error;
         toast.success("Sistema atualizado com sucesso");
       } else {
-        const { error } = await supabase.from("client_systems").insert([formData]);
+        const { error } = await supabase.from("client_systems").insert([dataToSave]);
         if (error) throw error;
         toast.success("Sistema cadastrado com sucesso");
       }
@@ -111,6 +120,16 @@ export const ClientSystemDialog = ({ open, onOpenChange, system }: ClientSystemD
                 value={formData.contact_email}
                 onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
                 placeholder="contato@sistema.com"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="office_code">Código de Escritório</Label>
+              <Input
+                id="office_code"
+                type="number"
+                value={formData.office_code}
+                onChange={(e) => setFormData({ ...formData, office_code: e.target.value })}
+                placeholder="11"
               />
             </div>
             <div className="flex items-center space-x-2">

@@ -89,6 +89,12 @@ Deno.serve(async (req) => {
     console.log('Service URL:', service.service_url);
     console.log('Nome Relacional:', service.nome_relacional);
     console.log('Token (masked):', '***' + service.token.slice(-4));
+    console.log('Office Code:', service.office_code);
+
+    // Validate office_code is configured
+    if (!service.office_code) {
+      throw new Error('Office code is required for this service. Please configure it in the service settings.');
+    }
 
     // Compute correct SOAP endpoint and namespace
     const { endpoint, namespace } = resolveSolucionareEndpoint(service.service_url);
@@ -190,11 +196,11 @@ Deno.serve(async (req) => {
       if (!Array.isArray(offices) || offices.length === 0) {
         console.log('⚠ No offices found, skipping names sync');
       } else {
-        console.log(`Found ${offices.length} offices, fetching names for office code 11`);
+        console.log(`Found ${offices.length} offices, fetching names for office code ${service.office_code}`);
         
-        // For now, use office code 11 as shown in SoapUI example
-        // TODO: Map office names to codes and iterate through all
-        const names = await soapClient.call('getNomesPesquisa', { codEscritorio: 11 });
+        // Use the office_code from service configuration
+        console.log('Using office code:', service.office_code);
+        const names = await soapClient.call('getNomesPesquisa', { codEscritorio: service.office_code });
         console.log('Names response type:', typeof names);
         console.log('Is array?', Array.isArray(names));
         console.log('Names data:', JSON.stringify(names).substring(0, 1000));
