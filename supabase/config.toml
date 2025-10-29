@@ -14,3 +14,15 @@ verify_jwt = true
 
 [functions.sync-orchestrator]
 verify_jwt = true
+
+[functions.api-processes]
+verify_jwt = false
+
+[functions.api-distributions]
+verify_jwt = false
+
+[functions.api-publications]
+verify_jwt = false
+
+[functions.api-webhook]
+verify_jwt = true

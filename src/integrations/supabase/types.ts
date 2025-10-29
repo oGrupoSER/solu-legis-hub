@@ -14,6 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      api_requests: {
+        Row: {
+          client_system_id: string | null
+          endpoint: string
+          id: string
+          ip_address: string | null
+          method: string
+          request_time: string | null
+          response_time_ms: number | null
+          status_code: number | null
+          token_id: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          client_system_id?: string | null
+          endpoint: string
+          id?: string
+          ip_address?: string | null
+          method: string
+          request_time?: string | null
+          response_time_ms?: number | null
+          status_code?: number | null
+          token_id?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          client_system_id?: string | null
+          endpoint?: string
+          id?: string
+          ip_address?: string | null
+          method?: string
+          request_time?: string | null
+          response_time_ms?: number | null
+          status_code?: number | null
+          token_id?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_requests_client_system_id_fkey"
+            columns: ["client_system_id"]
+            isOneToOne: false
+            referencedRelation: "client_systems"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "api_requests_token_id_fkey"
+            columns: ["token_id"]
+            isOneToOne: false
+            referencedRelation: "api_tokens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       api_tokens: {
         Row: {
           client_system_id: string | null
@@ -84,6 +138,47 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      client_webhooks: {
+        Row: {
+          client_system_id: string
+          created_at: string | null
+          events: string[]
+          id: string
+          is_active: boolean | null
+          secret: string | null
+          updated_at: string | null
+          webhook_url: string
+        }
+        Insert: {
+          client_system_id: string
+          created_at?: string | null
+          events: string[]
+          id?: string
+          is_active?: boolean | null
+          secret?: string | null
+          updated_at?: string | null
+          webhook_url: string
+        }
+        Update: {
+          client_system_id?: string
+          created_at?: string | null
+          events?: string[]
+          id?: string
+          is_active?: boolean | null
+          secret?: string | null
+          updated_at?: string | null
+          webhook_url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_webhooks_client_system_id_fkey"
+            columns: ["client_system_id"]
+            isOneToOne: false
+            referencedRelation: "client_systems"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       distributions: {
         Row: {

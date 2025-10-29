@@ -1,12 +1,14 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2, Key } from "lucide-react";
+import { Plus, Edit, Trash2, Key, Webhook } from "lucide-react";
 import { toast } from "sonner";
 import { ClientSystemDialog } from "./ClientSystemDialog";
 import { TokensDialog } from "./TokensDialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { WebhooksTable } from "./WebhooksTable";
 
 interface ClientSystem {
   id: string;
@@ -22,6 +24,7 @@ export const ClientSystemsTable = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [tokensDialogOpen, setTokensDialogOpen] = useState(false);
+  const [webhooksDialogOpen, setWebhooksDialogOpen] = useState(false);
   const [editingSystem, setEditingSystem] = useState<ClientSystem | null>(null);
   const [selectedSystemId, setSelectedSystemId] = useState<string | null>(null);
 
@@ -66,6 +69,11 @@ export const ClientSystemsTable = () => {
   const handleManageTokens = (systemId: string) => {
     setSelectedSystemId(systemId);
     setTokensDialogOpen(true);
+  };
+
+  const handleManageWebhooks = (systemId: string) => {
+    setSelectedSystemId(systemId);
+    setWebhooksDialogOpen(true);
   };
 
   const handleDialogClose = (refresh?: boolean) => {
@@ -122,6 +130,9 @@ export const ClientSystemsTable = () => {
                       <Button variant="ghost" size="icon" onClick={() => handleManageTokens(system.id)}>
                         <Key className="h-4 w-4" />
                       </Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleManageWebhooks(system.id)}>
+                        <Webhook className="h-4 w-4" />
+                      </Button>
                       <Button variant="ghost" size="icon" onClick={() => handleEdit(system)}>
                         <Edit className="h-4 w-4" />
                       </Button>
@@ -148,6 +159,15 @@ export const ClientSystemsTable = () => {
         onOpenChange={() => setTokensDialogOpen(false)}
         systemId={selectedSystemId}
       />
+
+      <Dialog open={webhooksDialogOpen} onOpenChange={setWebhooksDialogOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Webhooks</DialogTitle>
+          </DialogHeader>
+          {selectedSystemId && <WebhooksTable clientSystemId={selectedSystemId} />}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
