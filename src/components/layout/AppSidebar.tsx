@@ -1,4 +1,4 @@
-import { LayoutDashboard, Clock, Activity, Users, Building2, Scale, Shield } from "lucide-react";
+import { LayoutDashboard, Clock, Activity, Scale, Shield } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   Sidebar,
@@ -16,11 +16,6 @@ const mainItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Logs de Sincronização", url: "/sync-logs", icon: Clock },
   { title: "Monitoramento de API", url: "/api-monitoring", icon: Activity },
-];
-
-const managementItems = [
-  { title: "Parceiros", url: "/partner-services", icon: Building2 },
-  { title: "Sistemas Clientes", url: "/clients", icon: Users },
 ];
 
 export function AppSidebar() {
@@ -75,24 +70,6 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Management Navigation */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Gerenciamento</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {managementItems.map((item) => (
-                <SidebarMenuItem key={item.url}>
-                  <SidebarMenuButton asChild>
-                    <NavLink to={item.url} className={getNavCls(item.url)}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
       </SidebarContent>
     </Sidebar>
   );
