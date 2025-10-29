@@ -89,11 +89,29 @@ Deno.serve(async (req) => {
     console.log('Service URL:', service.service_url);
     console.log('Nome Relacional:', service.nome_relacional);
     console.log('Token (masked):', '***' + service.token.slice(-4));
-    console.log('Office Code:', service.office_code);
+    console.log('Office Code (service):', service.office_code);
 
-    // Validate office_code is configured
-    if (!service.office_code) {
-      throw new Error('Office code is required for this service. Please configure it in the service settings.');
+    // Resolve office code: prefer service.office_code, fallback to an active client_systems.office_code
+    let officeCode = service.office_code as number | null;
+    if (!officeCode) {
+      console.log('No office_code on service. Attempting to read from client_systems...');
+      const { data: cs, error: csError } = await supabase
+        .from('client_systems')
+        .select('office_code')
+        .eq('is_active', true)
+        .not('office_code', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (csError) {
+        console.error('Error fetching client_systems office_code:', csError);
+      }
+      officeCode = (cs as any)?.office_code ?? null;
+      console.log('Office Code (client_systems fallback):', officeCode);
+    }
+
+    if (!officeCode) {
+      throw new Error('Office code is required. Configure it no serviço ou no Sistema Cliente.');
     }
 
     // Compute correct SOAP endpoint and namespace
@@ -196,11 +214,11 @@ Deno.serve(async (req) => {
       if (!Array.isArray(offices) || offices.length === 0) {
         console.log('⚠ No offices found, skipping names sync');
       } else {
-        console.log(`Found ${offices.length} offices, fetching names for office code ${service.office_code}`);
+        console.log(`Found ${offices.length} offices, fetching names for office code ${officeCode}`);
         
-        // Use the office_code from service configuration
-        console.log('Using office code:', service.office_code);
-        const names = await soapClient.call('getNomesPesquisa', { codEscritorio: service.office_code });
+        // Use the resolved officeCode
+        console.log('Using office code:', officeCode);
+        const names = await soapClient.call('getNomesPesquisa', { codEscritorio: officeCode });
         console.log('Names response type:', typeof names);
         console.log('Is array?', Array.isArray(names));
         console.log('Names data:', JSON.stringify(names).substring(0, 1000));
