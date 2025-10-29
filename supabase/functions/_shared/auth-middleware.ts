@@ -18,7 +18,8 @@ export interface AuthResult {
 }
 
 /**
- * Validate API token from request headers
+ * Validate API token or Supabase JWT from request headers
+ * Supports both external API tokens and internal Supabase authentication
  */
 export async function validateToken(request: Request): Promise<AuthResult> {
   const authHeader = request.headers.get('Authorization');
@@ -39,50 +40,71 @@ export async function validateToken(request: Request): Promise<AuthResult> {
     };
   }
 
-  // Validate token in database
-  const { data: tokenData, error } = await supabase
+  // First, try to validate as API token (for external clients)
+  const { data: tokenData, error: tokenError } = await supabase
     .from('api_tokens')
     .select('id, client_system_id, is_active, expires_at')
     .eq('token', token)
-    .single();
+    .maybeSingle();
 
-  if (error || !tokenData) {
+  // If it's a valid API token
+  if (tokenData && !tokenError) {
+    // Check if token is active
+    if (!tokenData.is_active) {
+      return {
+        authenticated: false,
+        error: 'Token is inactive'
+      };
+    }
+
+    // Check if token is expired
+    if (tokenData.expires_at) {
+      const expiresAt = new Date(tokenData.expires_at);
+      if (expiresAt < new Date()) {
+        return {
+          authenticated: false,
+          error: 'Token has expired'
+        };
+      }
+    }
+
+    // Update last_used_at
+    await supabase
+      .from('api_tokens')
+      .update({ last_used_at: new Date().toISOString() })
+      .eq('id', tokenData.id);
+
+    return {
+      authenticated: true,
+      clientSystemId: tokenData.client_system_id,
+      tokenId: tokenData.id
+    };
+  }
+
+  // If not an API token, try to validate as Supabase JWT (for internal frontend use)
+  try {
+    const { data: { user }, error: jwtError } = await supabase.auth.getUser(token);
+
+    if (jwtError || !user) {
+      return {
+        authenticated: false,
+        error: 'Invalid token'
+      };
+    }
+
+    // Valid Supabase JWT - return authenticated without tokenId
+    // (rate limiting won't apply to authenticated users)
+    return {
+      authenticated: true,
+      clientSystemId: undefined,
+      tokenId: undefined
+    };
+  } catch (jwtError) {
     return {
       authenticated: false,
       error: 'Invalid token'
     };
   }
-
-  // Check if token is active
-  if (!tokenData.is_active) {
-    return {
-      authenticated: false,
-      error: 'Token is inactive'
-    };
-  }
-
-  // Check if token is expired
-  if (tokenData.expires_at) {
-    const expiresAt = new Date(tokenData.expires_at);
-    if (expiresAt < new Date()) {
-      return {
-        authenticated: false,
-        error: 'Token has expired'
-      };
-    }
-  }
-
-  // Update last_used_at
-  await supabase
-    .from('api_tokens')
-    .update({ last_used_at: new Date().toISOString() })
-    .eq('id', tokenData.id);
-
-  return {
-    authenticated: true,
-    clientSystemId: tokenData.client_system_id,
-    tokenId: tokenData.id
-  };
 }
 
 /**
