@@ -174,9 +174,20 @@ const PartnerServiceDialog = ({ open, onOpenChange, partnerId, service }: Partne
               type="url"
               value={formData.service_url}
               onChange={(e) => setFormData({ ...formData, service_url: e.target.value })}
-              placeholder="https://api.example.com/v1"
+              placeholder="http://api.example.com/endpoint"
               required
             />
+            <p className="text-sm text-muted-foreground">
+              ⚠️ Insira apenas a URL base do serviço, <strong>sem parâmetros</strong> (?, &amp;).
+              {formData.service_type === 'publications' && (
+                <> Para Publicações REST, exemplo: <code className="text-xs bg-muted px-1 rounded">http://domain/api/endpoint</code></>
+              )}
+            </p>
+            {(formData.service_url.includes('?') || formData.service_url.includes('&')) && (
+              <p className="text-sm text-destructive">
+                ⛔ A URL não deve conter parâmetros (? ou &amp;). Os campos "Nome Relacional" e "Token" serão adicionados automaticamente.
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">

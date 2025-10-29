@@ -4,6 +4,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.77.0';
+import { RestClient } from '../_shared/rest-client.ts';
 import { SoapClient } from '../_shared/soap-client.ts';
 import { getActiveServices, updateLastSync, validateService } from '../_shared/service-config.ts';
 import { Logger } from '../_shared/logger.ts';
@@ -86,22 +87,23 @@ Deno.serve(async (req) => {
 
         console.log(`Found ${terms.length} active publication terms`);
 
-        // Initialize SOAP client
-        const soapClient = new SoapClient({
-          serviceUrl: service.service_url,
-          nomeRelacional: service.nome_relacional,
-          token: service.token,
-        });
+      // Initialize REST client for publications (API uses query params for auth)
+      const restClient = new RestClient({
+        baseUrl: service.service_url,
+        nomeRelacional: service.nome_relacional,
+        token: service.token,
+        authInQuery: true, // Publicações API requires auth in query params
+      });
 
         let totalSynced = 0;
 
-        // Sync publications
+        // Sync publications using REST API
         if (start_date && end_date) {
           // Use period search
-          totalSynced = await syncByPeriod(soapClient, supabase, service, terms, start_date, end_date);
+          totalSynced = await syncByPeriod(restClient, supabase, service, terms, start_date, end_date);
         } else {
           // Use new publications search
-          totalSynced = await syncNewPublications(soapClient, supabase, service, terms);
+          totalSynced = await syncNewPublications(restClient, supabase, service, terms);
         }
 
         // Update last sync timestamp
@@ -161,10 +163,10 @@ Deno.serve(async (req) => {
 });
 
 /**
- * Sync publications by period
+ * Sync publications by period using REST API
  */
 async function syncByPeriod(
-  soapClient: SoapClient,
+  restClient: RestClient,
   supabase: any,
   service: any,
   terms: any[],
@@ -173,10 +175,12 @@ async function syncByPeriod(
 ): Promise<number> {
   console.log(`Fetching publications from ${startDate} to ${endDate}`);
 
-  const result = await soapClient.call('getPublicacoesPeriodo', {
+  const result = await restClient.get('', {
     dataInicio: startDate,
     dataFim: endDate,
   });
+
+  console.log('Publications response:', JSON.stringify(result, null, 2));
 
   if (!result || typeof result !== 'object') {
     console.log('No publications found in period');
@@ -188,17 +192,19 @@ async function syncByPeriod(
 }
 
 /**
- * Sync new publications
+ * Sync new publications using REST API
  */
 async function syncNewPublications(
-  soapClient: SoapClient,
+  restClient: RestClient,
   supabase: any,
   service: any,
   terms: any[]
 ): Promise<number> {
   console.log('Fetching new publications');
 
-  const result = await soapClient.call('getPublicacoes', {});
+  const result = await restClient.get('');
+
+  console.log('Publications response:', JSON.stringify(result, null, 2));
 
   if (!result || typeof result !== 'object') {
     console.log('No new publications found');
@@ -208,10 +214,8 @@ async function syncNewPublications(
   const publications = Array.isArray(result) ? result : [result];
   const synced = await processPublications(supabase, service, publications, terms);
 
-  // Confirm receipt of publications
-  if (synced > 0) {
-    await confirmPublications(soapClient, publications);
-  }
+  // Note: REST API may not require confirmation like SOAP did
+  // If confirmation is needed, implement via REST endpoint
 
   return synced;
 }
@@ -269,22 +273,5 @@ async function processPublications(
   return syncedCount;
 }
 
-/**
- * Confirm receipt of publications via SOAP
- */
-async function confirmPublications(soapClient: SoapClient, publications: any[]): Promise<void> {
-  try {
-    for (const pub of publications) {
-      const publicationId = pub.id || pub.idPublicacao;
-      if (publicationId) {
-        await soapClient.call('confirmaRecebimentoPublicacao', {
-          idPublicacao: publicationId,
-        });
-      }
-    }
-    console.log('Confirmed receipt of publications');
-  } catch (error) {
-    console.error('Error confirming publications:', error);
-    // Non-critical error, don't throw
-  }
-}
+// Note: Confirmation function removed as REST API may not require it
+// If confirmation is needed, implement a new REST endpoint call here

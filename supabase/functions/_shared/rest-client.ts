@@ -7,6 +7,7 @@ export interface RestConfig {
   baseUrl: string;
   nomeRelacional: string;
   token: string;
+  authInQuery?: boolean; // If true, sends nomeRelacional and token as query params instead of headers
 }
 
 export class RestClient {
@@ -23,6 +24,12 @@ export class RestClient {
    */
   private buildUrl(endpoint: string, params?: Record<string, any>): string {
     const url = new URL(endpoint, this.config.baseUrl);
+    
+    // Add authentication as query parameters if authInQuery is true
+    if (this.config.authInQuery) {
+      url.searchParams.append('nomeRelacional', this.config.nomeRelacional);
+      url.searchParams.append('token', this.config.token);
+    }
     
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
@@ -79,13 +86,19 @@ export class RestClient {
 
     console.log(`REST GET: ${url}`);
 
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    // Add authentication as headers if authInQuery is false (default)
+    if (!this.config.authInQuery) {
+      headers['nomeRelacional'] = this.config.nomeRelacional;
+      headers['token'] = this.config.token;
+    }
+
     const response = await this.requestWithRetry(url, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'nomeRelacional': this.config.nomeRelacional,
-        'token': this.config.token,
-      },
+      headers,
     });
 
     if (!response.ok) {
@@ -104,13 +117,19 @@ export class RestClient {
 
     console.log(`REST POST: ${url}`);
 
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    // Add authentication as headers if authInQuery is false (default)
+    if (!this.config.authInQuery) {
+      headers['nomeRelacional'] = this.config.nomeRelacional;
+      headers['token'] = this.config.token;
+    }
+
     const response = await this.requestWithRetry(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'nomeRelacional': this.config.nomeRelacional,
-        'token': this.config.token,
-      },
+      headers,
       body: body ? JSON.stringify(body) : undefined,
     });
 
@@ -130,13 +149,19 @@ export class RestClient {
 
     console.log(`REST PUT: ${url}`);
 
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    // Add authentication as headers if authInQuery is false (default)
+    if (!this.config.authInQuery) {
+      headers['nomeRelacional'] = this.config.nomeRelacional;
+      headers['token'] = this.config.token;
+    }
+
     const response = await this.requestWithRetry(url, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'nomeRelacional': this.config.nomeRelacional,
-        'token': this.config.token,
-      },
+      headers,
       body: body ? JSON.stringify(body) : undefined,
     });
 
@@ -156,13 +181,19 @@ export class RestClient {
 
     console.log(`REST DELETE: ${url}`);
 
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    // Add authentication as headers if authInQuery is false (default)
+    if (!this.config.authInQuery) {
+      headers['nomeRelacional'] = this.config.nomeRelacional;
+      headers['token'] = this.config.token;
+    }
+
     const response = await this.requestWithRetry(url, {
       method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-        'nomeRelacional': this.config.nomeRelacional,
-        'token': this.config.token,
-      },
+      headers,
     });
 
     if (!response.ok) {
