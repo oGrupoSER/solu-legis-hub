@@ -84,7 +84,7 @@ export function PublicationDetailDialog({
                 <div>
                   <h3 className="text-sm font-medium text-muted-foreground mb-2">Conteúdo da Publicação</h3>
                   <div className="prose prose-sm max-w-none">
-                    <p className="text-foreground whitespace-pre-wrap">
+                    <p className="text-foreground whitespace-pre-wrap break-words leading-relaxed">
                       {publication.content || "Sem conteúdo disponível"}
                     </p>
                   </div>
