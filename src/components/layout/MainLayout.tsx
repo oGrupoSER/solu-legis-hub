@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
+import { NotificationCenter } from "./NotificationCenter";
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -65,10 +66,13 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
           {/* Header */}
           <header className="h-14 border-b border-border bg-card flex items-center justify-between px-4 sticky top-0 z-40 backdrop-blur supports-[backdrop-filter]:bg-card/60">
             <SidebarTrigger />
-            <Button variant="ghost" size="sm" onClick={handleLogout} className="gap-2">
-              <LogOut className="h-4 w-4" />
-              Sair
-            </Button>
+            <div className="flex items-center gap-2">
+              <NotificationCenter />
+              <Button variant="ghost" size="sm" onClick={handleLogout} className="gap-2">
+                <LogOut className="h-4 w-4" />
+                Sair
+              </Button>
+            </div>
           </header>
 
           {/* Main Content */}

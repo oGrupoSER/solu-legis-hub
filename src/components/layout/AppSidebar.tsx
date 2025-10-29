@@ -1,4 +1,4 @@
-import { LayoutDashboard, Clock, Activity, Search, TestTube, Scale, Shield } from "lucide-react";
+import { LayoutDashboard, Clock, Activity, Search, TestTube, Scale, Shield, FileText, Settings, HelpCircle } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   Sidebar,
@@ -18,6 +18,9 @@ const mainItems = [
   { title: "Monitoramento de API", url: "/api-monitoring", icon: Activity },
   { title: "Termos de Busca", url: "/search-terms", icon: Search },
   { title: "Playground de API", url: "/api-testing", icon: TestTube },
+  { title: "Relatórios", url: "/reports", icon: FileText },
+  { title: "Configurações", url: "/settings", icon: Settings },
+  { title: "Ajuda", url: "/help", icon: HelpCircle },
 ];
 
 export function AppSidebar() {
