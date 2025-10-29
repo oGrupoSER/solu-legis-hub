@@ -218,8 +218,8 @@ export function PublicationDetailDialog({
             </div>
 
             <ScrollArea className="h-[450px] w-full rounded-md border">
-              <pre className="p-4 text-xs">
-                <code className="language-json">
+              <pre className="p-4 text-xs whitespace-pre-wrap break-words overflow-wrap-anywhere">
+                <code className="language-json font-mono">
                   {JSON.stringify(publication.raw_data, null, 2)}
                 </code>
               </pre>
