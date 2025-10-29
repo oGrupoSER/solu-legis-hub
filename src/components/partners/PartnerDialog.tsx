@@ -12,7 +12,6 @@ interface Partner {
   id: string;
   name: string;
   description: string | null;
-  api_base_url: string | null;
   is_active: boolean;
 }
 
@@ -27,7 +26,6 @@ export const PartnerDialog = ({ open, onOpenChange, partner }: PartnerDialogProp
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    api_base_url: "",
     is_active: true,
   });
 
@@ -36,14 +34,12 @@ export const PartnerDialog = ({ open, onOpenChange, partner }: PartnerDialogProp
       setFormData({
         name: partner.name,
         description: partner.description || "",
-        api_base_url: partner.api_base_url || "",
         is_active: partner.is_active,
       });
     } else {
       setFormData({
         name: "",
         description: "",
-        api_base_url: "",
         is_active: true,
       });
     }
@@ -101,16 +97,6 @@ export const PartnerDialog = ({ open, onOpenChange, partner }: PartnerDialogProp
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 rows={3}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="api_base_url">URL Base da API</Label>
-              <Input
-                id="api_base_url"
-                type="url"
-                value={formData.api_base_url}
-                onChange={(e) => setFormData({ ...formData, api_base_url: e.target.value })}
-                placeholder="https://api.exemplo.com"
               />
             </div>
             <div className="flex items-center space-x-2">

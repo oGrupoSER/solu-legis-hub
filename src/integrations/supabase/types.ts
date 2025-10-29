@@ -91,6 +91,7 @@ export type Database = {
           distribution_date: string | null
           id: string
           partner_id: string | null
+          partner_service_id: string | null
           process_number: string
           raw_data: Json
           term: string | null
@@ -101,6 +102,7 @@ export type Database = {
           distribution_date?: string | null
           id?: string
           partner_id?: string | null
+          partner_service_id?: string | null
           process_number: string
           raw_data: Json
           term?: string | null
@@ -111,6 +113,7 @@ export type Database = {
           distribution_date?: string | null
           id?: string
           partner_id?: string | null
+          partner_service_id?: string | null
           process_number?: string
           raw_data?: Json
           term?: string | null
@@ -119,6 +122,66 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "distributions_partner_id_fkey"
+            columns: ["partner_id"]
+            isOneToOne: false
+            referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "distributions_partner_service_id_fkey"
+            columns: ["partner_service_id"]
+            isOneToOne: false
+            referencedRelation: "partner_services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      partner_services: {
+        Row: {
+          config: Json | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          last_sync_at: string | null
+          nome_relacional: string
+          partner_id: string
+          service_name: string
+          service_type: string
+          service_url: string
+          token: string
+          updated_at: string | null
+        }
+        Insert: {
+          config?: Json | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_sync_at?: string | null
+          nome_relacional: string
+          partner_id: string
+          service_name: string
+          service_type: string
+          service_url: string
+          token: string
+          updated_at?: string | null
+        }
+        Update: {
+          config?: Json | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_sync_at?: string | null
+          nome_relacional?: string
+          partner_id?: string
+          service_name?: string
+          service_type?: string
+          service_url?: string
+          token?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "partner_services_partner_id_fkey"
             columns: ["partner_id"]
             isOneToOne: false
             referencedRelation: "partners"
@@ -201,6 +264,7 @@ export type Database = {
           instance: string | null
           last_sync_at: string | null
           partner_id: string | null
+          partner_service_id: string | null
           process_number: string
           raw_data: Json
           status: string | null
@@ -213,6 +277,7 @@ export type Database = {
           instance?: string | null
           last_sync_at?: string | null
           partner_id?: string | null
+          partner_service_id?: string | null
           process_number: string
           raw_data: Json
           status?: string | null
@@ -225,6 +290,7 @@ export type Database = {
           instance?: string | null
           last_sync_at?: string | null
           partner_id?: string | null
+          partner_service_id?: string | null
           process_number?: string
           raw_data?: Json
           status?: string | null
@@ -239,6 +305,13 @@ export type Database = {
             referencedRelation: "partners"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "processes_partner_service_id_fkey"
+            columns: ["partner_service_id"]
+            isOneToOne: false
+            referencedRelation: "partner_services"
+            referencedColumns: ["id"]
+          },
         ]
       }
       publications: {
@@ -249,6 +322,7 @@ export type Database = {
           id: string
           matched_terms: string[] | null
           partner_id: string | null
+          partner_service_id: string | null
           publication_date: string | null
           raw_data: Json
         }
@@ -259,6 +333,7 @@ export type Database = {
           id?: string
           matched_terms?: string[] | null
           partner_id?: string | null
+          partner_service_id?: string | null
           publication_date?: string | null
           raw_data: Json
         }
@@ -269,6 +344,7 @@ export type Database = {
           id?: string
           matched_terms?: string[] | null
           partner_id?: string | null
+          partner_service_id?: string | null
           publication_date?: string | null
           raw_data?: Json
         }
@@ -280,6 +356,13 @@ export type Database = {
             referencedRelation: "partners"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "publications_partner_service_id_fkey"
+            columns: ["partner_service_id"]
+            isOneToOne: false
+            referencedRelation: "partner_services"
+            referencedColumns: ["id"]
+          },
         ]
       }
       search_terms: {
@@ -288,6 +371,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           partner_id: string | null
+          partner_service_id: string | null
           term: string
           term_type: string
           updated_at: string | null
@@ -297,6 +381,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           partner_id?: string | null
+          partner_service_id?: string | null
           term: string
           term_type: string
           updated_at?: string | null
@@ -306,6 +391,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           partner_id?: string | null
+          partner_service_id?: string | null
           term?: string
           term_type?: string
           updated_at?: string | null
@@ -318,6 +404,13 @@ export type Database = {
             referencedRelation: "partners"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "search_terms_partner_service_id_fkey"
+            columns: ["partner_service_id"]
+            isOneToOne: false
+            referencedRelation: "partner_services"
+            referencedColumns: ["id"]
+          },
         ]
       }
       sync_logs: {
@@ -326,6 +419,7 @@ export type Database = {
           error_message: string | null
           id: string
           partner_id: string | null
+          partner_service_id: string | null
           records_synced: number | null
           started_at: string | null
           status: string
@@ -336,6 +430,7 @@ export type Database = {
           error_message?: string | null
           id?: string
           partner_id?: string | null
+          partner_service_id?: string | null
           records_synced?: number | null
           started_at?: string | null
           status: string
@@ -346,6 +441,7 @@ export type Database = {
           error_message?: string | null
           id?: string
           partner_id?: string | null
+          partner_service_id?: string | null
           records_synced?: number | null
           started_at?: string | null
           status?: string
@@ -357,6 +453,13 @@ export type Database = {
             columns: ["partner_id"]
             isOneToOne: false
             referencedRelation: "partners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sync_logs_partner_service_id_fkey"
+            columns: ["partner_service_id"]
+            isOneToOne: false
+            referencedRelation: "partner_services"
             referencedColumns: ["id"]
           },
         ]

@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit, Trash2 } from "lucide-react";
+import { Plus, Edit, Trash2, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { PartnerDialog } from "./PartnerDialog";
 
@@ -11,12 +12,12 @@ interface Partner {
   id: string;
   name: string;
   description: string | null;
-  api_base_url: string | null;
   is_active: boolean;
   created_at: string;
 }
 
 export const PartnersTable = () => {
+  const navigate = useNavigate();
   const [partners, setPartners] = useState<Partner[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -86,7 +87,6 @@ export const PartnersTable = () => {
             <TableRow>
               <TableHead>Nome</TableHead>
               <TableHead>Descrição</TableHead>
-              <TableHead>URL Base API</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Ações</TableHead>
             </TableRow>
@@ -94,7 +94,7 @@ export const PartnersTable = () => {
           <TableBody>
             {partners.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground">
+                <TableCell colSpan={4} className="text-center text-muted-foreground">
                   Nenhum parceiro cadastrado
                 </TableCell>
               </TableRow>
@@ -103,9 +103,6 @@ export const PartnersTable = () => {
                 <TableRow key={partner.id}>
                   <TableCell className="font-medium">{partner.name}</TableCell>
                   <TableCell className="text-muted-foreground">{partner.description || "-"}</TableCell>
-                  <TableCell className="text-sm font-mono text-muted-foreground">
-                    {partner.api_base_url || "-"}
-                  </TableCell>
                   <TableCell>
                     <Badge variant={partner.is_active ? "default" : "secondary"}>
                       {partner.is_active ? "Ativo" : "Inativo"}
@@ -113,6 +110,14 @@ export const PartnersTable = () => {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => navigate(`/partner-services?partnerId=${partner.id}`)}
+                        title="Gerenciar Serviços"
+                      >
+                        <Settings className="h-4 w-4" />
+                      </Button>
                       <Button variant="ghost" size="icon" onClick={() => handleEdit(partner)}>
                         <Edit className="h-4 w-4" />
                       </Button>
