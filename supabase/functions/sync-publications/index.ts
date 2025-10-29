@@ -183,7 +183,8 @@ async function syncByPeriod(
     return 0;
   }
 
-  const publications = Array.isArray(result) ? result : [result];
+  const publicationsRaw = (result && (result.ArrayOfPublicacoes?.Publicacoes ?? result.Publicacoes ?? result)) || [];
+  const publications = Array.isArray(publicationsRaw) ? publicationsRaw : [publicationsRaw];
   return await processPublications(supabase, service, publications, terms);
 }
 
@@ -219,7 +220,8 @@ async function syncNewPublications(
         break;
       }
       
-      const publications = Array.isArray(result) ? result : [result];
+      const publicationsRaw = (result && (result.ArrayOfPublicacoes?.Publicacoes ?? result.Publicacoes ?? result)) || [];
+      const publications = Array.isArray(publicationsRaw) ? publicationsRaw : [publicationsRaw];
       console.log(`Received ${publications.length} publications in batch ${batchNumber}`);
       
       if (publications.length === 0) {
@@ -299,7 +301,7 @@ async function processPublications(
       const codPublicacao = pub.codPublicacao; // Unique ID
       const content = pub.conteudoPublicacao || ''; // Full content
       const gazetteName = pub.nomeDiario || ''; // Gazette name
-      const publicationDate = pub.dataPublicacao || null; // Publication date
+      const publicationDate = pub.dataPublicacao ? String(pub.dataPublicacao).slice(0, 10) : null; // YYYY-MM-DD
       
       // Skip if no codPublicacao (required for deduplication)
       if (!codPublicacao) {

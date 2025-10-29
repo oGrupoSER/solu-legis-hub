@@ -3,6 +3,8 @@
  * Handles authentication and retry logic
  */
 
+import { XMLParser } from 'https://esm.sh/fast-xml-parser@4.3.2';
+
 export interface RestConfig {
   baseUrl: string;
   nomeRelacional: string;
@@ -110,6 +112,8 @@ export class RestClient {
     }
 
     const responseText = await response.text();
+    const contentType = response.headers.get('content-type') || '';
+    console.log(`REST Content-Type: ${contentType}`);
     console.log(`REST Response Body (first 500 chars): ${responseText.substring(0, 500)}`);
     
     if (!responseText || responseText.trim() === '') {
@@ -117,6 +121,20 @@ export class RestClient {
       return null;
     }
 
+    // Try XML first if content-type indicates or response starts with '<'
+    const trimmed = responseText.trim();
+    if (contentType.includes('xml') || trimmed.startsWith('<')) {
+      try {
+        const parser = new XMLParser({ ignoreAttributes: false });
+        const parsed = parser.parse(responseText);
+        return parsed;
+      } catch (e) {
+        console.error('Failed to parse XML response:', e);
+        throw e;
+      }
+    }
+
+    // Fallback to JSON
     return JSON.parse(responseText);
   }
 
