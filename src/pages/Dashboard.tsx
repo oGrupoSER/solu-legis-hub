@@ -36,6 +36,8 @@ const Dashboard = () => {
       return;
     }
 
+    setIsLoading(false);
+
     supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_OUT" || !session) {
         navigate("/auth");
@@ -71,18 +73,13 @@ const Dashboard = () => {
       });
     } catch (error) {
       toast.error("Erro ao carregar estatísticas");
-    } finally {
-      setIsLoading(false);
     }
   };
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background">
-        <DashboardHeader />
-        <div className="container py-8 flex items-center justify-center">
-          <div className="text-muted-foreground">Carregando...</div>
-        </div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-muted-foreground">Carregando...</div>
       </div>
     );
   }
