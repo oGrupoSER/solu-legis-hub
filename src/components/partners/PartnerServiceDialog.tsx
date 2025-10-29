@@ -163,6 +163,7 @@ const PartnerServiceDialog = ({ open, onOpenChange, partnerId, service }: Partne
                 <SelectItem value="processes">Andamentos</SelectItem>
                 <SelectItem value="distributions">Distribuições</SelectItem>
                 <SelectItem value="publications">Publicações</SelectItem>
+                <SelectItem value="terms">Termos e Escritórios</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -181,6 +182,9 @@ const PartnerServiceDialog = ({ open, onOpenChange, partnerId, service }: Partne
               ⚠️ Insira apenas a URL base do serviço, <strong>sem parâmetros</strong> (?, &amp;).
               {formData.service_type === 'publications' && (
                 <> Para Publicações REST, exemplo: <code className="text-xs bg-muted px-1 rounded">http://domain/api/endpoint</code></>
+              )}
+              {formData.service_type === 'terms' && (
+                <> Para Termos SOAP, exemplo: <code className="text-xs bg-muted px-1 rounded">http://domain/webservice/NomeService.wsdl</code></>
               )}
             </p>
             {(formData.service_url.includes('?') || formData.service_url.includes('&')) && (

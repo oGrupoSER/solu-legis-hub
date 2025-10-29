@@ -108,16 +108,16 @@ const SearchTerms = () => {
     setSyncStats(null);
     
     try {
-      // Get the first publications service
+      // Get the first terms service (SOAP)
       const { data: services } = await supabase
         .from('partner_services')
         .select('id')
-        .eq('service_type', 'publications')
+        .eq('service_type', 'terms')
         .eq('is_active', true)
         .limit(1);
 
       if (!services || services.length === 0) {
-        toast.error("Nenhum serviço de publicações ativo encontrado");
+        toast.error("Nenhum serviço de termos ativo encontrado. Configure um serviço do tipo 'Termos e Escritórios' primeiro.");
         return;
       }
 

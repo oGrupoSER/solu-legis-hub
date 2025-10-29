@@ -77,6 +77,7 @@ Deno.serve(async (req) => {
     try {
       console.log('Fetching offices from Solucionare...');
       const offices = await soapClient.call('buscarEscritorios', {});
+      console.log('Offices response:', offices);
       
       if (Array.isArray(offices) && offices.length > 0) {
         console.log(`Found ${offices.length} offices`);
@@ -138,6 +139,7 @@ Deno.serve(async (req) => {
     try {
       console.log('Fetching search names from Solucionare...');
       const names = await soapClient.call('buscarNomesPesquisa', {});
+      console.log('Names response:', names);
       
       if (Array.isArray(names) && names.length > 0) {
         console.log(`Found ${names.length} search names`);
