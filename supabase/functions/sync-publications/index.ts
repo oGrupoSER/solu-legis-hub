@@ -61,8 +61,8 @@ Deno.serve(async (req) => {
 
         console.log(`Syncing publications for service: ${service.service_name}`);
 
-        // Get active search terms for this service
-        const { data: terms, error: termsError } = await supabase
+        // Get active search terms for this service (optional - used for local matching)
+        const { data: termsData, error: termsError } = await supabase
           .from('search_terms')
           .select('*')
           .eq('partner_service_id', service.id)
@@ -73,19 +73,11 @@ Deno.serve(async (req) => {
           throw termsError;
         }
 
-        if (!terms || terms.length === 0) {
-          console.log('No active publication terms found for this service');
-          await logger.success(0);
-          results.push({
-            service_id: service.id,
-            service_name: service.service_name,
-            synced: 0,
-            message: 'No active terms',
-          });
-          continue;
+        const terms = termsData || [];
+        console.log(`Found ${terms.length} active publication terms for local matching`);
+        if (terms.length === 0) {
+          console.log('No terms found - will import all publications without term matching');
         }
-
-        console.log(`Found ${terms.length} active publication terms`);
 
       // Initialize REST client for publications (API uses query params for auth)
       const restClient = new RestClient({
@@ -193,6 +185,7 @@ async function syncByPeriod(
 
 /**
  * Sync new publications using REST API
+ * Fetches publications in batches of up to 500 until no more are available
  */
 async function syncNewPublications(
   restClient: RestClient,
@@ -200,28 +193,88 @@ async function syncNewPublications(
   service: any,
   terms: any[]
 ): Promise<number> {
-  console.log('Fetching new publications');
-
-  const result = await restClient.get('');
-
-  console.log('Publications response:', JSON.stringify(result, null, 2));
-
-  if (!result || typeof result !== 'object') {
-    console.log('No new publications found');
-    return 0;
+  console.log('Fetching publications in batches of up to 500...');
+  
+  let totalSynced = 0;
+  let batchNumber = 1;
+  let hasMore = true;
+  const failedBatches: Array<{ batch: number; error: string }> = [];
+  
+  while (hasMore) {
+    try {
+      console.log(`\n=== Fetching batch ${batchNumber} ===`);
+      
+      const result = await restClient.get('');
+      
+      if (!result || typeof result !== 'object') {
+        console.log('No more publications available');
+        hasMore = false;
+        break;
+      }
+      
+      const publications = Array.isArray(result) ? result : [result];
+      console.log(`Received ${publications.length} publications in batch ${batchNumber}`);
+      
+      if (publications.length === 0) {
+        console.log('Empty batch received - no more data available');
+        hasMore = false;
+        break;
+      }
+      
+      // Process batch
+      const synced = await processPublications(supabase, service, publications, terms);
+      totalSynced += synced;
+      
+      console.log(`=== Batch ${batchNumber} Summary ===`);
+      console.log(`- Received: ${publications.length} publications`);
+      console.log(`- New: ${synced} publications`);
+      console.log(`- Duplicates: ${publications.length - synced}`);
+      console.log(`- Total synced so far: ${totalSynced}`);
+      console.log(`================================\n`);
+      
+      // If received less than 500, no more data available
+      if (publications.length < 500) {
+        console.log('Received less than 500 publications - no more data available');
+        hasMore = false;
+      }
+      
+      batchNumber++;
+      
+    } catch (batchError) {
+      const errorMessage = batchError instanceof Error ? batchError.message : 'Unknown error';
+      console.error(`Error processing batch ${batchNumber}:`, batchError);
+      
+      // Record failed batch but continue with next batch
+      failedBatches.push({
+        batch: batchNumber,
+        error: errorMessage,
+      });
+      
+      batchNumber++;
+      
+      // Stop after 3 consecutive errors to prevent infinite loop
+      if (failedBatches.length >= 3) {
+        console.error('Too many consecutive errors - stopping sync');
+        hasMore = false;
+      }
+    }
   }
-
-  const publications = Array.isArray(result) ? result : [result];
-  const synced = await processPublications(supabase, service, publications, terms);
-
-  // Note: REST API may not require confirmation like SOAP did
-  // If confirmation is needed, implement via REST endpoint
-
-  return synced;
+  
+  console.log(`\n=== SYNC COMPLETED ===`);
+  console.log(`Total batches processed: ${batchNumber - 1}`);
+  console.log(`Total new publications: ${totalSynced}`);
+  if (failedBatches.length > 0) {
+    console.log(`Failed batches: ${failedBatches.length}`);
+    console.log('Failed batch details:', JSON.stringify(failedBatches, null, 2));
+  }
+  console.log(`======================\n`);
+  
+  return totalSynced;
 }
 
 /**
- * Process and store publications
+ * Process and store publications using batch upsert
+ * Maps fields according to Solucionare API documentation
  */
 async function processPublications(
   supabase: any,
@@ -229,22 +282,31 @@ async function processPublications(
   publications: any[],
   terms: any[]
 ): Promise<number> {
-  let syncedCount = 0;
-
+  console.log(`Processing ${publications.length} publications...`);
+  
+  const publicationsToInsert = [];
+  
   for (const pub of publications) {
     try {
-      // Extract publication data
-      const content = pub.conteudo || pub.content || '';
-      const gazetteName = pub.nomeGazeta || pub.gazette_name || '';
-      const publicationDate = pub.dataPublicacao || pub.publication_date || null;
-
-      // Find matching terms
+      // Extract publication data according to Solucionare API docs (pages 13-14)
+      const codPublicacao = pub.codPublicacao; // Unique ID
+      const content = pub.conteudoPublicacao || ''; // Full content
+      const gazetteName = pub.nomeDiario || ''; // Gazette name
+      const publicationDate = pub.dataPublicacao || null; // Publication date
+      
+      // Skip if no codPublicacao (required for deduplication)
+      if (!codPublicacao) {
+        console.warn('Publication missing codPublicacao, skipping:', pub);
+        continue;
+      }
+      
+      // Find matching terms (local matching)
       const matchedTerms = terms
         .filter((term) => content.toLowerCase().includes(term.term.toLowerCase()))
         .map((term) => term.term);
-
-      // Insert publication
-      const { error } = await supabase.from('publications').insert({
+      
+      publicationsToInsert.push({
+        cod_publicacao: codPublicacao,
         partner_id: service.partner_id,
         partner_service_id: service.id,
         gazette_name: gazetteName,
@@ -253,24 +315,39 @@ async function processPublications(
         matched_terms: matchedTerms,
         raw_data: pub,
       });
-
-      if (error) {
-        // Check if it's a duplicate
-        if (error.code === '23505') {
-          console.log('Publication already exists, skipping');
-          continue;
-        }
-        throw error;
-      }
-
-      syncedCount++;
+      
     } catch (pubError) {
-      console.error('Error processing publication:', pubError);
+      console.error('Error preparing publication:', pubError);
       // Continue with next publication
     }
   }
-
-  return syncedCount;
+  
+  if (publicationsToInsert.length === 0) {
+    console.log('No valid publications to insert');
+    return 0;
+  }
+  
+  console.log(`Attempting to upsert ${publicationsToInsert.length} publications...`);
+  
+  // Batch upsert with conflict resolution on cod_publicacao
+  const { data, error } = await supabase
+    .from('publications')
+    .upsert(publicationsToInsert, {
+      onConflict: 'cod_publicacao',
+      ignoreDuplicates: true, // Don't update if already exists
+    })
+    .select();
+  
+  if (error) {
+    console.error('Error upserting publications:', error);
+    throw error;
+  }
+  
+  // Return how many were actually inserted (not duplicates)
+  const insertedCount = data?.length || 0;
+  console.log(`Successfully inserted ${insertedCount} new publications (${publicationsToInsert.length - insertedCount} were duplicates)`);
+  
+  return insertedCount;
 }
 
 // Note: Confirmation function removed as REST API may not require it

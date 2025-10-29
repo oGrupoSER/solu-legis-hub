@@ -411,6 +411,7 @@ export type Database = {
       }
       publications: {
         Row: {
+          cod_publicacao: number | null
           content: string | null
           created_at: string | null
           gazette_name: string | null
@@ -422,6 +423,7 @@ export type Database = {
           raw_data: Json
         }
         Insert: {
+          cod_publicacao?: number | null
           content?: string | null
           created_at?: string | null
           gazette_name?: string | null
@@ -433,6 +435,7 @@ export type Database = {
           raw_data: Json
         }
         Update: {
+          cod_publicacao?: number | null
           content?: string | null
           created_at?: string | null
           gazette_name?: string | null
