@@ -7,6 +7,7 @@ export interface SoapConfig {
   serviceUrl: string;
   nomeRelacional: string;
   token: string;
+  namespace?: string; // Custom namespace for SOAP envelope
 }
 
 export class SoapClient {
@@ -20,27 +21,29 @@ export class SoapClient {
    * Build SOAP envelope for request
    */
   private buildEnvelope(method: string, params: Record<string, any>): string {
+    const namespace = this.config.namespace || this.getNormalizedUrl();
+    
     const paramsXml = Object.entries(params)
       .map(([key, value]) => {
-        if (typeof value === 'object' && value !== null) {
-          return `<${key}>${JSON.stringify(value)}</${key}>`;
-        }
-        return `<${key}>${this.escapeXml(String(value))}</${key}>`;
+        const typeAttr = typeof value === 'number' ? 'xsi:type="xsd:int"' : 'xsi:type="xsd:string"';
+        return `<${key} ${typeAttr}>${this.escapeXml(String(value))}</${key}>`;
       })
       .join('');
 
     return `<?xml version="1.0" encoding="utf-8"?>
-<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
-               xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
-               xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-  <soap:Body>
-    <${method} xmlns="http://tempuri.org/">
-      <nomeRelacional>${this.escapeXml(this.config.nomeRelacional)}</nomeRelacional>
-      <token>${this.escapeXml(this.config.token)}</token>
+<soapenv:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+                  xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
+                  xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+                  xmlns:nom="${namespace}">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <nom:${method} soapenv:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
+      <nomeRelacional xsi:type="xsd:string">${this.escapeXml(this.config.nomeRelacional)}</nomeRelacional>
+      <token xsi:type="xsd:string">${this.escapeXml(this.config.token)}</token>
       ${paramsXml}
-    </${method}>
-  </soap:Body>
-</soap:Envelope>`;
+    </nom:${method}>
+  </soapenv:Body>
+</soapenv:Envelope>`;
   }
 
   /**
@@ -75,85 +78,65 @@ export class SoapClient {
   }
 
   /**
-   * Parse SOAP response
+   * Parse SOAP response - handles complex structures with nested objects
    */
   private parseResponse(xmlText: string, method: string): any {
     try {
       console.log('=== SOAP Response Parsing ===');
       console.log('Method:', method);
-      console.log('Raw XML (first 500 chars):', xmlText.substring(0, 500));
+      console.log('Raw XML (first 1000 chars):', xmlText.substring(0, 1000));
       
       // Remove namespaces and extra attributes for easier parsing
       const cleanXml = xmlText
-        .replace(/<[A-Za-z0-9_]+:/g, '<')
-        .replace(/<\/[A-Za-z0-9_]+:/g, '</')
-        .replace(/xmlns[^=]*="[^"]*"\s*/g, '')
+        .replace(/<[A-Za-z0-9_-]+:/g, '<')
+        .replace(/<\/[A-Za-z0-9_-]+:/g, '</')
+        .replace(/\s+xmlns[^=]*="[^"]*"/g, '')
+        .replace(/\s+xsi:type="[^"]*"/g, '')
+        .replace(/\s+arrayType="[^"]*"/g, '')
+        .replace(/\s+encodingStyle="[^"]*"/g, '')
         .replace(/\s+>/g, '>')
         .trim();
 
-      console.log('Clean XML (first 500 chars):', cleanXml.substring(0, 500));
+      console.log('Clean XML (first 1000 chars):', cleanXml.substring(0, 1000));
 
-      // Try multiple patterns for the result with optional namespace prefix
-      const patterns = [
-        new RegExp(`<(?:\\w+:)?${method}Result>(.*?)</(?:\\w+:)?${method}Result>`, 's'),
-        new RegExp(`<(?:\\w+:)?${method}Response[^>]*>(.*?)</(?:\\w+:)?${method}Response>`, 's'),
-        new RegExp(`<(?:\\w+:)?return>(.*?)</(?:\\w+:)?return>`, 's'),
-        // Fallback: try to find any <string> elements in response
-        new RegExp(`<Body[^>]*>(.*?)</Body>`, 's')
-      ];
-
-      let resultXml = '';
-      for (const pattern of patterns) {
-        const match = cleanXml.match(pattern);
-        if (match) {
-          resultXml = match[1].trim();
-          console.log('Match found with pattern:', pattern.source);
-          console.log('Result XML:', resultXml.substring(0, 300));
-          break;
-        }
+      // Extract the response body content
+      const bodyMatch = cleanXml.match(/<Body>(.*?)<\/Body>/s);
+      if (!bodyMatch) {
+        throw new Error('No SOAP Body found in response');
       }
 
-      if (!resultXml) {
-        console.error('No result pattern matched. Full clean XML:', cleanXml);
-        throw new Error(`No result found for method ${method}`);
+      const bodyContent = bodyMatch[1];
+      console.log('Body content (first 500 chars):', bodyContent.substring(0, 500));
+
+      // Check if response contains <retorno> array structure
+      if (bodyContent.includes('<retorno>')) {
+        console.log('Parsing complex array structure with <retorno>');
+        return this.parseComplexArray(bodyContent);
       }
 
-      // Try to parse as JSON if it looks like JSON
-      if (resultXml.startsWith('{') || resultXml.startsWith('[')) {
-        try {
-          const parsed = JSON.parse(resultXml);
-          console.log('Parsed as JSON:', parsed);
-          return parsed;
-        } catch {
-          console.log('Failed to parse as JSON, returning as string');
-          return resultXml;
-        }
-      }
-
-      // Parse XML arrays (escritorios, nomes)
-      if (resultXml.includes('<string>')) {
+      // Parse simple string arrays
+      if (bodyContent.includes('<string>')) {
         const items: string[] = [];
         const stringRegex = /<string>(.*?)<\/string>/gs;
         let stringMatch;
-        while ((stringMatch = stringRegex.exec(resultXml)) !== null) {
+        while ((stringMatch = stringRegex.exec(bodyContent)) !== null) {
           const value = stringMatch[1].trim();
           if (value) {
             items.push(value);
           }
         }
-        console.log(`Extracted ${items.length} string items:`, items.slice(0, 5));
+        console.log(`Extracted ${items.length} string items`);
         return items;
       }
 
-      // If it's empty or whitespace only, return empty array
-      if (!resultXml || resultXml.trim() === '') {
+      // If empty, return empty array
+      if (!bodyContent.trim() || bodyContent.trim() === '<return/>') {
         console.log('Empty result, returning empty array');
         return [];
       }
 
-      // Otherwise return as XML string
-      console.log('Returning raw result XML');
-      return resultXml;
+      console.log('Returning body content as-is');
+      return bodyContent;
     } catch (error) {
       console.error('=== SOAP Parsing Error ===');
       console.error('Error:', error);
@@ -161,6 +144,55 @@ export class SoapClient {
       const message = error instanceof Error ? error.message : 'Unknown error';
       throw new Error(`Failed to parse SOAP response: ${message}`);
     }
+  }
+
+  /**
+   * Parse complex array structures with nested objects
+   */
+  private parseComplexArray(xml: string): any[] {
+    const items: any[] = [];
+    const itemRegex = /<item[^>]*>(.*?)<\/item>/gs;
+    let itemMatch;
+    
+    while ((itemMatch = itemRegex.exec(xml)) !== null) {
+      const itemXml = itemMatch[1];
+      const item: any = {};
+      
+      // Extract all simple fields
+      const fieldRegex = /<([a-zA-Z]+)>([^<]*)<\/\1>/g;
+      let fieldMatch;
+      
+      while ((fieldMatch = fieldRegex.exec(itemXml)) !== null) {
+        const fieldName = fieldMatch[1];
+        const fieldValue = fieldMatch[2].trim();
+        
+        // Try to parse as number if it looks like one
+        if (/^\d+$/.test(fieldValue)) {
+          item[fieldName] = parseInt(fieldValue, 10);
+        } else {
+          item[fieldName] = fieldValue;
+        }
+      }
+      
+      // Extract nested arrays (like variacoes)
+      const arrayRegex = /<([a-zA-Z]+)>((?:.*?)<item[^>]*>.*?<\/item>(?:.*?))<\/\1>/gs;
+      let arrayMatch;
+      
+      while ((arrayMatch = arrayRegex.exec(itemXml)) !== null) {
+        const arrayName = arrayMatch[1];
+        const arrayContent = arrayMatch[2];
+        item[arrayName] = this.parseComplexArray(arrayContent);
+      }
+      
+      items.push(item);
+    }
+    
+    console.log(`Parsed ${items.length} complex items`);
+    if (items.length > 0) {
+      console.log('First item sample:', JSON.stringify(items[0]).substring(0, 200));
+    }
+    
+    return items;
   }
 
   /**
@@ -177,11 +209,12 @@ export class SoapClient {
     console.log('Envelope (first 500 chars):', envelope.substring(0, 500));
 
     try {
+      const namespace = this.config.namespace || normalizedUrl;
       const response = await fetch(normalizedUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'text/xml; charset=utf-8',
-          'SOAPAction': `http://tempuri.org/${method}`,
+          'SOAPAction': `${namespace}#${method}`,
         },
         body: envelope,
       });

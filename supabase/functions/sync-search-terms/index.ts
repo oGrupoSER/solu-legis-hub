@@ -65,11 +65,12 @@ Deno.serve(async (req) => {
     console.log('Nome Relacional:', service.nome_relacional);
     console.log('Token (masked):', '***' + service.token.slice(-4));
 
-    // Initialize SOAP client
+    // Initialize SOAP client with proper namespace
     const soapClient = new SoapClient({
       serviceUrl: service.service_url,
       nomeRelacional: service.nome_relacional,
       token: service.token,
+      namespace: service.service_url.replace('.wsdl', '').replace('?wsdl', ''),
     });
     
     console.log('SOAP Client initialized successfully');
@@ -83,10 +84,10 @@ Deno.serve(async (req) => {
       errors: [],
     };
 
-    // Sync offices (escritórios)
+    // Sync offices (escritórios) - using getEscritorios method
     try {
       console.log('\n=== Fetching Offices (Escritórios) ===');
-      const offices = await soapClient.call('buscarEscritorios', {});
+      const offices = await soapClient.call('getEscritorios', {});
       console.log('Offices response type:', typeof offices);
       console.log('Is array?', Array.isArray(offices));
       console.log('Offices data:', JSON.stringify(offices).substring(0, 500));
@@ -149,64 +150,119 @@ Deno.serve(async (req) => {
       result.errors.push(`Failed to fetch offices: ${message}`);
     }
 
-    // Sync search names (nomes de pesquisa)
+    // Sync search names (nomes de pesquisa) - using getNomesPesquisa with codEscritorio
     try {
       console.log('\n=== Fetching Search Names (Nomes de Pesquisa) ===');
-      const names = await soapClient.call('buscarNomesPesquisa', {});
-      console.log('Names response type:', typeof names);
-      console.log('Is array?', Array.isArray(names));
-      console.log('Names data:', JSON.stringify(names).substring(0, 500));
       
-      if (Array.isArray(names) && names.length > 0) {
-        console.log(`✓ Found ${names.length} search names`);
-
-        for (const searchName of names) {
-          try {
-            // Check if term already exists
-            const { data: existing } = await supabase
-              .from('search_terms')
-              .select('id')
-              .eq('term', searchName)
-              .eq('term_type', 'name')
-              .eq('partner_service_id', serviceId)
-              .single();
-
-            if (existing) {
-              // Update existing term
-              const { error } = await supabase
-                .from('search_terms')
-                .update({
-                  is_active: true,
-                  updated_at: new Date().toISOString(),
-                })
-                .eq('id', existing.id);
-
-              if (error) throw error;
-              result.namesUpdated++;
-            } else {
-              // Insert new term
-              const { error } = await supabase
-                .from('search_terms')
-                .insert({
-                  term: searchName,
-                  term_type: 'name',
-                  partner_id: service.partner_id,
-                  partner_service_id: serviceId,
-                  is_active: true,
-                });
-
-              if (error) throw error;
-              result.namesImported++;
-            }
-          } catch (error) {
-            const message = error instanceof Error ? error.message : 'Unknown error';
-            console.error(`Error syncing name "${searchName}":`, message);
-            result.errors.push(`Name "${searchName}": ${message}`);
-          }
-        }
+      // First, get all offices to query names for each one
+      const offices = await soapClient.call('getEscritorios', {});
+      
+      if (!Array.isArray(offices) || offices.length === 0) {
+        console.log('⚠ No offices found, skipping names sync');
       } else {
-        console.log('⚠ No search names found or invalid response format');
-        console.log('Response value:', names);
+        console.log(`Found ${offices.length} offices, fetching names for office code 11`);
+        
+        // For now, use office code 11 as shown in SoapUI example
+        // TODO: Map office names to codes and iterate through all
+        const names = await soapClient.call('getNomesPesquisa', { codEscritorio: 11 });
+        console.log('Names response type:', typeof names);
+        console.log('Is array?', Array.isArray(names));
+        console.log('Names data:', JSON.stringify(names).substring(0, 1000));
+        
+        if (Array.isArray(names) && names.length > 0) {
+          console.log(`✓ Found ${names.length} search names`);
+
+          for (const nameObj of names) {
+            try {
+              // Extract the main name from the complex object
+              const searchName = nameObj.nome || nameObj.term;
+              const codNome = nameObj.codNome;
+              
+              if (!searchName) {
+                console.log('⚠ Skipping item without name:', JSON.stringify(nameObj).substring(0, 100));
+                continue;
+              }
+
+              console.log(`Processing name: ${searchName} (code: ${codNome})`);
+
+              // Check if term already exists
+              const { data: existing } = await supabase
+                .from('search_terms')
+                .select('id')
+                .eq('term', searchName)
+                .eq('term_type', 'name')
+                .eq('partner_service_id', serviceId)
+                .single();
+
+              if (existing) {
+                // Update existing term
+                const { error } = await supabase
+                  .from('search_terms')
+                  .update({
+                    is_active: true,
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq('id', existing.id);
+
+                if (error) throw error;
+                result.namesUpdated++;
+              } else {
+                // Insert new term
+                const { error } = await supabase
+                  .from('search_terms')
+                  .insert({
+                    term: searchName,
+                    term_type: 'name',
+                    partner_id: service.partner_id,
+                    partner_service_id: serviceId,
+                    is_active: true,
+                  });
+
+                if (error) throw error;
+                result.namesImported++;
+              }
+
+              // Also sync variations (variacoes) if they exist
+              if (nameObj.variacoes && Array.isArray(nameObj.variacoes)) {
+                console.log(`  Found ${nameObj.variacoes.length} variations for "${searchName}"`);
+                for (const variacao of nameObj.variacoes) {
+                  const variacaoTerm = variacao.termo;
+                  if (!variacaoTerm) continue;
+
+                  // Check if variation exists
+                  const { data: existingVar } = await supabase
+                    .from('search_terms')
+                    .select('id')
+                    .eq('term', variacaoTerm)
+                    .eq('term_type', 'name')
+                    .eq('partner_service_id', serviceId)
+                    .single();
+
+                  if (!existingVar) {
+                    await supabase
+                      .from('search_terms')
+                      .insert({
+                        term: variacaoTerm,
+                        term_type: 'name',
+                        partner_id: service.partner_id,
+                        partner_service_id: serviceId,
+                        is_active: true,
+                      });
+                    result.namesImported++;
+                  }
+                }
+              }
+            } catch (error) {
+              const message = error instanceof Error ? error.message : 'Unknown error';
+              console.error(`Error syncing name object:`, message);
+              console.error('Name object:', JSON.stringify(nameObj).substring(0, 200));
+              result.errors.push(`Name sync error: ${message}`);
+            }
+          }
+        } else {
+          console.log('⚠ No search names found or invalid response format');
+          console.log('Response value:', JSON.stringify(names).substring(0, 500));
+        }
       }
     } catch (error: any) {
       console.error('✗ Error fetching search names:', error);
