@@ -44,3 +44,6 @@ verify_jwt = true
 
 [functions.sync-search-terms]
 verify_jwt = true
+
+[functions.revert-confirmations]
+verify_jwt = true

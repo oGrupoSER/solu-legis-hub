@@ -1,4 +1,4 @@
-import { LayoutDashboard, Clock, Activity, Search, TestTube, Scale, Shield, FileText, Settings, HelpCircle, Newspaper, Gavel, FolderInput, AlertCircle, Building2, Users } from "lucide-react";
+import { LayoutDashboard, Clock, Activity, Search, TestTube, Scale, Shield, FileText, Settings, HelpCircle, Newspaper, Gavel, FolderInput, AlertCircle, Building2, Users, RotateCcw } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   Sidebar,
@@ -21,6 +21,7 @@ const mainItems = [
   { title: "Publicações", url: "/publications", icon: Newspaper },
   { title: "Status Tribunais", url: "/court-status", icon: AlertCircle },
   { title: "Termos de Busca", url: "/search-terms", icon: Search },
+  { title: "Reversão Confirmações", url: "/confirmation-reversal", icon: RotateCcw },
   { title: "Logs de Sincronização", url: "/sync-logs", icon: Clock },
   { title: "Monitoramento de API", url: "/api-monitoring", icon: Activity },
   { title: "Playground de API", url: "/api-testing", icon: TestTube },

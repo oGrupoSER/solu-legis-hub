@@ -22,6 +22,7 @@ import Processes from "./pages/Processes";
 import ProcessDetails from "./pages/ProcessDetails";
 import Distributions from "./pages/Distributions";
 import CourtStatus from "./pages/CourtStatus";
+import ConfirmationReversal from "./pages/ConfirmationReversal";
 
 const queryClient = new QueryClient();
 
@@ -45,6 +46,7 @@ const App = () => (
                 <Route path="/processes/:id" element={<ProcessDetails />} />
                 <Route path="/distributions" element={<Distributions />} />
                 <Route path="/court-status" element={<CourtStatus />} />
+                <Route path="/confirmation-reversal" element={<ConfirmationReversal />} />
                 <Route path="/sync-logs" element={<SyncLogs />} />
                 <Route path="/publications" element={<Publications />} />
                 <Route path="/api-monitoring" element={<ApiMonitoring />} />
