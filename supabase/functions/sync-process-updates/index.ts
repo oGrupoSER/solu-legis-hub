@@ -827,11 +827,14 @@ async function syncCovers(client: RestClient, supabase: any, service: any): Prom
       }
     }
 
-    // Batch upsert parties
+    // Batch upsert parties using new unique index
     if (partyInserts.length > 0) {
       const { error: partyError } = await supabase
         .from('process_parties')
-        .upsert(partyInserts, { onConflict: 'cod_processo_polo,cod_agrupador' });
+        .upsert(partyInserts, { 
+          onConflict: 'process_id,nome,tipo_polo',
+          ignoreDuplicates: true 
+        });
       
       if (partyError) {
         console.error('Error batch upserting parties:', partyError);
@@ -840,11 +843,14 @@ async function syncCovers(client: RestClient, supabase: any, service: any): Prom
       }
     }
 
-    // Batch upsert lawyers
+    // Batch upsert lawyers using new unique index
     if (lawyerInserts.length > 0) {
       const { error: lawyerError } = await supabase
         .from('process_lawyers')
-        .upsert(lawyerInserts, { onConflict: 'cod_processo_polo,num_oab' });
+        .upsert(lawyerInserts, { 
+          onConflict: 'process_id,cod_processo_polo,nome_advogado',
+          ignoreDuplicates: true 
+        });
       
       if (lawyerError) {
         console.error('Error batch upserting lawyers:', lawyerError);
@@ -882,7 +888,11 @@ async function syncCovers(client: RestClient, supabase: any, service: any): Prom
 
 /**
  * Confirm receipt of synced items
- * POST /ConfirmaRecebimento{Type} with body as array directly (e.g., [1, 2, 3])
+ * API V3 expects objects with specific property names:
+ * - Groupers: { codAgrupadorConfirmado: X }
+ * - Dependencies: { codDependenciaConfirmado: X }
+ * - Movements: { codAndamentoConfirmado: X }
+ * - Documents: { codDocumentoConfirmado: X }
  */
 async function confirmReceipt(client: RestClient, supabase: any, type: string, ids: number[]): Promise<void> {
   try {
@@ -893,14 +903,25 @@ async function confirmReceipt(client: RestClient, supabase: any, type: string, i
       documents: '/ConfirmaRecebimentoDocumento',
     };
 
-    const endpoint = endpoints[type];
-    if (!endpoint) return;
+    // API expects object format with specific property names
+    const confirmPropertyNames: Record<string, string> = {
+      groupers: 'codAgrupadorConfirmado',
+      dependencies: 'codDependenciaConfirmado',
+      movements: 'codAndamentoConfirmado',
+      documents: 'codDocumentoConfirmado',
+    };
 
-    // Confirm in batches of 100 - API expects array directly, not wrapped in object
+    const endpoint = endpoints[type];
+    const propName = confirmPropertyNames[type];
+    if (!endpoint || !propName) return;
+
+    // Confirm in batches of 100 - API expects array of objects
     const batchSize = 100;
     for (let i = 0; i < ids.length; i += batchSize) {
       const batch = ids.slice(i, i + batchSize);
-      await client.post(endpoint, batch);
+      // Convert to array of objects with the correct property name
+      const confirmArray = batch.map(id => ({ [propName]: id }));
+      await client.post(endpoint, confirmArray);
     }
 
     // Update confirmed status in database

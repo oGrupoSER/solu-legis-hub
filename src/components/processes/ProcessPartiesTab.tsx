@@ -83,7 +83,10 @@ export function ProcessPartiesTab({ processId }: ProcessPartiesTabProps) {
   const otherParties = parties.filter(p => p.tipo_polo !== 1 && p.tipo_polo !== 2);
 
   const renderPartyCard = (party: Party) => {
-    const partyLawyers = lawyers.filter(l => l.cod_processo_polo === (party as any).cod_processo_polo);
+    // Match lawyers by cod_processo_polo (same as party)
+    const partyLawyers = lawyers.filter(l => 
+      l.cod_processo_polo === (party as any).cod_processo_polo
+    );
     
     return (
       <div key={party.id} className="border rounded-lg p-4 space-y-3">
