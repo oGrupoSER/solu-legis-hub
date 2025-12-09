@@ -25,7 +25,18 @@ export class RestClient {
    * Build full URL with query parameters
    */
   private buildUrl(endpoint: string, params?: Record<string, any>): string {
-    const url = new URL(endpoint, this.config.baseUrl);
+    // Ensure baseUrl ends with / for proper path joining
+    let baseUrl = this.config.baseUrl;
+    if (!baseUrl.endsWith('/')) {
+      baseUrl += '/';
+    }
+    
+    // Remove leading / from endpoint to avoid path issues
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
+    
+    // Build the full URL by concatenating baseUrl + endpoint
+    const fullUrl = baseUrl + cleanEndpoint;
+    const url = new URL(fullUrl);
     
     // Add authentication as query parameters if authInQuery is true
     if (this.config.authInQuery) {
