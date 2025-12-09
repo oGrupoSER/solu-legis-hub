@@ -1,11 +1,8 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { StatsCard } from "@/components/dashboard/StatsCard";
-import { PartnersTable } from "@/components/partners/PartnersTable";
-import { ClientSystemsTable } from "@/components/clients/ClientSystemsTable";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Key, Activity, Building2, FileText, Clock } from "lucide-react";
+import { Users, Key, Activity, Building2, FileText, Clock, Newspaper, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
@@ -155,21 +152,6 @@ const Dashboard = () => {
         </CardContent>
       </Card>
 
-      {/* Management Tabs */}
-      <Tabs defaultValue="partners" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">
-          <TabsTrigger value="partners">Parceiros</TabsTrigger>
-          <TabsTrigger value="clients">Sistemas Clientes</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="partners" className="space-y-4">
-          <PartnersTable />
-        </TabsContent>
-
-        <TabsContent value="clients" className="space-y-4">
-          <ClientSystemsTable />
-        </TabsContent>
-      </Tabs>
     </div>
   );
 };

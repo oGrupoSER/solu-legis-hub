@@ -6,7 +6,9 @@ import { Routes, Route } from "react-router-dom";
 import { MainLayout } from "./components/layout/MainLayout";
 import Dashboard from "./pages/Dashboard";
 import Auth from "./pages/Auth";
+import Partners from "./pages/Partners";
 import PartnerServices from "./pages/PartnerServices";
+import Clients from "./pages/Clients";
 import SyncLogs from "./pages/SyncLogs";
 import Publications from "./pages/Publications";
 import ApiMonitoring from "./pages/ApiMonitoring";
@@ -36,6 +38,9 @@ const App = () => (
             <MainLayout>
               <Routes>
                 <Route path="/" element={<Dashboard />} />
+                <Route path="/partners" element={<Partners />} />
+                <Route path="/partners/:partnerId/services" element={<PartnerServices />} />
+                <Route path="/clients" element={<Clients />} />
                 <Route path="/processes" element={<Processes />} />
                 <Route path="/processes/:id" element={<ProcessDetails />} />
                 <Route path="/distributions" element={<Distributions />} />
