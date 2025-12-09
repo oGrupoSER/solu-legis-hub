@@ -500,10 +500,8 @@ async function syncCovers(client: RestClient, supabase: any, service: any): Prom
     
     if (codProcessos.length === 0) return 0;
 
-    // POST /BuscaDadosCapaEStatusVariosProcessos with body { codProcessos: [...] }
-    const coversData = await client.post('/BuscaDadosCapaEStatusVariosProcessos', {
-      codProcessos: codProcessos,
-    });
+    // POST /BuscaDadosCapaEStatusVariosProcessos expects array of codProcesso directly
+    const coversData = await client.post('/BuscaDadosCapaEStatusVariosProcessos', codProcessos);
 
     if (!Array.isArray(coversData) || coversData.length === 0) {
       console.log('No cover data returned');
