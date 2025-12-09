@@ -18,6 +18,7 @@ import Help from "./pages/Help";
 import NotFound from "./pages/NotFound";
 import Processes from "./pages/Processes";
 import ProcessDetails from "./pages/ProcessDetails";
+import Distributions from "./pages/Distributions";
 
 const queryClient = new QueryClient();
 
@@ -36,6 +37,7 @@ const App = () => (
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/processes" element={<Processes />} />
                 <Route path="/processes/:id" element={<ProcessDetails />} />
+                <Route path="/distributions" element={<Distributions />} />
                 <Route path="/sync-logs" element={<SyncLogs />} />
                 <Route path="/publications" element={<Publications />} />
                 <Route path="/api-monitoring" element={<ApiMonitoring />} />
