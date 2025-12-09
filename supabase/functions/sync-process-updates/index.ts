@@ -889,10 +889,10 @@ async function syncCovers(client: RestClient, supabase: any, service: any): Prom
 /**
  * Confirm receipt of synced items
  * API V3 expects objects with specific property names:
- * - Groupers: { codAgrupadorConfirmado: X }
- * - Dependencies: { codDependenciaConfirmado: X }
- * - Movements: { codAndamentoConfirmado: X }
- * - Documents: { codDocumentoConfirmado: X }
+ * - Groupers: { codAgrupador: X }
+ * - Dependencies: { codDependencia: X }
+ * - Movements: { codAndamento: X }
+ * - Documents: { codDocumento: X }
  */
 async function confirmReceipt(client: RestClient, supabase: any, type: string, ids: number[]): Promise<void> {
   try {
@@ -903,12 +903,12 @@ async function confirmReceipt(client: RestClient, supabase: any, type: string, i
       documents: '/ConfirmaRecebimentoDocumento',
     };
 
-    // API expects object format with specific property names
+    // API expects object format with these property names (not "Confirmado" suffix)
     const confirmPropertyNames: Record<string, string> = {
-      groupers: 'codAgrupadorConfirmado',
-      dependencies: 'codDependenciaConfirmado',
-      movements: 'codAndamentoConfirmado',
-      documents: 'codDocumentoConfirmado',
+      groupers: 'codAgrupador',
+      dependencies: 'codDependencia',
+      movements: 'codAndamento',
+      documents: 'codDocumento',
     };
 
     const endpoint = endpoints[type];
