@@ -1,6 +1,7 @@
 /**
  * Sync Processes Edge Function
- * Syncs process movements from Solucionare API V3
+ * Lists registered processes from Solucionare API V3
+ * Endpoint: BuscaProcessosCadastrados - returns list of codProcesso for a given office
  */
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
@@ -26,8 +27,26 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
+    const body = await req.json().catch(() => ({}));
+    const { serviceId, officeCode } = body;
+
     // Get all active process services
-    const services = await getActiveServices('processes');
+    let services;
+    if (serviceId) {
+      const { data, error } = await supabase
+        .from('partner_services')
+        .select('*')
+        .eq('id', serviceId)
+        .eq('service_type', 'processes')
+        .eq('is_active', true);
+      
+      if (error || !data?.length) {
+        throw new Error('Service not found or inactive');
+      }
+      services = data;
+    } else {
+      services = await getActiveServices('processes');
+    }
 
     if (services.length === 0) {
       return new Response(
@@ -44,76 +63,67 @@ serve(async (req) => {
 
         await logger.start({
           partner_service_id: service.id,
-          sync_type: 'processes',
+          sync_type: 'processes_list',
         });
 
+        // API V3 uses query params for authentication
         const client = new RestClient({
           baseUrl: service.service_url,
           nomeRelacional: service.nome_relacional,
           token: service.token,
+          authInQuery: true, // API V3 requires auth via query params
         });
 
-        // Fetch processes list
-        console.log(`Fetching processes for service: ${service.service_name}`);
-        const processesData = await client.get('/BuscaProcessos');
+        // Fetch registered processes list
+        // BuscaProcessosCadastrados returns list of codProcesso for a given office
+        console.log(`Fetching registered processes for service: ${service.service_name}`);
+        
+        const params: Record<string, any> = {};
+        if (officeCode) {
+          params.codEscritorio = officeCode;
+        }
+        
+        const processesData = await client.get('/BuscaProcessosCadastrados', params);
 
         if (!processesData || !Array.isArray(processesData)) {
-          throw new Error('Invalid response format from BuscaProcessos');
+          console.log('No processes returned or invalid format:', processesData);
+          await logger.success(0);
+          results.push({
+            service: service.service_name,
+            success: true,
+            recordsSynced: 0,
+            message: 'No processes found',
+          });
+          continue;
         }
 
         let syncedCount = 0;
 
-        // For each process, fetch new movements
-        for (const process of processesData) {
-          const { numeroProcesso, tribunal } = process;
-
-          // Fetch new movements since last sync
-          const movementsData = await client.get('/BuscaNovosAndamentos', {
-            numeroProcesso,
-            dataUltimaConsulta: service.last_sync_at || new Date(0).toISOString(),
-          });
-
-          // Upsert process
-          const { data: processRecord, error: processError } = await supabase
+        // For each codProcesso returned, ensure it exists in our database
+        for (const codProcesso of processesData) {
+          // Check if process already exists
+          const { data: existingProcess } = await supabase
             .from('processes')
-            .upsert({
-              process_number: numeroProcesso,
-              tribunal: tribunal,
-              partner_service_id: service.id,
-              partner_id: service.partner_id,
-              raw_data: process,
-              status: process.status || null,
-              instance: process.instancia || null,
-            }, {
-              onConflict: 'process_number',
-              ignoreDuplicates: false,
-            })
             .select('id')
-            .single();
+            .eq('cod_processo', codProcesso)
+            .maybeSingle();
 
-          if (processError) {
-            console.error(`Error upserting process ${numeroProcesso}:`, processError);
-            continue;
-          }
+          if (!existingProcess) {
+            // Create a placeholder record - full data will be synced via sync-process-updates
+            const { error: insertError } = await supabase
+              .from('processes')
+              .insert({
+                process_number: `COD-${codProcesso}`, // Temporary, will be updated when syncing cover
+                cod_processo: codProcesso,
+                partner_service_id: service.id,
+                partner_id: service.partner_id,
+                status_code: 4, // Cadastrado
+                status_description: 'Cadastrado',
+                raw_data: { codProcesso },
+              });
 
-          // Insert movements
-          if (Array.isArray(movementsData) && movementsData.length > 0) {
-            const movements = movementsData.map((movement: any) => ({
-              process_id: processRecord.id,
-              movement_type: movement.tipo || null,
-              movement_date: movement.data || null,
-              description: movement.descricao || null,
-              raw_data: movement,
-            }));
-
-            const { error: movementsError } = await supabase
-              .from('process_movements')
-              .insert(movements);
-
-            if (movementsError) {
-              console.error(`Error inserting movements for ${numeroProcesso}:`, movementsError);
-            } else {
-              syncedCount += movements.length;
+            if (!insertError) {
+              syncedCount++;
             }
           }
         }
@@ -124,7 +134,8 @@ serve(async (req) => {
         results.push({
           service: service.service_name,
           success: true,
-          recordsSynced: syncedCount,
+          totalProcesses: processesData.length,
+          newProcesses: syncedCount,
         });
 
       } catch (error) {
