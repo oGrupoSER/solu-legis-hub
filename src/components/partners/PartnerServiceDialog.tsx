@@ -6,8 +6,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { Info } from "lucide-react";
 
 interface PartnerService {
   id: string;
@@ -27,6 +29,24 @@ interface PartnerServiceDialogProps {
   partnerId: string;
   service?: PartnerService;
 }
+
+const SERVICE_TYPE_LABELS: Record<string, string> = {
+  processes: "Andamentos",
+  distributions: "Distribuições",
+  publications: "Publicações",
+  terms: "Termos e Escritórios",
+  diary_status: "Status dos Diários",
+};
+
+const getConfigHelp = (serviceType: string): { example: string; description: string } | null => {
+  if (serviceType === "diary_status") {
+    return {
+      example: '{\n  "tipoDataFiltro": 1\n}',
+      description: 'O campo "tipoDataFiltro" define como filtrar a data na consulta. Valores: 1 = Data de publicação, 2 = Data de disponibilização.',
+    };
+  }
+  return null;
+};
 
 const PartnerServiceDialog = ({ open, onOpenChange, partnerId, service }: PartnerServiceDialogProps) => {
   const [isLoading, setIsLoading] = useState(false);
@@ -63,6 +83,16 @@ const PartnerServiceDialog = ({ open, onOpenChange, partnerId, service }: Partne
       });
     }
   }, [service, open]);
+
+  // Auto-fill config when selecting diary_status type
+  useEffect(() => {
+    if (formData.service_type === "diary_status" && formData.config === "{}") {
+      setFormData(prev => ({
+        ...prev,
+        config: '{\n  "tipoDataFiltro": 1\n}'
+      }));
+    }
+  }, [formData.service_type]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -131,6 +161,8 @@ const PartnerServiceDialog = ({ open, onOpenChange, partnerId, service }: Partne
     }
   };
 
+  const configHelp = getConfigHelp(formData.service_type);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -164,6 +196,7 @@ const PartnerServiceDialog = ({ open, onOpenChange, partnerId, service }: Partne
                 <SelectItem value="distributions">Distribuições</SelectItem>
                 <SelectItem value="publications">Publicações</SelectItem>
                 <SelectItem value="terms">Termos e Escritórios</SelectItem>
+                <SelectItem value="diary_status">Status dos Diários</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -185,6 +218,9 @@ const PartnerServiceDialog = ({ open, onOpenChange, partnerId, service }: Partne
               )}
               {formData.service_type === 'terms' && (
                 <> Para Termos SOAP, exemplo: <code className="text-xs bg-muted px-1 rounded">http://domain/webservice/NomeService.wsdl</code></>
+              )}
+              {formData.service_type === 'diary_status' && (
+                <> Para Status dos Diários, exemplo: <code className="text-xs bg-muted px-1 rounded">http://domain/api/ControllerApi/Publicacoes/statusDiarios</code></>
               )}
             </p>
             {(formData.service_url.includes('?') || formData.service_url.includes('&')) && (
@@ -217,7 +253,6 @@ const PartnerServiceDialog = ({ open, onOpenChange, partnerId, service }: Partne
             />
           </div>
 
-
           <div className="space-y-2">
             <Label htmlFor="config">Configurações Adicionais (JSON)</Label>
             <Textarea
@@ -228,9 +263,21 @@ const PartnerServiceDialog = ({ open, onOpenChange, partnerId, service }: Partne
               rows={4}
               className="font-mono text-sm"
             />
-            <p className="text-sm text-muted-foreground">
-              Configurações específicas do serviço em formato JSON
-            </p>
+            {configHelp ? (
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  <p className="text-sm mb-2">{configHelp.description}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Exemplo: <code className="bg-muted px-1 rounded">{configHelp.example.replace(/\n/g, ' ')}</code>
+                  </p>
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Configurações específicas do serviço em formato JSON
+              </p>
+            )}
           </div>
 
           <div className="flex items-center space-x-2">

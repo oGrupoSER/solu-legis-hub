@@ -225,61 +225,58 @@ export type Database = {
           },
         ]
       }
-      court_news: {
+      diary_status: {
         Row: {
-          assunto: string | null
-          cod_assunto: number | null
-          cod_mapa_diario: number | null
-          cod_noticia: number
+          cod_mapa_diario: number
+          consulta_date: string
           created_at: string | null
           data_disponibilizacao: string | null
           data_publicacao: string | null
-          descricao: string | null
+          esfera_diario: string | null
           estado: string | null
           id: string
+          nome_diario: string | null
           partner_service_id: string | null
           raw_data: Json
           sigla_diario: string | null
-          titulo: string | null
+          status: string | null
           tribunal: string | null
         }
         Insert: {
-          assunto?: string | null
-          cod_assunto?: number | null
-          cod_mapa_diario?: number | null
-          cod_noticia: number
+          cod_mapa_diario: number
+          consulta_date: string
           created_at?: string | null
           data_disponibilizacao?: string | null
           data_publicacao?: string | null
-          descricao?: string | null
+          esfera_diario?: string | null
           estado?: string | null
           id?: string
+          nome_diario?: string | null
           partner_service_id?: string | null
           raw_data?: Json
           sigla_diario?: string | null
-          titulo?: string | null
+          status?: string | null
           tribunal?: string | null
         }
         Update: {
-          assunto?: string | null
-          cod_assunto?: number | null
-          cod_mapa_diario?: number | null
-          cod_noticia?: number
+          cod_mapa_diario?: number
+          consulta_date?: string
           created_at?: string | null
           data_disponibilizacao?: string | null
           data_publicacao?: string | null
-          descricao?: string | null
+          esfera_diario?: string | null
           estado?: string | null
           id?: string
+          nome_diario?: string | null
           partner_service_id?: string | null
           raw_data?: Json
           sigla_diario?: string | null
-          titulo?: string | null
+          status?: string | null
           tribunal?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "court_news_partner_service_id_fkey"
+            foreignKeyName: "diary_status_partner_service_id_fkey"
             columns: ["partner_service_id"]
             isOneToOne: false
             referencedRelation: "partner_services"
