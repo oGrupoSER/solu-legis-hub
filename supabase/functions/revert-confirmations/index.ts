@@ -41,11 +41,6 @@ Deno.serve(async (req) => {
     let failed = 0;
     const errors: string[] = [];
 
-    // Build base URL with authentication
-    const baseUrl = service_url.includes('?') 
-      ? `${service_url}&nomeRelacional=${encodeURIComponent(nome_relacional)}&token=${encodeURIComponent(token)}`
-      : `${service_url}?nomeRelacional=${encodeURIComponent(nome_relacional)}&token=${encodeURIComponent(token)}`;
-
     // Process in batches of 100
     const batchSize = 100;
     for (let i = 0; i < codes.length; i += batchSize) {
@@ -53,62 +48,67 @@ Deno.serve(async (req) => {
       
       try {
         let endpoint = '';
-        let payload: any = {};
 
         switch (type) {
           case 'publications':
-            // API endpoint for reverting publication confirmations
-            endpoint = baseUrl.replace('/getPublicacoes', '/ReverterConfirmacaoPublicacao')
-              .replace('/Publicacoes', '/ReverterConfirmacaoPublicacao');
-            payload = batch.map(code => ({ codPublicacao: code }));
+            // Use the same confirmation endpoint with confirmar=false to revert
+            // POST api/ControllerApi/Publicacoes/confirmaRecebimentoPublicacao?nomeRelacional={nomeRelacional}&token={token}&confirmar={confirmar}
+            // Body: Collection of integer (cod_publicacao)
+            const basePublicationsUrl = service_url.replace('/getPublicacoes', '').replace('/Publicacoes', '');
+            endpoint = `${basePublicationsUrl}/Publicacoes/confirmaRecebimentoPublicacao?nomeRelacional=${encodeURIComponent(nome_relacional)}&token=${encodeURIComponent(token)}&confirmar=false`;
             break;
 
           case 'processes':
-            // API endpoint for reverting process confirmations
-            // The exact endpoint depends on the Solucionare API specification
-            endpoint = baseUrl.replace('BuscaProcessosCadastrados', 'ReverterConfirmacaoProcesso')
-              .replace('/AndamentoProcessual', '/AndamentoProcessual/ReverterConfirmacao');
-            payload = batch.map(code => ({ codProcesso: code }));
+            // Same pattern - use confirmation endpoint with confirmar=false
+            const baseProcessUrl = service_url.replace('/BuscaProcessosCadastrados', '');
+            endpoint = `${baseProcessUrl}/ConfirmaRecebimentoProcesso?nomeRelacional=${encodeURIComponent(nome_relacional)}&token=${encodeURIComponent(token)}&confirmar=false`;
             break;
 
           case 'documents':
-            // API endpoint for reverting document confirmations
-            endpoint = baseUrl.replace('BuscaProcessosCadastrados', 'ReverterConfirmacaoDocumento')
-              .replace('/AndamentoProcessual', '/AndamentoProcessual/ReverterConfirmacaoDocumento');
-            payload = batch.map(code => ({ codDocumento: code }));
+            // Same pattern - use confirmation endpoint with confirmar=false
+            const baseDocUrl = service_url.replace('/BuscaProcessosCadastrados', '');
+            endpoint = `${baseDocUrl}/ConfirmaRecebimentoDocumento?nomeRelacional=${encodeURIComponent(nome_relacional)}&token=${encodeURIComponent(token)}&confirmar=false`;
             break;
 
           case 'distributions':
-            endpoint = baseUrl.replace('/getDistribuicoes', '/ReverterConfirmacaoDistribuicao');
-            payload = batch.map(code => ({ codDistribuicao: code }));
+            const baseDistUrl = service_url.replace('/getDistribuicoes', '').replace('/Distribuicoes', '');
+            endpoint = `${baseDistUrl}/Distribuicoes/confirmaRecebimentoDistribuicao?nomeRelacional=${encodeURIComponent(nome_relacional)}&token=${encodeURIComponent(token)}&confirmar=false`;
             break;
         }
 
         console.log(`[revert-confirmations] Calling ${endpoint} with ${batch.length} items`);
+        console.log(`[revert-confirmations] Payload: ${JSON.stringify(batch)}`);
 
         const response = await fetch(endpoint, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(batch), // Send array of integers directly
         });
 
+        const responseText = await response.text();
+        console.log(`[revert-confirmations] Response status: ${response.status}, body: ${responseText}`);
+
         if (response.ok) {
-          const result = await response.json();
-          console.log(`[revert-confirmations] Batch result:`, result);
-          
-          // Check response structure for success/failure counts
-          if (result.sucesso !== undefined) {
-            success += result.sucesso || batch.length;
-            failed += result.falha || 0;
-          } else {
+          try {
+            const result = JSON.parse(responseText);
+            console.log(`[revert-confirmations] Batch result:`, result);
+            
+            // Check response structure for success/failure counts
+            if (result.sucesso !== undefined) {
+              success += result.sucesso || batch.length;
+              failed += result.falha || 0;
+            } else {
+              success += batch.length;
+            }
+          } catch {
+            // Response might not be JSON
             success += batch.length;
           }
         } else {
-          const errorText = await response.text();
-          console.error(`[revert-confirmations] API error: ${response.status} - ${errorText}`);
-          errors.push(`Batch ${i}-${i + batch.length}: HTTP ${response.status}`);
+          console.error(`[revert-confirmations] API error: ${response.status} - ${responseText}`);
+          errors.push(`Batch ${i}-${i + batch.length}: HTTP ${response.status} - ${responseText}`);
           failed += batch.length;
         }
       } catch (batchError) {
