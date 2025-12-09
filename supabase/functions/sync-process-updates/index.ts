@@ -8,6 +8,9 @@
  * - Covers (Capas)
  * - Parties (Partes/Polos)
  * - Lawyers (Advogados)
+ * 
+ * API V3 uses query params for authentication (nomeRelacional + token)
+ * All BuscaNovos* endpoints return max 500 items and require confirmation via ConfirmaRecebimento*
  */
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
@@ -74,10 +77,12 @@ serve(async (req) => {
           sync_type: `process_updates_${syncType}`,
         });
 
+        // API V3 uses query params for authentication
         const client = new RestClient({
           baseUrl: service.service_url,
           nomeRelacional: service.nome_relacional,
           token: service.token,
+          authInQuery: true, // API V3 requires auth via query params
         });
 
         let totalSynced = 0;
@@ -156,15 +161,19 @@ serve(async (req) => {
 
 /**
  * Sync Groupers (Agrupadores)
+ * GET /BuscaNovosAgrupadores - returns max 500 unconfirmed groupers
+ * POST /ConfirmaRecebimentoAgrupador - confirms receipt
  */
 async function syncGroupers(client: RestClient, supabase: any, service: any): Promise<number> {
   try {
     const data = await client.get('/BuscaNovosAgrupadores');
     
     if (!Array.isArray(data) || data.length === 0) {
+      console.log('No new groupers found');
       return 0;
     }
 
+    console.log(`Found ${data.length} new groupers`);
     let synced = 0;
     const confirmIds: number[] = [];
 
@@ -174,7 +183,7 @@ async function syncGroupers(client: RestClient, supabase: any, service: any): Pr
         .from('processes')
         .select('id')
         .eq('cod_processo', grouper.codProcesso)
-        .single();
+        .maybeSingle();
 
       const { error } = await supabase
         .from('process_groupers')
@@ -199,6 +208,8 @@ async function syncGroupers(client: RestClient, supabase: any, service: any): Pr
       if (!error) {
         synced++;
         confirmIds.push(grouper.codAgrupador);
+      } else {
+        console.error('Error upserting grouper:', error);
       }
     }
 
@@ -216,15 +227,19 @@ async function syncGroupers(client: RestClient, supabase: any, service: any): Pr
 
 /**
  * Sync Dependencies
+ * GET /BuscaNovasDependencias - returns max 500 unconfirmed dependencies
+ * POST /ConfirmaRecebimentoDependencia - confirms receipt
  */
 async function syncDependencies(client: RestClient, supabase: any, service: any): Promise<number> {
   try {
     const data = await client.get('/BuscaNovasDependencias');
     
     if (!Array.isArray(data) || data.length === 0) {
+      console.log('No new dependencies found');
       return 0;
     }
 
+    console.log(`Found ${data.length} new dependencies`);
     let synced = 0;
     const confirmIds: number[] = [];
 
@@ -233,7 +248,7 @@ async function syncDependencies(client: RestClient, supabase: any, service: any)
         .from('processes')
         .select('id')
         .eq('cod_processo', dep.codProcesso)
-        .single();
+        .maybeSingle();
 
       const { error } = await supabase
         .from('process_dependencies')
@@ -253,6 +268,8 @@ async function syncDependencies(client: RestClient, supabase: any, service: any)
       if (!error) {
         synced++;
         confirmIds.push(dep.codDependencia);
+      } else {
+        console.error('Error upserting dependency:', error);
       }
     }
 
@@ -269,15 +286,19 @@ async function syncDependencies(client: RestClient, supabase: any, service: any)
 
 /**
  * Sync Movements (Andamentos)
+ * GET /BuscaNovosAndamentos - returns max 500 unconfirmed movements
+ * POST /ConfirmaRecebimentoAndamento - confirms receipt
  */
 async function syncMovements(client: RestClient, supabase: any, service: any): Promise<number> {
   try {
     const data = await client.get('/BuscaNovosAndamentos');
     
     if (!Array.isArray(data) || data.length === 0) {
+      console.log('No new movements found');
       return 0;
     }
 
+    console.log(`Found ${data.length} new movements`);
     let synced = 0;
     const confirmIds: number[] = [];
 
@@ -286,7 +307,7 @@ async function syncMovements(client: RestClient, supabase: any, service: any): P
         .from('processes')
         .select('id')
         .eq('cod_processo', mov.codProcesso)
-        .single();
+        .maybeSingle();
 
       const { error } = await supabase
         .from('process_movements')
@@ -307,6 +328,8 @@ async function syncMovements(client: RestClient, supabase: any, service: any): P
       if (!error) {
         synced++;
         confirmIds.push(mov.codAndamento);
+      } else {
+        console.error('Error upserting movement:', error);
       }
     }
 
@@ -323,15 +346,19 @@ async function syncMovements(client: RestClient, supabase: any, service: any): P
 
 /**
  * Sync Documents
+ * GET /BuscaNovosDocumentos - returns max 500 unconfirmed documents
+ * POST /ConfirmaRecebimentoDocumento - confirms receipt
  */
 async function syncDocuments(client: RestClient, supabase: any, service: any): Promise<number> {
   try {
     const data = await client.get('/BuscaNovosDocumentos');
     
     if (!Array.isArray(data) || data.length === 0) {
+      console.log('No new documents found');
       return 0;
     }
 
+    console.log(`Found ${data.length} new documents`);
     let synced = 0;
     const confirmIds: number[] = [];
 
@@ -340,7 +367,7 @@ async function syncDocuments(client: RestClient, supabase: any, service: any): P
         .from('processes')
         .select('id')
         .eq('cod_processo', doc.codProcesso)
-        .single();
+        .maybeSingle();
 
       // Find movement if exists
       let movementId = null;
@@ -349,7 +376,7 @@ async function syncDocuments(client: RestClient, supabase: any, service: any): P
           .from('process_movements')
           .select('id')
           .eq('cod_andamento', doc.codAndamento)
-          .single();
+          .maybeSingle();
         movementId = movement?.id;
       }
 
@@ -375,6 +402,8 @@ async function syncDocuments(client: RestClient, supabase: any, service: any): P
       if (!error) {
         synced++;
         confirmIds.push(doc.codDocumento);
+      } else {
+        console.error('Error upserting document:', error);
       }
     }
 
@@ -391,6 +420,9 @@ async function syncDocuments(client: RestClient, supabase: any, service: any): P
 
 /**
  * Sync Covers (Capas) with Parties and Lawyers
+ * GET /BuscaProcessosComCapaAtualizada - returns list of codProcesso with updated covers
+ * POST /BuscaDadosCapaEStatusVariosProcessos - gets cover details for multiple processes
+ * POST /ConfirmaRecebimentoProcessosComCapaAtualizada - confirms receipt
  */
 async function syncCovers(client: RestClient, supabase: any, service: any): Promise<number> {
   try {
@@ -398,32 +430,43 @@ async function syncCovers(client: RestClient, supabase: any, service: any): Prom
     const processesWithUpdates = await client.get('/BuscaProcessosComCapaAtualizada');
     
     if (!Array.isArray(processesWithUpdates) || processesWithUpdates.length === 0) {
+      console.log('No processes with updated covers found');
       return 0;
     }
 
+    console.log(`Found ${processesWithUpdates.length} processes with updated covers`);
+
     // Get cover details for these processes
-    const codProcessos = processesWithUpdates.map((p: any) => p.codProcesso).filter(Boolean);
+    const codProcessos = processesWithUpdates.map((p: any) => p.codProcesso || p).filter(Boolean);
     
     if (codProcessos.length === 0) return 0;
 
+    // POST /BuscaDadosCapaEStatusVariosProcessos with body { codProcessos: [...] }
     const coversData = await client.post('/BuscaDadosCapaEStatusVariosProcessos', {
       codProcessos: codProcessos,
     });
 
     if (!Array.isArray(coversData) || coversData.length === 0) {
+      console.log('No cover data returned');
       return 0;
     }
 
+    console.log(`Got cover data for ${coversData.length} processes`);
+
     let synced = 0;
+    const confirmIds: number[] = [];
 
     for (const cover of coversData) {
       const { data: process } = await supabase
         .from('processes')
         .select('id')
         .eq('cod_processo', cover.codProcesso)
-        .single();
+        .maybeSingle();
 
-      if (!process) continue;
+      if (!process) {
+        console.log(`Process not found for codProcesso: ${cover.codProcesso}`);
+        continue;
+      }
 
       // Find grouper if exists
       let grouperId = null;
@@ -432,7 +475,7 @@ async function syncCovers(client: RestClient, supabase: any, service: any): Prom
           .from('process_groupers')
           .select('id')
           .eq('cod_agrupador', cover.codAgrupador)
-          .single();
+          .maybeSingle();
         grouperId = grouper?.id;
       }
 
@@ -462,7 +505,7 @@ async function syncCovers(client: RestClient, supabase: any, service: any): Prom
           onConflict: 'process_id,cod_agrupador',
         })
         .select()
-        .single();
+        .maybeSingle();
 
       if (coverError) {
         console.error('Error upserting cover:', coverError);
@@ -470,11 +513,12 @@ async function syncCovers(client: RestClient, supabase: any, service: any): Prom
       }
 
       synced++;
+      confirmIds.push(cover.codProcesso);
 
       // Sync parties (polos)
       if (Array.isArray(cover.polos)) {
         for (const polo of cover.polos) {
-          await supabase
+          const { data: partyRecord } = await supabase
             .from('process_parties')
             .upsert({
               process_id: process.id,
@@ -489,7 +533,9 @@ async function syncCovers(client: RestClient, supabase: any, service: any): Prom
               raw_data: polo,
             }, {
               onConflict: 'cod_processo_polo,cod_agrupador',
-            });
+            })
+            .select()
+            .maybeSingle();
 
           // Sync lawyers for this party
           if (Array.isArray(polo.advogados)) {
@@ -498,7 +544,7 @@ async function syncCovers(client: RestClient, supabase: any, service: any): Prom
                 .from('process_lawyers')
                 .upsert({
                   process_id: process.id,
-                  party_id: null, // Will be linked later if needed
+                  party_id: partyRecord?.id || null,
                   cod_processo_polo: polo.codProcessoPolo,
                   cod_agrupador: cover.codAgrupador || null,
                   nome_advogado: adv.nomeAdvogado,
@@ -514,11 +560,33 @@ async function syncCovers(client: RestClient, supabase: any, service: any): Prom
         }
       }
 
-      // Update last cover sync in processes table
+      // Update last cover sync and process number in processes table
+      const updateData: Record<string, any> = { 
+        last_cover_sync_at: new Date().toISOString() 
+      };
+      
+      // Update process_number if we have the actual number from the cover
+      if (cover.numProcesso) {
+        updateData.process_number = cover.numProcesso;
+      }
+
       await supabase
         .from('processes')
-        .update({ last_cover_sync_at: new Date().toISOString() })
+        .update(updateData)
         .eq('id', process.id);
+    }
+
+    // Confirm receipt of cover updates
+    if (confirmIds.length > 0) {
+      try {
+        // POST /ConfirmaRecebimentoProcessosComCapaAtualizada
+        await client.post('/ConfirmaRecebimentoProcessosComCapaAtualizada', {
+          codProcessos: confirmIds,
+        });
+        console.log(`Confirmed receipt of ${confirmIds.length} cover updates`);
+      } catch (error) {
+        console.error('Error confirming cover receipts:', error);
+      }
     }
 
     return synced;
@@ -530,6 +598,7 @@ async function syncCovers(client: RestClient, supabase: any, service: any): Prom
 
 /**
  * Confirm receipt of synced items
+ * POST /ConfirmaRecebimento{Type} with body { codigos: [...] }
  */
 async function confirmReceipt(client: RestClient, supabase: any, type: string, ids: number[]): Promise<void> {
   try {

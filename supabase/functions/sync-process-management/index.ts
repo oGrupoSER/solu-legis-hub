@@ -5,8 +5,8 @@
  * Actions:
  * - register: CadastraNovoProcesso
  * - delete: ExcluirProcesso  
- * - status: BuscaStatusProcesso
- * - list: BuscaProcessos (lista processos do escritório)
+ * - status: BuscaStatusProcesso (uses codProcesso, not numProcesso)
+ * - list: BuscaProcessosCadastrados (lista codProcessos do escritório)
  */
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
@@ -71,10 +71,12 @@ serve(async (req) => {
 
     validateService(service);
 
+    // API V3 uses query params for authentication
     const client = new RestClient({
       baseUrl: service.service_url,
       nomeRelacional: service.nome_relacional,
       token: service.token,
+      authInQuery: true, // API V3 requires auth via query params
     });
 
     let result;
@@ -93,6 +95,7 @@ serve(async (req) => {
 
         console.log(`Registering process: ${processNumber}`);
         
+        // POST /CadastraNovoProcesso with body
         const registerData = await client.post('/CadastraNovoProcesso', {
           numProcesso: processNumber,
           codEscritorio: officeCode,
@@ -136,7 +139,7 @@ serve(async (req) => {
       }
 
       case 'delete': {
-        // ExcluirProcesso
+        // ExcluirProcesso - uses codProcesso as query param
         if (!processNumber) {
           throw new Error('processNumber is required');
         }
@@ -159,6 +162,7 @@ serve(async (req) => {
           throw new Error('Process not found or missing cod_processo');
         }
 
+        // DELETE /ExcluirProcesso?codProcesso=X
         const deleteData = await client.delete('/ExcluirProcesso', {
           codProcesso: existingProcess.cod_processo,
         });
@@ -183,27 +187,38 @@ serve(async (req) => {
       }
 
       case 'status': {
-        // BuscaStatusProcesso
+        // BuscaStatusProcesso - uses codProcesso (NOT numProcesso!)
         if (!processNumber) {
           throw new Error('processNumber is required');
         }
 
         console.log(`Checking status for process: ${processNumber}`);
 
+        // First get cod_processo from database
+        const { data: existingProcess } = await supabase
+          .from('processes')
+          .select('id, cod_processo')
+          .eq('process_number', processNumber)
+          .maybeSingle();
+
+        if (!existingProcess?.cod_processo) {
+          throw new Error('Process not found or missing cod_processo. Register the process first.');
+        }
+
+        // GET /BuscaStatusProcesso?codProcesso=X
         const statusData = await client.get('/BuscaStatusProcesso', {
-          numProcesso: processNumber,
+          codProcesso: existingProcess.cod_processo,
         });
 
-        // Update status in database if process exists
+        // Update status in database if we got data
         if (statusData?.codStatus) {
           await supabase
             .from('processes')
             .update({
               status_code: statusData.codStatus,
               status_description: STATUS_CODES[statusData.codStatus] || statusData.descricaoStatus,
-              cod_processo: statusData.codProcesso || null,
             })
-            .eq('process_number', processNumber);
+            .eq('id', existingProcess.id);
         }
 
         result = { 
@@ -215,10 +230,16 @@ serve(async (req) => {
       }
 
       case 'list': {
-        // BuscaProcessos - lista todos os processos do escritório
+        // BuscaProcessosCadastrados - lista todos os codProcesso do escritório
         console.log(`Listing all processes for service: ${service.service_name}`);
 
-        const processesData = await client.get('/BuscaProcessos');
+        const params: Record<string, any> = {};
+        if (officeCode) {
+          params.codEscritorio = officeCode;
+        }
+
+        // GET /BuscaProcessosCadastrados?codEscritorio=X (optional)
+        const processesData = await client.get('/BuscaProcessosCadastrados', params);
 
         result = { 
           success: true, 
