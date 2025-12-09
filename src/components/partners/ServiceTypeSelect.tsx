@@ -19,6 +19,7 @@ export const ServiceTypeSelect = ({ value, onValueChange }: ServiceTypeSelectPro
           <SelectItem value="processes">Processos (SOAP)</SelectItem>
           <SelectItem value="distributions">Distribuições (SOAP)</SelectItem>
           <SelectItem value="terms">Termos e Escritórios (SOAP)</SelectItem>
+          <SelectItem value="diary_status">Status dos Diários (REST API)</SelectItem>
         </SelectContent>
       </Select>
     </div>

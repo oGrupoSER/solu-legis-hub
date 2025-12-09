@@ -36,7 +36,7 @@ verify_jwt = true
 [functions.manage-distribution-terms]
 verify_jwt = true
 
-[functions.sync-court-news]
+[functions.sync-diary-status]
 verify_jwt = true
 
 [functions.manage-search-terms]
