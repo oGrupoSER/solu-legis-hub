@@ -20,6 +20,7 @@ interface PartnerService {
   nome_relacional: string;
   token: string;
   is_active: boolean;
+  confirm_receipt: boolean;
   config: Record<string, any>;
 }
 
@@ -57,6 +58,7 @@ const PartnerServiceDialog = ({ open, onOpenChange, partnerId, service }: Partne
     nome_relacional: "",
     token: "",
     is_active: true,
+    confirm_receipt: false,
     config: "{}"
   });
 
@@ -69,6 +71,7 @@ const PartnerServiceDialog = ({ open, onOpenChange, partnerId, service }: Partne
         nome_relacional: service.nome_relacional,
         token: service.token,
         is_active: service.is_active,
+        confirm_receipt: service.confirm_receipt ?? false,
         config: JSON.stringify(service.config, null, 2)
       });
     } else {
@@ -79,6 +82,7 @@ const PartnerServiceDialog = ({ open, onOpenChange, partnerId, service }: Partne
         nome_relacional: "",
         token: "",
         is_active: true,
+        confirm_receipt: false,
         config: "{}"
       });
     }
@@ -120,6 +124,7 @@ const PartnerServiceDialog = ({ open, onOpenChange, partnerId, service }: Partne
         nome_relacional: formData.nome_relacional,
         token: formData.token,
         is_active: formData.is_active,
+        confirm_receipt: formData.confirm_receipt,
         config: configJson
       };
 
@@ -287,6 +292,20 @@ const PartnerServiceDialog = ({ open, onOpenChange, partnerId, service }: Partne
               onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
             />
             <Label htmlFor="is_active">Serviço Ativo</Label>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="confirm_receipt"
+              checked={formData.confirm_receipt}
+              onCheckedChange={(checked) => setFormData({ ...formData, confirm_receipt: checked })}
+            />
+            <Label htmlFor="confirm_receipt" className="flex flex-col">
+              <span>Confirmar Recebimento</span>
+              <span className="text-xs text-muted-foreground font-normal">
+                ⚠️ Manter desativado enquanto sistema legado estiver ativo
+              </span>
+            </Label>
           </div>
 
           <DialogFooter>

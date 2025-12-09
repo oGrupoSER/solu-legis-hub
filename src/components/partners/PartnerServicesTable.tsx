@@ -20,6 +20,7 @@ interface PartnerService {
   nome_relacional: string;
   token: string;
   is_active: boolean;
+  confirm_receipt: boolean;
   config: any;
   last_sync_at: string | null;
   created_at: string;
