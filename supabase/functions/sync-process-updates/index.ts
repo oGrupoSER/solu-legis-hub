@@ -618,27 +618,40 @@ async function syncCovers(client: RestClient, supabase: any, service: any): Prom
         continue;
       }
 
-      const grouperId = cover.codAgrupador ? grouperMap.get(cover.codAgrupador) || null : null;
+      // Extract cover data from dadosCapa array (API returns nested structure)
+      const dadosCapa = Array.isArray(cover.dadosCapa) && cover.dadosCapa.length > 0 
+        ? cover.dadosCapa[0] 
+        : {};
+      
+      const codAgrupador = dadosCapa.codAgrupador || cover.codAgrupador || null;
+      const grouperId = codAgrupador ? grouperMap.get(codAgrupador) || null : null;
 
-      // Prepare cover insert
+      // Parse valor from string like "R$ 5.000,00" to number
+      let valorCausa = null;
+      if (dadosCapa.valor) {
+        const valorStr = dadosCapa.valor.replace(/[R$\s.]/g, '').replace(',', '.');
+        valorCausa = parseFloat(valorStr) || null;
+      }
+
+      // Prepare cover insert with data extracted from dadosCapa
       coverInserts.push({
         process_id: processId,
         grouper_id: grouperId,
-        cod_agrupador: cover.codAgrupador || null,
+        cod_agrupador: codAgrupador,
         cod_processo: cover.codProcesso,
-        comarca: cover.comarca || null,
-        vara: cover.vara || null,
-        tribunal: cover.tribunal || null,
-        assunto: cover.assunto || null,
-        natureza: cover.natureza || null,
-        tipo_acao: cover.tipoAcao || null,
-        classe: cover.classe || null,
-        juiz: cover.juiz || null,
-        situacao: cover.situacao || null,
-        area: cover.area || null,
-        valor_causa: cover.valorCausa || null,
-        data_distribuicao: cover.dataDistribuicao || null,
-        data_atualizacao: cover.dataAtualizacao || null,
+        comarca: dadosCapa.comarca || null,
+        vara: dadosCapa.vara || null,
+        tribunal: dadosCapa.tribunal || cover.nomeSistema || null,
+        assunto: dadosCapa.assunto || null,
+        natureza: dadosCapa.natureza || null,
+        tipo_acao: dadosCapa.tipoAcao || null,
+        classe: dadosCapa.classe || null,
+        juiz: dadosCapa.juiz || null,
+        situacao: cover.status || dadosCapa.situacao || null,
+        area: dadosCapa.area || null,
+        valor_causa: valorCausa,
+        data_distribuicao: dadosCapa.dataDistribuicao || null,
+        data_atualizacao: dadosCapa.dataRecebimento || cover.dataUltimaConsultaProcesso || null,
         raw_data: cover,
       });
 
@@ -649,36 +662,42 @@ async function syncCovers(client: RestClient, supabase: any, service: any): Prom
       }
       synced++;
 
-      // Collect parties
-      if (Array.isArray(cover.polos)) {
-        for (const polo of cover.polos) {
-          partyInserts.push({
-            process_id: processId,
-            cod_processo_polo: polo.codProcessoPolo,
-            cod_agrupador: cover.codAgrupador || null,
-            tipo_polo: polo.tipoPolo,
-            nome: polo.nome,
-            cpf: polo.cpf || null,
-            cnpj: polo.cnpj || null,
-            tipo_pessoa: polo.tipoPessoa || null,
-            raw_data: polo,
-          });
+      // Collect parties from autor and reu arrays (API structure)
+      const allParties = [
+        ...(Array.isArray(cover.autor) ? cover.autor : []),
+        ...(Array.isArray(cover.reu) ? cover.reu : []),
+        ...(Array.isArray(cover.outrosEnvolvidos) ? cover.outrosEnvolvidos : []),
+      ];
+      
+      for (const polo of allParties) {
+        if (!polo.nome) continue;
+        partyInserts.push({
+          process_id: processId,
+          cod_processo_polo: polo.codProcessoPolo || null,
+          cod_agrupador: polo.codAgrupador || codAgrupador || null,
+          tipo_polo: polo.tipoPolo || (polo.descricaoTipoPolo === 'Ativo' ? 1 : 2),
+          nome: polo.nome,
+          cpf: polo.cpf || null,
+          cnpj: polo.cnpj || null,
+          tipo_pessoa: polo.tipoPessoa || null,
+          raw_data: polo,
+        });
+      }
 
-          // Collect lawyers
-          if (Array.isArray(polo.advogados)) {
-            for (const adv of polo.advogados) {
-              lawyerInserts.push({
-                process_id: processId,
-                cod_processo_polo: polo.codProcessoPolo,
-                cod_agrupador: cover.codAgrupador || null,
-                nome_advogado: adv.nomeAdvogado,
-                num_oab: adv.numOAB || null,
-                uf_oab: adv.ufOAB || null,
-                tipo_oab: adv.tipoOAB || null,
-                raw_data: adv,
-              });
-            }
-          }
+      // Collect lawyers from advogadoProcesso array
+      if (Array.isArray(cover.advogadoProcesso)) {
+        for (const adv of cover.advogadoProcesso) {
+          if (!adv.nome) continue;
+          lawyerInserts.push({
+            process_id: processId,
+            cod_processo_polo: adv.codProcessoPolo || null,
+            cod_agrupador: adv.codAgrupador || codAgrupador || null,
+            nome_advogado: adv.nome || adv.nomeAdvogado,
+            num_oab: adv.oab || adv.numOAB || null,
+            uf_oab: adv.ufOAB || null,
+            tipo_oab: adv.tipoOAB || null,
+            raw_data: adv,
+          });
         }
       }
 
