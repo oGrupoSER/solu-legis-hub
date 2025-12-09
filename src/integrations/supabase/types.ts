@@ -346,7 +346,6 @@ export type Database = {
           is_active: boolean | null
           last_sync_at: string | null
           nome_relacional: string
-          office_code: number | null
           partner_id: string
           service_name: string
           service_type: string
@@ -361,7 +360,6 @@ export type Database = {
           is_active?: boolean | null
           last_sync_at?: string | null
           nome_relacional: string
-          office_code?: number | null
           partner_id: string
           service_name: string
           service_type: string
@@ -376,7 +374,6 @@ export type Database = {
           is_active?: boolean | null
           last_sync_at?: string | null
           nome_relacional?: string
-          office_code?: number | null
           partner_id?: string
           service_name?: string
           service_type?: string

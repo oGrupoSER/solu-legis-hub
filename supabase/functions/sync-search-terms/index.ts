@@ -89,29 +89,26 @@ Deno.serve(async (req) => {
     console.log('Service URL:', service.service_url);
     console.log('Nome Relacional:', service.nome_relacional);
     console.log('Token (masked):', '***' + service.token.slice(-4));
-    console.log('Office Code (service):', service.office_code);
 
-    // Resolve office code: prefer service.office_code, fallback to an active client_systems.office_code
-    let officeCode = service.office_code as number | null;
-    if (!officeCode) {
-      console.log('No office_code on service. Attempting to read from client_systems...');
-      const { data: cs, error: csError } = await supabase
-        .from('client_systems')
-        .select('office_code')
-        .eq('is_active', true)
-        .not('office_code', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (csError) {
-        console.error('Error fetching client_systems office_code:', csError);
-      }
-      officeCode = (cs as any)?.office_code ?? null;
-      console.log('Office Code (client_systems fallback):', officeCode);
+    // Get office_code from client_systems linked via client_system_services
+    console.log('Fetching office_code from linked client_systems...');
+    const { data: clientServiceData, error: csError } = await supabase
+      .from('client_system_services')
+      .select('client_systems(office_code)')
+      .eq('partner_service_id', serviceId)
+      .eq('is_active', true)
+      .limit(1)
+      .maybeSingle();
+
+    if (csError) {
+      console.error('Error fetching client_system_services:', csError);
     }
 
+    const officeCode = (clientServiceData?.client_systems as any)?.office_code as number | null;
+    console.log('Office Code (from client_systems):', officeCode);
+
     if (!officeCode) {
-      throw new Error('Office code is required. Configure it no serviço ou no Sistema Cliente.');
+      throw new Error('Nenhum Sistema Cliente com código de escritório vinculado a este serviço.');
     }
 
     // Compute correct SOAP endpoint and namespace
