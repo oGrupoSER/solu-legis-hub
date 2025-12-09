@@ -6,9 +6,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, Edit, Trash2, Download, RefreshCw } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Plus, Search, Download, RefreshCw, UserSearch, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { SearchTermDialog } from "@/components/terms/SearchTermDialog";
+import { ManageTermDialog } from "@/components/terms/ManageTermDialog";
+import { TermActionsDropdown } from "@/components/terms/TermActionsDropdown";
 import { TermsStats } from "@/components/terms/TermsStats";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 
@@ -24,6 +27,12 @@ interface SearchTerm {
   partner_services?: { service_name: string };
 }
 
+interface PartnerService {
+  id: string;
+  service_name: string;
+  service_type: string;
+}
+
 const SearchTerms = () => {
   const [terms, setTerms] = useState<SearchTerm[]>([]);
   const [filteredTerms, setFilteredTerms] = useState<SearchTerm[]>([]);
@@ -35,9 +44,17 @@ const SearchTerms = () => {
   const [filterStatus, setFilterStatus] = useState("all");
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStats, setSyncStats] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState("names");
+  const [termsServices, setTermsServices] = useState<PartnerService[]>([]);
+  const [selectedService, setSelectedService] = useState<string>("");
+  const [manageDialogOpen, setManageDialogOpen] = useState(false);
+  const [manageDialogMode, setManageDialogMode] = useState<'create' | 'edit'>('create');
+  const [manageDialogType, setManageDialogType] = useState<'name' | 'office'>('name');
+  const [editingTermData, setEditingTermData] = useState<any>(null);
 
   useEffect(() => {
     fetchTerms();
+    fetchTermsServices();
   }, []);
 
   useEffect(() => {
@@ -57,6 +74,24 @@ const SearchTerms = () => {
       toast.error("Erro ao carregar termos de busca");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchTermsServices = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("partner_services")
+        .select("id, service_name, service_type")
+        .eq("service_type", "terms")
+        .eq("is_active", true);
+
+      if (error) throw error;
+      setTermsServices(data || []);
+      if (data && data.length > 0 && !selectedService) {
+        setSelectedService(data[0].id);
+      }
+    } catch (error) {
+      console.error("Error fetching services:", error);
     }
   };
 
@@ -353,18 +388,11 @@ const SearchTerms = () => {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="icon" onClick={() => handleEdit(term)}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(term.id)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
+                        <TermActionsDropdown
+                          term={term}
+                          onEdit={() => handleEdit(term)}
+                          onRefresh={fetchTerms}
+                        />
                       </TableCell>
                     </TableRow>
                   ))
