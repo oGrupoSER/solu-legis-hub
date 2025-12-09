@@ -67,9 +67,15 @@ export function ProcessDocumentsTab({ processId }: ProcessDocumentsTabProps) {
     return (
       <Card>
         <CardContent className="py-8">
-          <p className="text-center text-muted-foreground">
-            Nenhum documento encontrado para este processo
-          </p>
+          <div className="text-center space-y-2">
+            <p className="text-muted-foreground">
+              Nenhum documento encontrado para este processo
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Os documentos são sincronizados automaticamente quando disponíveis na Solucionare.
+              Processos recém-cadastrados podem ainda não ter documentos registrados.
+            </p>
+          </div>
         </CardContent>
       </Card>
     );
