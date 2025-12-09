@@ -5,10 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Eye, Search, Calendar } from "lucide-react";
+import { Eye, Search, Calendar, X } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { PublicationDetailDialog } from "./PublicationDetailDialog";
+import { DateRangePicker } from "./DateRangePicker";
+import { HighlightedContent } from "./HighlightedContent";
 import {
   Pagination,
   PaginationContent,
@@ -39,12 +41,22 @@ export function PublicationsTable() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterGazette, setFilterGazette] = useState<string>("all");
   const [filterPartner, setFilterPartner] = useState<string>("all");
+  const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
+    from: undefined,
+    to: undefined,
+  });
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [gazetteOptions, setGazetteOptions] = useState<string[]>([]);
+  const [partnerOptions, setPartnerOptions] = useState<{ id: string; name: string }[]>([]);
   const itemsPerPage = 20;
 
   useEffect(() => {
     fetchPublications();
+  }, [currentPage, searchTerm, filterGazette, filterPartner, dateRange]);
+
+  useEffect(() => {
+    fetchFilterOptions();
     
     // Realtime subscription
     const channel = supabase
@@ -63,7 +75,26 @@ export function PublicationsTable() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentPage, searchTerm, filterGazette, filterPartner]);
+  }, []);
+
+  const fetchFilterOptions = async () => {
+    // Fetch unique gazettes
+    const { data: gazetteData } = await supabase
+      .from("publications")
+      .select("gazette_name")
+      .not("gazette_name", "is", null);
+    
+    const gazettes = [...new Set(gazetteData?.map(g => g.gazette_name).filter(Boolean))];
+    setGazetteOptions(gazettes as string[]);
+
+    // Fetch partners
+    const { data: partnerData } = await supabase
+      .from("partners")
+      .select("id, name")
+      .eq("is_active", true);
+    
+    setPartnerOptions(partnerData || []);
+  };
 
   const fetchPublications = async () => {
     try {
@@ -86,6 +117,14 @@ export function PublicationsTable() {
 
       if (filterPartner !== "all") {
         query = query.eq("partner_id", filterPartner);
+      }
+
+      // Date range filter
+      if (dateRange.from) {
+        query = query.gte("publication_date", format(dateRange.from, "yyyy-MM-dd"));
+      }
+      if (dateRange.to) {
+        query = query.lte("publication_date", format(dateRange.to, "yyyy-MM-dd"));
       }
 
       // Pagination
@@ -139,17 +178,26 @@ export function PublicationsTable() {
           />
         </div>
         
+        <DateRangePicker
+          from={dateRange.from}
+          to={dateRange.to}
+          onSelect={(range) => {
+            setDateRange(range);
+            setCurrentPage(1);
+          }}
+        />
+
         <Select value={filterGazette} onValueChange={(value) => {
           setFilterGazette(value);
           setCurrentPage(1);
         }}>
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="Filtrar por gazeta" />
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Gazeta" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas as Gazetas</SelectItem>
-            {Array.from(new Set(publications.map(p => p.gazette_name).filter(Boolean))).map((gazette) => (
-              <SelectItem key={gazette} value={gazette!}>
+            {gazetteOptions.map((gazette) => (
+              <SelectItem key={gazette} value={gazette}>
                 {gazette}
               </SelectItem>
             ))}
@@ -160,18 +208,35 @@ export function PublicationsTable() {
           setFilterPartner(value);
           setCurrentPage(1);
         }}>
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="Filtrar por parceiro" />
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Parceiro" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os Parceiros</SelectItem>
-            {Array.from(new Set(publications.map(p => p.partners?.name).filter(Boolean))).map((partner) => (
-              <SelectItem key={partner} value={partner!}>
-                {partner}
+            {partnerOptions.map((partner) => (
+              <SelectItem key={partner.id} value={partner.id}>
+                {partner.name}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
+
+        {(searchTerm || filterGazette !== "all" || filterPartner !== "all" || dateRange.from) && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              setSearchTerm("");
+              setFilterGazette("all");
+              setFilterPartner("all");
+              setDateRange({ from: undefined, to: undefined });
+              setCurrentPage(1);
+            }}
+            title="Limpar filtros"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        )}
       </div>
 
       {/* Table */}
@@ -237,9 +302,13 @@ export function PublicationsTable() {
                     </div>
                   </TableCell>
                   <TableCell className="max-w-xs">
-                    <p className="text-sm text-muted-foreground truncate">
-                      {getContentPreview(publication.content)}
-                    </p>
+                    <div className="text-sm text-muted-foreground line-clamp-2">
+                      <HighlightedContent
+                        content={publication.content || ""}
+                        terms={publication.matched_terms || []}
+                        maxLength={150}
+                      />
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Button
