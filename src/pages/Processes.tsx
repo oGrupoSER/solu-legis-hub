@@ -1,0 +1,105 @@
+import { useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { RefreshCw, Plus, Gavel } from "lucide-react";
+import { toast } from "sonner";
+import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
+import { ProcessesTable } from "@/components/processes/ProcessesTable";
+import { ProcessDialog } from "@/components/processes/ProcessDialog";
+import { supabase } from "@/integrations/supabase/client";
+
+const Processes = () => {
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+
+  const handleSync = async () => {
+    try {
+      setSyncing(true);
+      toast.info("Iniciando sincronização de processos...");
+      
+      const { data, error } = await supabase.functions.invoke("sync-process-updates", {
+        body: { syncType: "full" },
+      });
+
+      if (error) throw error;
+      
+      toast.success("Sincronização de processos concluída");
+      setRefreshTrigger(prev => prev + 1);
+    } catch (error) {
+      console.error("Sync error:", error);
+      toast.error("Erro ao sincronizar processos");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleProcessCreated = () => {
+    setDialogOpen(false);
+    setRefreshTrigger(prev => prev + 1);
+    toast.success("Processo cadastrado com sucesso");
+  };
+
+  return (
+    <div className="container py-8 space-y-6">
+      <BreadcrumbNav
+        items={[
+          { label: "Dashboard", href: "/" },
+          { label: "Processos" },
+        ]}
+      />
+      
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground flex items-center gap-2">
+            <Gavel className="h-8 w-8 text-primary" />
+            Processos
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Gerencie todos os processos monitorados pela Solucionare
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            onClick={handleSync}
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            disabled={syncing}
+          >
+            <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
+            Sincronizar
+          </Button>
+          <Button
+            onClick={() => setDialogOpen(true)}
+            size="sm"
+            className="gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Novo Processo
+          </Button>
+        </div>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Processos Monitorados</CardTitle>
+          <CardDescription>
+            Lista de todos os processos cadastrados para monitoramento
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          <ProcessesTable key={refreshTrigger} />
+        </CardContent>
+      </Card>
+
+      <ProcessDialog 
+        open={dialogOpen} 
+        onOpenChange={setDialogOpen}
+        onSuccess={handleProcessCreated}
+      />
+    </div>
+  );
+};
+
+export default Processes;

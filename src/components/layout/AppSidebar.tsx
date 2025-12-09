@@ -1,4 +1,4 @@
-import { LayoutDashboard, Clock, Activity, Search, TestTube, Scale, Shield, FileText, Settings, HelpCircle, Newspaper } from "lucide-react";
+import { LayoutDashboard, Clock, Activity, Search, TestTube, Scale, Shield, FileText, Settings, HelpCircle, Newspaper, Gavel } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   Sidebar,
@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/sidebar";
 
 const mainItems = [
+  { title: "Dashboard", url: "/", icon: LayoutDashboard },
+  { title: "Processos", url: "/processes", icon: Gavel },
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Logs de Sincronização", url: "/sync-logs", icon: Clock },
   { title: "Publicações", url: "/publications", icon: Newspaper },

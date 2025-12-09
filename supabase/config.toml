@@ -26,3 +26,9 @@ verify_jwt = false
 
 [functions.api-webhook]
 verify_jwt = true
+
+[functions.sync-process-management]
+verify_jwt = true
+
+[functions.sync-process-updates]
+verify_jwt = true

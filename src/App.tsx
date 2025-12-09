@@ -16,6 +16,8 @@ import Settings from "./pages/Settings";
 import Reports from "./pages/Reports";
 import Help from "./pages/Help";
 import NotFound from "./pages/NotFound";
+import Processes from "./pages/Processes";
+import ProcessDetails from "./pages/ProcessDetails";
 
 const queryClient = new QueryClient();
 
@@ -32,6 +34,8 @@ const App = () => (
             <MainLayout>
               <Routes>
                 <Route path="/" element={<Dashboard />} />
+                <Route path="/processes" element={<Processes />} />
+                <Route path="/processes/:id" element={<ProcessDetails />} />
                 <Route path="/sync-logs" element={<SyncLogs />} />
                 <Route path="/publications" element={<Publications />} />
                 <Route path="/api-monitoring" element={<ApiMonitoring />} />
