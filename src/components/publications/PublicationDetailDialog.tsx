@@ -10,9 +10,10 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Copy, Download, Calendar, FileText, Tag, Building2 } from "lucide-react";
+import { Copy, Download, Calendar, FileText, Tag, Building2, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { HighlightedContent } from "./HighlightedContent";
 
 interface Publication {
   id: string;
@@ -58,6 +59,48 @@ export function PublicationDetailDialog({
     toast.success("JSON baixado com sucesso");
   };
 
+  const handleCopyContent = () => {
+    navigator.clipboard.writeText(publication.content || "");
+    toast.success("Conteúdo copiado para a área de transferência");
+  };
+
+  const handlePrint = () => {
+    const printWindow = window.open("", "_blank");
+    if (printWindow) {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Publicação - ${publication.gazette_name || "Diário Oficial"}</title>
+            <style>
+              body { font-family: Arial, sans-serif; padding: 20px; line-height: 1.6; }
+              h1 { font-size: 18px; margin-bottom: 10px; }
+              .meta { color: #666; font-size: 14px; margin-bottom: 20px; }
+              .content { white-space: pre-wrap; font-size: 14px; }
+              .terms { margin-top: 20px; padding: 10px; background: #f5f5f5; }
+              .terms span { display: inline-block; margin: 2px; padding: 2px 8px; background: #e0e0e0; border-radius: 4px; }
+            </style>
+          </head>
+          <body>
+            <h1>${publication.gazette_name || "Publicação"}</h1>
+            <div class="meta">
+              Data: ${publication.publication_date ? format(new Date(publication.publication_date), "dd/MM/yyyy") : "N/A"}
+            </div>
+            <div class="content">${publication.content || ""}</div>
+            ${publication.matched_terms && publication.matched_terms.length > 0 ? `
+              <div class="terms">
+                <strong>Termos encontrados:</strong><br>
+                ${publication.matched_terms.map(t => `<span>${t}</span>`).join("")}
+              </div>
+            ` : ""}
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.print();
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh]">
@@ -80,13 +123,27 @@ export function PublicationDetailDialog({
 
           <TabsContent value="content" className="space-y-4">
             <ScrollArea className="h-[500px] w-full rounded-md border p-4">
+              <div className="flex gap-2 mb-4">
+                <Button onClick={handleCopyContent} variant="outline" size="sm" className="gap-2">
+                  <Copy className="h-4 w-4" />
+                  Copiar
+                </Button>
+                <Button onClick={handlePrint} variant="outline" size="sm" className="gap-2">
+                  <Printer className="h-4 w-4" />
+                  Imprimir
+                </Button>
+              </div>
               <div className="space-y-4">
                 <div>
                   <h3 className="text-sm font-medium text-muted-foreground mb-2">Conteúdo da Publicação</h3>
                   <div className="prose prose-sm max-w-none">
-                    <p className="text-foreground whitespace-pre-wrap break-words leading-relaxed">
-                      {publication.content || "Sem conteúdo disponível"}
-                    </p>
+                    <div className="text-foreground whitespace-pre-wrap break-words leading-relaxed">
+                      <HighlightedContent
+                        content={publication.content || "Sem conteúdo disponível"}
+                        terms={publication.matched_terms || []}
+                        maxLength={99999}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
