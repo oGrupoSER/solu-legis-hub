@@ -579,10 +579,8 @@ async function syncCovers(client: RestClient, supabase: any, service: any): Prom
     // Confirm receipt of cover updates
     if (confirmIds.length > 0) {
       try {
-        // POST /ConfirmaRecebimentoProcessosComCapaAtualizada
-        await client.post('/ConfirmaRecebimentoProcessosComCapaAtualizada', {
-          codProcessos: confirmIds,
-        });
+        // POST /ConfirmaRecebimentoProcessosComCapaAtualizada - API expects array directly
+        await client.post('/ConfirmaRecebimentoProcessosComCapaAtualizada', confirmIds);
         console.log(`Confirmed receipt of ${confirmIds.length} cover updates`);
       } catch (error) {
         console.error('Error confirming cover receipts:', error);
@@ -598,7 +596,7 @@ async function syncCovers(client: RestClient, supabase: any, service: any): Prom
 
 /**
  * Confirm receipt of synced items
- * POST /ConfirmaRecebimento{Type} with body { codigos: [...] }
+ * POST /ConfirmaRecebimento{Type} with body as array directly (e.g., [1, 2, 3])
  */
 async function confirmReceipt(client: RestClient, supabase: any, type: string, ids: number[]): Promise<void> {
   try {
@@ -612,11 +610,11 @@ async function confirmReceipt(client: RestClient, supabase: any, type: string, i
     const endpoint = endpoints[type];
     if (!endpoint) return;
 
-    // Confirm in batches of 100
+    // Confirm in batches of 100 - API expects array directly, not wrapped in object
     const batchSize = 100;
     for (let i = 0; i < ids.length; i += batchSize) {
       const batch = ids.slice(i, i + batchSize);
-      await client.post(endpoint, { codigos: batch });
+      await client.post(endpoint, batch);
     }
 
     // Update confirmed status in database
