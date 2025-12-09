@@ -495,6 +495,14 @@ async function syncCovers(client: RestClient, supabase: any, service: any): Prom
 
     console.log(`Found ${processesWithUpdates.length} processes with updated covers`);
 
+    // Create a map from codProcesso to codProcessoCapaAtualizada for confirmation
+    const confirmationMap = new Map<number, number>();
+    for (const p of processesWithUpdates) {
+      if (p.codProcesso && p.codProcessoCapaAtualizada) {
+        confirmationMap.set(p.codProcesso, p.codProcessoCapaAtualizada);
+      }
+    }
+
     // Get cover details for these processes
     const codProcessos = processesWithUpdates.map((p: any) => p.codProcesso || p).filter(Boolean);
     
@@ -514,6 +522,36 @@ async function syncCovers(client: RestClient, supabase: any, service: any): Prom
     const uniqueCodProcessos = [...new Set(coversData.map((c: any) => c.codProcesso).filter(Boolean))];
     const uniqueCodAgrupadores = [...new Set(coversData.map((c: any) => c.codAgrupador).filter(Boolean))];
 
+    // First, auto-create any processes that don't exist yet
+    const { data: existingProcesses } = await supabase
+      .from('processes')
+      .select('id, cod_processo')
+      .in('cod_processo', uniqueCodProcessos);
+    
+    const existingCodProcessos = new Set((existingProcesses || []).map((p: any) => p.cod_processo));
+    const missingCodProcessos = uniqueCodProcessos.filter(cp => !existingCodProcessos.has(cp));
+
+    if (missingCodProcessos.length > 0) {
+      console.log(`Auto-creating ${missingCodProcessos.length} missing processes from covers`);
+      // Get numProcesso from coversData for missing processes
+      const processInserts = missingCodProcessos.map(codProcesso => {
+        const cover = coversData.find((c: any) => c.codProcesso === codProcesso);
+        return {
+          process_number: cover?.numProcesso || `unknown-${codProcesso}`,
+          cod_processo: codProcesso,
+          cod_escritorio: cover?.codEscritorio || null,
+          partner_service_id: service.id,
+          partner_id: service.partner_id,
+          status_code: 4,
+          status_description: 'Cadastrado',
+          raw_data: { source: 'cover_sync', codProcesso },
+        };
+      });
+
+      await supabase.from('processes').upsert(processInserts, { onConflict: 'cod_processo' });
+    }
+
+    // Re-fetch processes after auto-creation
     const { data: processes } = await supabase
       .from('processes')
       .select('id, cod_processo')
@@ -527,6 +565,7 @@ async function syncCovers(client: RestClient, supabase: any, service: any): Prom
       .in('cod_agrupador', uniqueCodAgrupadores);
     
     const grouperMap = new Map((groupers || []).map((g: any) => [g.cod_agrupador, g.id]));
+
 
     let synced = 0;
     const confirmIds: number[] = [];
@@ -566,7 +605,11 @@ async function syncCovers(client: RestClient, supabase: any, service: any): Prom
         raw_data: cover,
       });
 
-      confirmIds.push(cover.codProcesso);
+      // Use codProcessoCapaAtualizada for confirmation if available
+      const confirmId = confirmationMap.get(cover.codProcesso);
+      if (confirmId) {
+        confirmIds.push(confirmId);
+      }
       synced++;
 
       // Collect parties
@@ -656,9 +699,13 @@ async function syncCovers(client: RestClient, supabase: any, service: any): Prom
     }
 
     // Confirm receipt of cover updates
+    // API expects array of objects with codProcessoCapaAtualizada (from processesWithUpdates)
     if (confirmIds.length > 0) {
       try {
-        await client.post('/ConfirmaRecebimentoProcessosComCapaAtualizada', confirmIds);
+        // The API expects array of objects like [{ codProcessoCapaAtualizada: X }, ...]
+        // We pass codProcesso directly as that's what we have
+        const confirmArray = confirmIds.map(id => ({ codProcessoCapaAtualizada: id }));
+        await client.post('/ConfirmaRecebimentoProcessosComCapaAtualizada', confirmArray);
         console.log(`Confirmed receipt of ${confirmIds.length} cover updates`);
       } catch (error) {
         console.error('Error confirming cover receipts:', error);
