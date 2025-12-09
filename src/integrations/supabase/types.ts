@@ -183,6 +183,68 @@ export type Database = {
           },
         ]
       }
+      court_news: {
+        Row: {
+          assunto: string | null
+          cod_assunto: number | null
+          cod_mapa_diario: number | null
+          cod_noticia: number
+          created_at: string | null
+          data_disponibilizacao: string | null
+          data_publicacao: string | null
+          descricao: string | null
+          estado: string | null
+          id: string
+          partner_service_id: string | null
+          raw_data: Json
+          sigla_diario: string | null
+          titulo: string | null
+          tribunal: string | null
+        }
+        Insert: {
+          assunto?: string | null
+          cod_assunto?: number | null
+          cod_mapa_diario?: number | null
+          cod_noticia: number
+          created_at?: string | null
+          data_disponibilizacao?: string | null
+          data_publicacao?: string | null
+          descricao?: string | null
+          estado?: string | null
+          id?: string
+          partner_service_id?: string | null
+          raw_data?: Json
+          sigla_diario?: string | null
+          titulo?: string | null
+          tribunal?: string | null
+        }
+        Update: {
+          assunto?: string | null
+          cod_assunto?: number | null
+          cod_mapa_diario?: number | null
+          cod_noticia?: number
+          created_at?: string | null
+          data_disponibilizacao?: string | null
+          data_publicacao?: string | null
+          descricao?: string | null
+          estado?: string | null
+          id?: string
+          partner_service_id?: string | null
+          raw_data?: Json
+          sigla_diario?: string | null
+          titulo?: string | null
+          tribunal?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "court_news_partner_service_id_fkey"
+            columns: ["partner_service_id"]
+            isOneToOne: false
+            referencedRelation: "partner_services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       distributions: {
         Row: {
           created_at: string | null
@@ -320,33 +382,367 @@ export type Database = {
         }
         Relationships: []
       }
+      process_covers: {
+        Row: {
+          area: string | null
+          assunto: string | null
+          classe: string | null
+          cod_agrupador: number | null
+          cod_processo: number | null
+          comarca: string | null
+          created_at: string | null
+          data_atualizacao: string | null
+          data_distribuicao: string | null
+          grouper_id: string | null
+          id: string
+          juiz: string | null
+          natureza: string | null
+          process_id: string | null
+          raw_data: Json
+          situacao: string | null
+          tipo_acao: string | null
+          tribunal: string | null
+          updated_at: string | null
+          valor_causa: number | null
+          vara: string | null
+        }
+        Insert: {
+          area?: string | null
+          assunto?: string | null
+          classe?: string | null
+          cod_agrupador?: number | null
+          cod_processo?: number | null
+          comarca?: string | null
+          created_at?: string | null
+          data_atualizacao?: string | null
+          data_distribuicao?: string | null
+          grouper_id?: string | null
+          id?: string
+          juiz?: string | null
+          natureza?: string | null
+          process_id?: string | null
+          raw_data?: Json
+          situacao?: string | null
+          tipo_acao?: string | null
+          tribunal?: string | null
+          updated_at?: string | null
+          valor_causa?: number | null
+          vara?: string | null
+        }
+        Update: {
+          area?: string | null
+          assunto?: string | null
+          classe?: string | null
+          cod_agrupador?: number | null
+          cod_processo?: number | null
+          comarca?: string | null
+          created_at?: string | null
+          data_atualizacao?: string | null
+          data_distribuicao?: string | null
+          grouper_id?: string | null
+          id?: string
+          juiz?: string | null
+          natureza?: string | null
+          process_id?: string | null
+          raw_data?: Json
+          situacao?: string | null
+          tipo_acao?: string | null
+          tribunal?: string | null
+          updated_at?: string | null
+          valor_causa?: number | null
+          vara?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "process_covers_grouper_id_fkey"
+            columns: ["grouper_id"]
+            isOneToOne: false
+            referencedRelation: "process_groupers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "process_covers_process_id_fkey"
+            columns: ["process_id"]
+            isOneToOne: false
+            referencedRelation: "processes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      process_dependencies: {
+        Row: {
+          cod_dependencia: number
+          cod_processo: number
+          created_at: string | null
+          id: string
+          instancia: number | null
+          is_confirmed: boolean | null
+          num_processo: string | null
+          process_id: string | null
+          raw_data: Json
+          titulo: string | null
+        }
+        Insert: {
+          cod_dependencia: number
+          cod_processo: number
+          created_at?: string | null
+          id?: string
+          instancia?: number | null
+          is_confirmed?: boolean | null
+          num_processo?: string | null
+          process_id?: string | null
+          raw_data?: Json
+          titulo?: string | null
+        }
+        Update: {
+          cod_dependencia?: number
+          cod_processo?: number
+          created_at?: string | null
+          id?: string
+          instancia?: number | null
+          is_confirmed?: boolean | null
+          num_processo?: string | null
+          process_id?: string | null
+          raw_data?: Json
+          titulo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "process_dependencies_process_id_fkey"
+            columns: ["process_id"]
+            isOneToOne: false
+            referencedRelation: "processes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      process_documents: {
+        Row: {
+          cod_agrupador: number | null
+          cod_andamento: number | null
+          cod_documento: number
+          cod_processo: number | null
+          created_at: string | null
+          documento_url: string | null
+          id: string
+          is_confirmed: boolean | null
+          movement_id: string | null
+          nome_arquivo: string | null
+          process_id: string | null
+          raw_data: Json
+          tamanho_bytes: number | null
+          tipo_documento: string | null
+        }
+        Insert: {
+          cod_agrupador?: number | null
+          cod_andamento?: number | null
+          cod_documento: number
+          cod_processo?: number | null
+          created_at?: string | null
+          documento_url?: string | null
+          id?: string
+          is_confirmed?: boolean | null
+          movement_id?: string | null
+          nome_arquivo?: string | null
+          process_id?: string | null
+          raw_data?: Json
+          tamanho_bytes?: number | null
+          tipo_documento?: string | null
+        }
+        Update: {
+          cod_agrupador?: number | null
+          cod_andamento?: number | null
+          cod_documento?: number
+          cod_processo?: number | null
+          created_at?: string | null
+          documento_url?: string | null
+          id?: string
+          is_confirmed?: boolean | null
+          movement_id?: string | null
+          nome_arquivo?: string | null
+          process_id?: string | null
+          raw_data?: Json
+          tamanho_bytes?: number | null
+          tipo_documento?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "process_documents_movement_id_fkey"
+            columns: ["movement_id"]
+            isOneToOne: false
+            referencedRelation: "process_movements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "process_documents_process_id_fkey"
+            columns: ["process_id"]
+            isOneToOne: false
+            referencedRelation: "processes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      process_groupers: {
+        Row: {
+          cod_agrupador: number
+          cod_processo: number
+          comarca: string | null
+          created_at: string | null
+          data_cadastro: string | null
+          id: string
+          instancia: number | null
+          is_confirmed: boolean | null
+          num_processo: string | null
+          posicao: number | null
+          process_id: string | null
+          raw_data: Json
+          titulo: string | null
+          tribunal: string | null
+          updated_at: string | null
+          vara: string | null
+        }
+        Insert: {
+          cod_agrupador: number
+          cod_processo: number
+          comarca?: string | null
+          created_at?: string | null
+          data_cadastro?: string | null
+          id?: string
+          instancia?: number | null
+          is_confirmed?: boolean | null
+          num_processo?: string | null
+          posicao?: number | null
+          process_id?: string | null
+          raw_data?: Json
+          titulo?: string | null
+          tribunal?: string | null
+          updated_at?: string | null
+          vara?: string | null
+        }
+        Update: {
+          cod_agrupador?: number
+          cod_processo?: number
+          comarca?: string | null
+          created_at?: string | null
+          data_cadastro?: string | null
+          id?: string
+          instancia?: number | null
+          is_confirmed?: boolean | null
+          num_processo?: string | null
+          posicao?: number | null
+          process_id?: string | null
+          raw_data?: Json
+          titulo?: string | null
+          tribunal?: string | null
+          updated_at?: string | null
+          vara?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "process_groupers_process_id_fkey"
+            columns: ["process_id"]
+            isOneToOne: false
+            referencedRelation: "processes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      process_lawyers: {
+        Row: {
+          cod_agrupador: number | null
+          cod_processo_polo: number | null
+          created_at: string | null
+          id: string
+          nome_advogado: string
+          num_oab: string | null
+          party_id: string | null
+          process_id: string | null
+          raw_data: Json
+          tipo_oab: string | null
+          uf_oab: string | null
+        }
+        Insert: {
+          cod_agrupador?: number | null
+          cod_processo_polo?: number | null
+          created_at?: string | null
+          id?: string
+          nome_advogado: string
+          num_oab?: string | null
+          party_id?: string | null
+          process_id?: string | null
+          raw_data?: Json
+          tipo_oab?: string | null
+          uf_oab?: string | null
+        }
+        Update: {
+          cod_agrupador?: number | null
+          cod_processo_polo?: number | null
+          created_at?: string | null
+          id?: string
+          nome_advogado?: string
+          num_oab?: string | null
+          party_id?: string | null
+          process_id?: string | null
+          raw_data?: Json
+          tipo_oab?: string | null
+          uf_oab?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "process_lawyers_party_id_fkey"
+            columns: ["party_id"]
+            isOneToOne: false
+            referencedRelation: "process_parties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "process_lawyers_process_id_fkey"
+            columns: ["process_id"]
+            isOneToOne: false
+            referencedRelation: "processes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       process_movements: {
         Row: {
+          cod_agrupador: number | null
+          cod_andamento: number | null
           created_at: string | null
+          data_andamento: string | null
           description: string | null
           id: string
           movement_date: string | null
           movement_type: string | null
           process_id: string | null
           raw_data: Json
+          tipo_andamento: string | null
         }
         Insert: {
+          cod_agrupador?: number | null
+          cod_andamento?: number | null
           created_at?: string | null
+          data_andamento?: string | null
           description?: string | null
           id?: string
           movement_date?: string | null
           movement_type?: string | null
           process_id?: string | null
           raw_data: Json
+          tipo_andamento?: string | null
         }
         Update: {
+          cod_agrupador?: number | null
+          cod_andamento?: number | null
           created_at?: string | null
+          data_andamento?: string | null
           description?: string | null
           id?: string
           movement_date?: string | null
           movement_type?: string | null
           process_id?: string | null
           raw_data?: Json
+          tipo_andamento?: string | null
         }
         Relationships: [
           {
@@ -358,44 +754,122 @@ export type Database = {
           },
         ]
       }
+      process_parties: {
+        Row: {
+          cnpj: string | null
+          cod_agrupador: number | null
+          cod_processo_polo: number | null
+          cover_id: string | null
+          cpf: string | null
+          created_at: string | null
+          id: string
+          nome: string
+          process_id: string | null
+          raw_data: Json
+          tipo_pessoa: string | null
+          tipo_polo: number
+        }
+        Insert: {
+          cnpj?: string | null
+          cod_agrupador?: number | null
+          cod_processo_polo?: number | null
+          cover_id?: string | null
+          cpf?: string | null
+          created_at?: string | null
+          id?: string
+          nome: string
+          process_id?: string | null
+          raw_data?: Json
+          tipo_pessoa?: string | null
+          tipo_polo: number
+        }
+        Update: {
+          cnpj?: string | null
+          cod_agrupador?: number | null
+          cod_processo_polo?: number | null
+          cover_id?: string | null
+          cpf?: string | null
+          created_at?: string | null
+          id?: string
+          nome?: string
+          process_id?: string | null
+          raw_data?: Json
+          tipo_pessoa?: string | null
+          tipo_polo?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "process_parties_cover_id_fkey"
+            columns: ["cover_id"]
+            isOneToOne: false
+            referencedRelation: "process_covers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "process_parties_process_id_fkey"
+            columns: ["process_id"]
+            isOneToOne: false
+            referencedRelation: "processes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       processes: {
         Row: {
+          cod_escritorio: number | null
+          cod_processo: number | null
           created_at: string | null
           id: string
           instance: string | null
+          last_cover_sync_at: string | null
           last_sync_at: string | null
           partner_id: string | null
           partner_service_id: string | null
           process_number: string
           raw_data: Json
           status: string | null
+          status_code: number | null
+          status_description: string | null
           tribunal: string | null
+          uf: string | null
           updated_at: string | null
         }
         Insert: {
+          cod_escritorio?: number | null
+          cod_processo?: number | null
           created_at?: string | null
           id?: string
           instance?: string | null
+          last_cover_sync_at?: string | null
           last_sync_at?: string | null
           partner_id?: string | null
           partner_service_id?: string | null
           process_number: string
           raw_data: Json
           status?: string | null
+          status_code?: number | null
+          status_description?: string | null
           tribunal?: string | null
+          uf?: string | null
           updated_at?: string | null
         }
         Update: {
+          cod_escritorio?: number | null
+          cod_processo?: number | null
           created_at?: string | null
           id?: string
           instance?: string | null
+          last_cover_sync_at?: string | null
           last_sync_at?: string | null
           partner_id?: string | null
           partner_service_id?: string | null
           process_number?: string
           raw_data?: Json
           status?: string | null
+          status_code?: number | null
+          status_description?: string | null
           tribunal?: string | null
+          uf?: string | null
           updated_at?: string | null
         }
         Relationships: [
