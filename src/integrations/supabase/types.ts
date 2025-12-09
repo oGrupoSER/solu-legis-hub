@@ -109,6 +109,48 @@ export type Database = {
           },
         ]
       }
+      client_system_services: {
+        Row: {
+          client_system_id: string
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          partner_service_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          client_system_id: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          partner_service_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          client_system_id?: string
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          partner_service_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_system_services_client_system_id_fkey"
+            columns: ["client_system_id"]
+            isOneToOne: false
+            referencedRelation: "client_systems"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_system_services_partner_service_id_fkey"
+            columns: ["partner_service_id"]
+            isOneToOne: false
+            referencedRelation: "partner_services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_systems: {
         Row: {
           contact_email: string | null
