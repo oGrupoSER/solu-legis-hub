@@ -338,6 +338,7 @@ export type Database = {
       partner_services: {
         Row: {
           config: Json | null
+          confirm_receipt: boolean
           created_at: string | null
           id: string
           is_active: boolean | null
@@ -352,6 +353,7 @@ export type Database = {
         }
         Insert: {
           config?: Json | null
+          confirm_receipt?: boolean
           created_at?: string | null
           id?: string
           is_active?: boolean | null
@@ -366,6 +368,7 @@ export type Database = {
         }
         Update: {
           config?: Json | null
+          confirm_receipt?: boolean
           created_at?: string | null
           id?: string
           is_active?: boolean | null
