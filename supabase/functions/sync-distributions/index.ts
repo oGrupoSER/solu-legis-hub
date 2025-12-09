@@ -186,20 +186,23 @@ async function syncDistributions(
     }
   }
 
-  // Confirm receipt of distributions
+  // DISABLED: Do not confirm receipt - legacy system is the official confirmer
+  // if (distributionsToConfirm.length > 0) {
+  //   try {
+  //     await apiRequest(
+  //       service.service_url,
+  //       '/ConfirmaRecebimentoDistribuicoes',
+  //       jwtToken,
+  //       'POST',
+  //       { ids: distributionsToConfirm }
+  //     );
+  //     console.log(`Confirmed receipt of ${distributionsToConfirm.length} distributions`);
+  //   } catch (error) {
+  //     console.error('Error confirming distributions:', error);
+  //   }
+  // }
   if (distributionsToConfirm.length > 0) {
-    try {
-      await apiRequest(
-        service.service_url,
-        '/ConfirmaRecebimentoDistribuicoes',
-        jwtToken,
-        'POST',
-        { ids: distributionsToConfirm }
-      );
-      console.log(`Confirmed receipt of ${distributionsToConfirm.length} distributions`);
-    } catch (error) {
-      console.error('Error confirming distributions:', error);
-    }
+    console.log(`Skipping confirmation for ${distributionsToConfirm.length} distributions (legacy system handles confirmations)`);
   }
 
   return syncedCount;

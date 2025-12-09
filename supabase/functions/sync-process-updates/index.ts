@@ -274,11 +274,12 @@ async function syncGroupers(client: RestClient, supabase: any, service: any): Pr
       return 0;
     }
 
-    // Step 4: Confirm receipt
-    const confirmIds = data.map((g: any) => g.codAgrupador);
-    if (confirmIds.length > 0) {
-      await confirmReceipt(client, supabase, 'groupers', confirmIds);
-    }
+    // DISABLED: Do not confirm receipt - legacy system is the official confirmer
+    // const confirmIds = data.map((g: any) => g.codAgrupador);
+    // if (confirmIds.length > 0) {
+    //   await confirmReceipt(client, supabase, 'groupers', confirmIds);
+    // }
+    console.log(`Skipping confirmation for ${data.length} groupers (legacy system handles confirmations)`);
 
     return data.length;
   } catch (error) {
@@ -363,11 +364,12 @@ async function syncDependencies(client: RestClient, supabase: any, service: any)
       return 0;
     }
 
-    // Step 4: Confirm receipt
-    const confirmIds = data.map((d: any) => d.codDependencia);
-    if (confirmIds.length > 0) {
-      await confirmReceipt(client, supabase, 'dependencies', confirmIds);
-    }
+    // DISABLED: Do not confirm receipt - legacy system is the official confirmer
+    // const confirmIds = data.map((d: any) => d.codDependencia);
+    // if (confirmIds.length > 0) {
+    //   await confirmReceipt(client, supabase, 'dependencies', confirmIds);
+    // }
+    console.log(`Skipping confirmation for ${data.length} dependencies (legacy system handles confirmations)`);
 
     return data.length;
   } catch (error) {
@@ -425,11 +427,12 @@ async function syncMovements(client: RestClient, supabase: any, service: any): P
       return 0;
     }
 
-    // Confirm receipt
-    const confirmIds = data.map((m: any) => m.codAndamento);
-    if (confirmIds.length > 0) {
-      await confirmReceipt(client, supabase, 'movements', confirmIds);
-    }
+    // DISABLED: Do not confirm receipt - legacy system is the official confirmer
+    // const confirmIds = data.map((m: any) => m.codAndamento);
+    // if (confirmIds.length > 0) {
+    //   await confirmReceipt(client, supabase, 'movements', confirmIds);
+    // }
+    console.log(`Skipping confirmation for ${data.length} movements (legacy system handles confirmations)`);
 
     return data.length;
   } catch (error) {
@@ -498,11 +501,12 @@ async function syncDocuments(client: RestClient, supabase: any, service: any): P
       return 0;
     }
 
-    // Confirm receipt
-    const confirmIds = data.map((d: any) => d.codDocumento);
-    if (confirmIds.length > 0) {
-      await confirmReceipt(client, supabase, 'documents', confirmIds);
-    }
+    // DISABLED: Do not confirm receipt - legacy system is the official confirmer
+    // const confirmIds = data.map((d: any) => d.codDocumento);
+    // if (confirmIds.length > 0) {
+    //   await confirmReceipt(client, supabase, 'documents', confirmIds);
+    // }
+    console.log(`Skipping confirmation for ${data.length} documents (legacy system handles confirmations)`);
 
     return data.length;
   } catch (error) {
@@ -865,18 +869,18 @@ async function syncCovers(client: RestClient, supabase: any, service: any): Prom
       await supabase.from('processes').update(data).eq('id', id);
     }
 
-    // Confirm receipt of cover updates
-    // API expects array of objects with codProcessoCapaAtualizada (from processesWithUpdates)
+    // DISABLED: Do not confirm receipt - legacy system is the official confirmer
+    // if (confirmIds.length > 0) {
+    //   try {
+    //     const confirmArray = confirmIds.map(id => ({ codProcessoCapaAtualizada: id }));
+    //     await client.post('/ConfirmaRecebimentoProcessosComCapaAtualizada', confirmArray);
+    //     console.log(`Confirmed receipt of ${confirmIds.length} cover updates`);
+    //   } catch (error) {
+    //     console.error('Error confirming cover receipts:', error);
+    //   }
+    // }
     if (confirmIds.length > 0) {
-      try {
-        // The API expects array of objects like [{ codProcessoCapaAtualizada: X }, ...]
-        // We pass codProcesso directly as that's what we have
-        const confirmArray = confirmIds.map(id => ({ codProcessoCapaAtualizada: id }));
-        await client.post('/ConfirmaRecebimentoProcessosComCapaAtualizada', confirmArray);
-        console.log(`Confirmed receipt of ${confirmIds.length} cover updates`);
-      } catch (error) {
-        console.error('Error confirming cover receipts:', error);
-      }
+      console.log(`Skipping confirmation for ${confirmIds.length} cover updates (legacy system handles confirmations)`);
     }
 
     return synced;
