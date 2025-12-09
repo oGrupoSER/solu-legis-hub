@@ -174,79 +174,79 @@ async function syncGroupers(client: RestClient, supabase: any, service: any): Pr
     }
 
     console.log(`Found ${data.length} new groupers`);
-    let synced = 0;
-    const confirmIds: number[] = [];
 
-    for (const grouper of data) {
-      // Find or create process - auto-create if not exists
-      let { data: process } = await supabase
+    // Step 1: Get unique codProcesso values and create processes in batch
+    const uniqueCodProcessos = [...new Set(data.map((g: any) => g.codProcesso).filter(Boolean))];
+    
+    // Batch upsert all processes first
+    const processInserts = uniqueCodProcessos.map(codProcesso => {
+      const grouper = data.find((g: any) => g.codProcesso === codProcesso);
+      return {
+        cod_processo: codProcesso,
+        cod_escritorio: grouper?.codEscritorio || null,
+        process_number: grouper?.numProcesso || grouper?.titulo || `PROC-${codProcesso}`,
+        tribunal: grouper?.tribunal || null,
+        partner_service_id: service.id,
+        partner_id: service.partner_id,
+        status_code: 4,
+        status_description: 'Cadastrado',
+        raw_data: { codProcesso, source: 'grouper_sync' },
+      };
+    });
+
+    if (processInserts.length > 0) {
+      const { error: processError } = await supabase
         .from('processes')
-        .select('id')
-        .eq('cod_processo', grouper.codProcesso)
-        .maybeSingle();
-
-      // Auto-create process if not found - use upsert to avoid duplicates
-      if (!process) {
-        const { data: newProcess, error: createError } = await supabase
-          .from('processes')
-          .upsert({
-            cod_processo: grouper.codProcesso,
-            cod_escritorio: grouper.codEscritorio || null,
-            process_number: grouper.numProcesso || grouper.titulo || `PROC-${grouper.codProcesso}`,
-            tribunal: grouper.tribunal || null,
-            partner_service_id: service.id,
-            partner_id: service.partner_id,
-            status_code: 4, // Cadastrado
-            status_description: 'Cadastrado',
-            raw_data: { codProcesso: grouper.codProcesso, source: 'grouper_sync' },
-          }, {
-            onConflict: 'cod_processo',
-          })
-          .select('id')
-          .single();
-
-        if (createError) {
-          console.error('Error creating process from grouper:', createError);
-        } else {
-          process = newProcess;
-          console.log(`Auto-created process for codProcesso: ${grouper.codProcesso}`);
-        }
-      }
-
-      const { error } = await supabase
-        .from('process_groupers')
-        .upsert({
-          cod_agrupador: grouper.codAgrupador,
-          cod_processo: grouper.codProcesso,
-          process_id: process?.id || null,
-          posicao: grouper.posicao || null,
-          titulo: grouper.titulo || null,
-          num_processo: grouper.numProcesso || null,
-          tribunal: grouper.tribunal || null,
-          comarca: grouper.comarca || null,
-          vara: grouper.vara || null,
-          instancia: grouper.instancia || null,
-          data_cadastro: grouper.dataCadastro || null,
-          is_confirmed: false,
-          raw_data: grouper,
-        }, {
-          onConflict: 'cod_agrupador,cod_processo',
-        });
-
-      if (!error) {
-        synced++;
-        confirmIds.push(grouper.codAgrupador);
+        .upsert(processInserts, { onConflict: 'cod_processo', ignoreDuplicates: true });
+      
+      if (processError) {
+        console.error('Error batch upserting processes:', processError);
       } else {
-        console.error('Error upserting grouper:', error);
+        console.log(`Batch upserted ${processInserts.length} processes`);
       }
     }
 
-    // Confirm receipt
+    // Step 2: Get all process IDs in one query
+    const { data: processes } = await supabase
+      .from('processes')
+      .select('id, cod_processo')
+      .in('cod_processo', uniqueCodProcessos);
+    
+    const processMap = new Map((processes || []).map((p: any) => [p.cod_processo, p.id]));
+
+    // Step 3: Batch upsert groupers
+    const grouperInserts = data.map((grouper: any) => ({
+      cod_agrupador: grouper.codAgrupador,
+      cod_processo: grouper.codProcesso,
+      process_id: processMap.get(grouper.codProcesso) || null,
+      posicao: grouper.posicao || null,
+      titulo: grouper.titulo || null,
+      num_processo: grouper.numProcesso || null,
+      tribunal: grouper.tribunal || null,
+      comarca: grouper.comarca || null,
+      vara: grouper.vara || null,
+      instancia: grouper.instancia || null,
+      data_cadastro: grouper.dataCadastro || null,
+      is_confirmed: false,
+      raw_data: grouper,
+    }));
+
+    const { error: grouperError } = await supabase
+      .from('process_groupers')
+      .upsert(grouperInserts, { onConflict: 'cod_agrupador,cod_processo' });
+
+    if (grouperError) {
+      console.error('Error batch upserting groupers:', grouperError);
+      return 0;
+    }
+
+    // Step 4: Confirm receipt
+    const confirmIds = data.map((g: any) => g.codAgrupador);
     if (confirmIds.length > 0) {
       await confirmReceipt(client, supabase, 'groupers', confirmIds);
     }
 
-    return synced;
+    return data.length;
   } catch (error) {
     console.error('Error syncing groupers:', error);
     return 0;
@@ -268,73 +268,74 @@ async function syncDependencies(client: RestClient, supabase: any, service: any)
     }
 
     console.log(`Found ${data.length} new dependencies`);
-    let synced = 0;
-    const confirmIds: number[] = [];
 
-    for (const dep of data) {
-      // Find or create process - auto-create if not exists
-      let { data: process } = await supabase
+    // Step 1: Get unique codProcesso values and create processes in batch
+    const uniqueCodProcessos = [...new Set(data.map((d: any) => d.codProcesso).filter(Boolean))];
+    
+    // Batch upsert all processes first
+    const processInserts = uniqueCodProcessos.map(codProcesso => {
+      const dep = data.find((d: any) => d.codProcesso === codProcesso);
+      return {
+        cod_processo: codProcesso,
+        cod_escritorio: dep?.codEscritorio || null,
+        process_number: dep?.numProcesso || dep?.titulo || `PROC-${codProcesso}`,
+        instance: dep?.instancia ? String(dep.instancia) : null,
+        partner_service_id: service.id,
+        partner_id: service.partner_id,
+        status_code: 4,
+        status_description: 'Cadastrado',
+        raw_data: { codProcesso, source: 'dependency_sync' },
+      };
+    });
+
+    if (processInserts.length > 0) {
+      const { error: processError } = await supabase
         .from('processes')
-        .select('id')
-        .eq('cod_processo', dep.codProcesso)
-        .maybeSingle();
-
-      // Auto-create process if not found - use upsert to avoid duplicates
-      if (!process) {
-        const { data: newProcess, error: createError } = await supabase
-          .from('processes')
-          .upsert({
-            cod_processo: dep.codProcesso,
-            cod_escritorio: dep.codEscritorio || null,
-            process_number: dep.numProcesso || dep.titulo || `PROC-${dep.codProcesso}`,
-            instance: dep.instancia ? String(dep.instancia) : null,
-            partner_service_id: service.id,
-            partner_id: service.partner_id,
-            status_code: 4,
-            status_description: 'Cadastrado',
-            raw_data: { codProcesso: dep.codProcesso, source: 'dependency_sync' },
-          }, {
-            onConflict: 'cod_processo',
-          })
-          .select('id')
-          .single();
-
-        if (createError) {
-          console.error('Error creating process from dependency:', createError);
-        } else {
-          process = newProcess;
-          console.log(`Auto-created process for codProcesso: ${dep.codProcesso}`);
-        }
-      }
-
-      const { error } = await supabase
-        .from('process_dependencies')
-        .upsert({
-          cod_dependencia: dep.codDependencia,
-          cod_processo: dep.codProcesso,
-          process_id: process?.id || null,
-          num_processo: dep.numProcesso || null,
-          instancia: dep.instancia || null,
-          titulo: dep.titulo || null,
-          is_confirmed: false,
-          raw_data: dep,
-        }, {
-          onConflict: 'cod_dependencia,cod_processo',
-        });
-
-      if (!error) {
-        synced++;
-        confirmIds.push(dep.codDependencia);
+        .upsert(processInserts, { onConflict: 'cod_processo', ignoreDuplicates: true });
+      
+      if (processError) {
+        console.error('Error batch upserting processes:', processError);
       } else {
-        console.error('Error upserting dependency:', error);
+        console.log(`Batch upserted ${processInserts.length} processes from dependencies`);
       }
     }
 
+    // Step 2: Get all process IDs in one query
+    const { data: processes } = await supabase
+      .from('processes')
+      .select('id, cod_processo')
+      .in('cod_processo', uniqueCodProcessos);
+    
+    const processMap = new Map((processes || []).map((p: any) => [p.cod_processo, p.id]));
+
+    // Step 3: Batch upsert dependencies
+    const depInserts = data.map((dep: any) => ({
+      cod_dependencia: dep.codDependencia,
+      cod_processo: dep.codProcesso,
+      process_id: processMap.get(dep.codProcesso) || null,
+      num_processo: dep.numProcesso || null,
+      instancia: dep.instancia || null,
+      titulo: dep.titulo || null,
+      is_confirmed: false,
+      raw_data: dep,
+    }));
+
+    const { error: depError } = await supabase
+      .from('process_dependencies')
+      .upsert(depInserts, { onConflict: 'cod_dependencia,cod_processo' });
+
+    if (depError) {
+      console.error('Error batch upserting dependencies:', depError);
+      return 0;
+    }
+
+    // Step 4: Confirm receipt
+    const confirmIds = data.map((d: any) => d.codDependencia);
     if (confirmIds.length > 0) {
       await confirmReceipt(client, supabase, 'dependencies', confirmIds);
     }
 
-    return synced;
+    return data.length;
   } catch (error) {
     console.error('Error syncing dependencies:', error);
     return 0;
@@ -356,45 +357,47 @@ async function syncMovements(client: RestClient, supabase: any, service: any): P
     }
 
     console.log(`Found ${data.length} new movements`);
-    let synced = 0;
-    const confirmIds: number[] = [];
 
-    for (const mov of data) {
-      const { data: process } = await supabase
-        .from('processes')
-        .select('id')
-        .eq('cod_processo', mov.codProcesso)
-        .maybeSingle();
+    // Get unique codProcesso values
+    const uniqueCodProcessos = [...new Set(data.map((m: any) => m.codProcesso).filter(Boolean))];
 
-      const { error } = await supabase
-        .from('process_movements')
-        .upsert({
-          cod_andamento: mov.codAndamento,
-          cod_agrupador: mov.codAgrupador || null,
-          process_id: process?.id || null,
-          movement_type: mov.tipoAndamento || null,
-          tipo_andamento: mov.tipoAndamento || null,
-          movement_date: mov.dataAndamento || null,
-          data_andamento: mov.dataAndamento || null,
-          description: mov.descricao || null,
-          raw_data: mov,
-        }, {
-          onConflict: 'cod_andamento',
-        });
+    // Get all process IDs in one query
+    const { data: processes } = await supabase
+      .from('processes')
+      .select('id, cod_processo')
+      .in('cod_processo', uniqueCodProcessos);
+    
+    const processMap = new Map((processes || []).map((p: any) => [p.cod_processo, p.id]));
 
-      if (!error) {
-        synced++;
-        confirmIds.push(mov.codAndamento);
-      } else {
-        console.error('Error upserting movement:', error);
-      }
+    // Batch upsert movements
+    const movementInserts = data.map((mov: any) => ({
+      cod_andamento: mov.codAndamento,
+      cod_agrupador: mov.codAgrupador || null,
+      process_id: processMap.get(mov.codProcesso) || null,
+      movement_type: mov.tipoAndamento || null,
+      tipo_andamento: mov.tipoAndamento || null,
+      movement_date: mov.dataAndamento || null,
+      data_andamento: mov.dataAndamento || null,
+      description: mov.descricao || null,
+      raw_data: mov,
+    }));
+
+    const { error: movError } = await supabase
+      .from('process_movements')
+      .upsert(movementInserts, { onConflict: 'cod_andamento' });
+
+    if (movError) {
+      console.error('Error batch upserting movements:', movError);
+      return 0;
     }
 
+    // Confirm receipt
+    const confirmIds = data.map((m: any) => m.codAndamento);
     if (confirmIds.length > 0) {
       await confirmReceipt(client, supabase, 'movements', confirmIds);
     }
 
-    return synced;
+    return data.length;
   } catch (error) {
     console.error('Error syncing movements:', error);
     return 0;
@@ -416,59 +419,58 @@ async function syncDocuments(client: RestClient, supabase: any, service: any): P
     }
 
     console.log(`Found ${data.length} new documents`);
-    let synced = 0;
-    const confirmIds: number[] = [];
 
-    for (const doc of data) {
-      const { data: process } = await supabase
-        .from('processes')
-        .select('id')
-        .eq('cod_processo', doc.codProcesso)
-        .maybeSingle();
+    // Get unique codProcesso and codAndamento values
+    const uniqueCodProcessos = [...new Set(data.map((d: any) => d.codProcesso).filter(Boolean))];
+    const uniqueCodAndamentos = [...new Set(data.map((d: any) => d.codAndamento).filter(Boolean))];
 
-      // Find movement if exists
-      let movementId = null;
-      if (doc.codAndamento) {
-        const { data: movement } = await supabase
-          .from('process_movements')
-          .select('id')
-          .eq('cod_andamento', doc.codAndamento)
-          .maybeSingle();
-        movementId = movement?.id;
-      }
+    // Get all process and movement IDs in batch queries
+    const { data: processes } = await supabase
+      .from('processes')
+      .select('id, cod_processo')
+      .in('cod_processo', uniqueCodProcessos);
+    
+    const processMap = new Map((processes || []).map((p: any) => [p.cod_processo, p.id]));
 
-      const { error } = await supabase
-        .from('process_documents')
-        .upsert({
-          cod_documento: doc.codDocumento,
-          cod_processo: doc.codProcesso,
-          cod_andamento: doc.codAndamento || null,
-          cod_agrupador: doc.codAgrupador || null,
-          process_id: process?.id || null,
-          movement_id: movementId,
-          tipo_documento: doc.tipoDocumento || null,
-          nome_arquivo: doc.nomeArquivo || null,
-          documento_url: doc.urlDocumento || null,
-          tamanho_bytes: doc.tamanhoBytes || null,
-          is_confirmed: false,
-          raw_data: doc,
-        }, {
-          onConflict: 'cod_documento',
-        });
+    const { data: movements } = await supabase
+      .from('process_movements')
+      .select('id, cod_andamento')
+      .in('cod_andamento', uniqueCodAndamentos);
+    
+    const movementMap = new Map((movements || []).map((m: any) => [m.cod_andamento, m.id]));
 
-      if (!error) {
-        synced++;
-        confirmIds.push(doc.codDocumento);
-      } else {
-        console.error('Error upserting document:', error);
-      }
+    // Batch upsert documents
+    const docInserts = data.map((doc: any) => ({
+      cod_documento: doc.codDocumento,
+      cod_processo: doc.codProcesso,
+      cod_andamento: doc.codAndamento || null,
+      cod_agrupador: doc.codAgrupador || null,
+      process_id: processMap.get(doc.codProcesso) || null,
+      movement_id: doc.codAndamento ? movementMap.get(doc.codAndamento) || null : null,
+      tipo_documento: doc.tipoDocumento || null,
+      nome_arquivo: doc.nomeArquivo || null,
+      documento_url: doc.urlDocumento || null,
+      tamanho_bytes: doc.tamanhoBytes || null,
+      is_confirmed: false,
+      raw_data: doc,
+    }));
+
+    const { error: docError } = await supabase
+      .from('process_documents')
+      .upsert(docInserts, { onConflict: 'cod_documento' });
+
+    if (docError) {
+      console.error('Error batch upserting documents:', docError);
+      return 0;
     }
 
+    // Confirm receipt
+    const confirmIds = data.map((d: any) => d.codDocumento);
     if (confirmIds.length > 0) {
       await confirmReceipt(client, supabase, 'documents', confirmIds);
     }
 
-    return synced;
+    return data.length;
   } catch (error) {
     console.error('Error syncing documents:', error);
     return 0;
@@ -510,133 +512,154 @@ async function syncCovers(client: RestClient, supabase: any, service: any): Prom
 
     console.log(`Got cover data for ${coversData.length} processes`);
 
+    // Get all process IDs and grouper IDs in batch
+    const uniqueCodProcessos = [...new Set(coversData.map((c: any) => c.codProcesso).filter(Boolean))];
+    const uniqueCodAgrupadores = [...new Set(coversData.map((c: any) => c.codAgrupador).filter(Boolean))];
+
+    const { data: processes } = await supabase
+      .from('processes')
+      .select('id, cod_processo')
+      .in('cod_processo', uniqueCodProcessos);
+    
+    const processMap = new Map((processes || []).map((p: any) => [p.cod_processo, p.id]));
+
+    const { data: groupers } = await supabase
+      .from('process_groupers')
+      .select('id, cod_agrupador')
+      .in('cod_agrupador', uniqueCodAgrupadores);
+    
+    const grouperMap = new Map((groupers || []).map((g: any) => [g.cod_agrupador, g.id]));
+
     let synced = 0;
     const confirmIds: number[] = [];
+    const coverInserts: any[] = [];
+    const partyInserts: any[] = [];
+    const lawyerInserts: any[] = [];
+    const processUpdates: any[] = [];
 
     for (const cover of coversData) {
-      const { data: process } = await supabase
-        .from('processes')
-        .select('id')
-        .eq('cod_processo', cover.codProcesso)
-        .maybeSingle();
-
-      if (!process) {
+      const processId = processMap.get(cover.codProcesso);
+      if (!processId) {
         console.log(`Process not found for codProcesso: ${cover.codProcesso}`);
         continue;
       }
 
-      // Find grouper if exists
-      let grouperId = null;
-      if (cover.codAgrupador) {
-        const { data: grouper } = await supabase
-          .from('process_groupers')
-          .select('id')
-          .eq('cod_agrupador', cover.codAgrupador)
-          .maybeSingle();
-        grouperId = grouper?.id;
-      }
+      const grouperId = cover.codAgrupador ? grouperMap.get(cover.codAgrupador) || null : null;
 
-      // Upsert cover
-      const { data: coverRecord, error: coverError } = await supabase
-        .from('process_covers')
-        .upsert({
-          process_id: process.id,
-          grouper_id: grouperId,
-          cod_agrupador: cover.codAgrupador || null,
-          cod_processo: cover.codProcesso,
-          comarca: cover.comarca || null,
-          vara: cover.vara || null,
-          tribunal: cover.tribunal || null,
-          assunto: cover.assunto || null,
-          natureza: cover.natureza || null,
-          tipo_acao: cover.tipoAcao || null,
-          classe: cover.classe || null,
-          juiz: cover.juiz || null,
-          situacao: cover.situacao || null,
-          area: cover.area || null,
-          valor_causa: cover.valorCausa || null,
-          data_distribuicao: cover.dataDistribuicao || null,
-          data_atualizacao: cover.dataAtualizacao || null,
-          raw_data: cover,
-        }, {
-          onConflict: 'process_id,cod_agrupador',
-        })
-        .select()
-        .maybeSingle();
+      // Prepare cover insert
+      coverInserts.push({
+        process_id: processId,
+        grouper_id: grouperId,
+        cod_agrupador: cover.codAgrupador || null,
+        cod_processo: cover.codProcesso,
+        comarca: cover.comarca || null,
+        vara: cover.vara || null,
+        tribunal: cover.tribunal || null,
+        assunto: cover.assunto || null,
+        natureza: cover.natureza || null,
+        tipo_acao: cover.tipoAcao || null,
+        classe: cover.classe || null,
+        juiz: cover.juiz || null,
+        situacao: cover.situacao || null,
+        area: cover.area || null,
+        valor_causa: cover.valorCausa || null,
+        data_distribuicao: cover.dataDistribuicao || null,
+        data_atualizacao: cover.dataAtualizacao || null,
+        raw_data: cover,
+      });
 
-      if (coverError) {
-        console.error('Error upserting cover:', coverError);
-        continue;
-      }
-
-      synced++;
       confirmIds.push(cover.codProcesso);
+      synced++;
 
-      // Sync parties (polos)
+      // Collect parties
       if (Array.isArray(cover.polos)) {
         for (const polo of cover.polos) {
-          const { data: partyRecord } = await supabase
-            .from('process_parties')
-            .upsert({
-              process_id: process.id,
-              cover_id: coverRecord?.id,
-              cod_processo_polo: polo.codProcessoPolo,
-              cod_agrupador: cover.codAgrupador || null,
-              tipo_polo: polo.tipoPolo,
-              nome: polo.nome,
-              cpf: polo.cpf || null,
-              cnpj: polo.cnpj || null,
-              tipo_pessoa: polo.tipoPessoa || null,
-              raw_data: polo,
-            }, {
-              onConflict: 'cod_processo_polo,cod_agrupador',
-            })
-            .select()
-            .maybeSingle();
+          partyInserts.push({
+            process_id: processId,
+            cod_processo_polo: polo.codProcessoPolo,
+            cod_agrupador: cover.codAgrupador || null,
+            tipo_polo: polo.tipoPolo,
+            nome: polo.nome,
+            cpf: polo.cpf || null,
+            cnpj: polo.cnpj || null,
+            tipo_pessoa: polo.tipoPessoa || null,
+            raw_data: polo,
+          });
 
-          // Sync lawyers for this party
+          // Collect lawyers
           if (Array.isArray(polo.advogados)) {
             for (const adv of polo.advogados) {
-              await supabase
-                .from('process_lawyers')
-                .upsert({
-                  process_id: process.id,
-                  party_id: partyRecord?.id || null,
-                  cod_processo_polo: polo.codProcessoPolo,
-                  cod_agrupador: cover.codAgrupador || null,
-                  nome_advogado: adv.nomeAdvogado,
-                  num_oab: adv.numOAB || null,
-                  uf_oab: adv.ufOAB || null,
-                  tipo_oab: adv.tipoOAB || null,
-                  raw_data: adv,
-                }, {
-                  onConflict: 'cod_processo_polo,num_oab',
-                });
+              lawyerInserts.push({
+                process_id: processId,
+                cod_processo_polo: polo.codProcessoPolo,
+                cod_agrupador: cover.codAgrupador || null,
+                nome_advogado: adv.nomeAdvogado,
+                num_oab: adv.numOAB || null,
+                uf_oab: adv.ufOAB || null,
+                tipo_oab: adv.tipoOAB || null,
+                raw_data: adv,
+              });
             }
           }
         }
       }
 
-      // Update last cover sync and process number in processes table
-      const updateData: Record<string, any> = { 
-        last_cover_sync_at: new Date().toISOString() 
-      };
-      
-      // Update process_number if we have the actual number from the cover
-      if (cover.numProcesso) {
-        updateData.process_number = cover.numProcesso;
-      }
+      // Prepare process update
+      processUpdates.push({
+        id: processId,
+        last_cover_sync_at: new Date().toISOString(),
+        process_number: cover.numProcesso || undefined,
+      });
+    }
 
-      await supabase
-        .from('processes')
-        .update(updateData)
-        .eq('id', process.id);
+    // Batch upsert covers
+    if (coverInserts.length > 0) {
+      const { error: coverError } = await supabase
+        .from('process_covers')
+        .upsert(coverInserts, { onConflict: 'process_id,cod_agrupador' });
+      
+      if (coverError) {
+        console.error('Error batch upserting covers:', coverError);
+      } else {
+        console.log(`Batch upserted ${coverInserts.length} covers`);
+      }
+    }
+
+    // Batch upsert parties
+    if (partyInserts.length > 0) {
+      const { error: partyError } = await supabase
+        .from('process_parties')
+        .upsert(partyInserts, { onConflict: 'cod_processo_polo,cod_agrupador' });
+      
+      if (partyError) {
+        console.error('Error batch upserting parties:', partyError);
+      } else {
+        console.log(`Batch upserted ${partyInserts.length} parties`);
+      }
+    }
+
+    // Batch upsert lawyers
+    if (lawyerInserts.length > 0) {
+      const { error: lawyerError } = await supabase
+        .from('process_lawyers')
+        .upsert(lawyerInserts, { onConflict: 'cod_processo_polo,num_oab' });
+      
+      if (lawyerError) {
+        console.error('Error batch upserting lawyers:', lawyerError);
+      } else {
+        console.log(`Batch upserted ${lawyerInserts.length} lawyers`);
+      }
+    }
+
+    // Update processes
+    for (const update of processUpdates) {
+      const { id, ...data } = update;
+      await supabase.from('processes').update(data).eq('id', id);
     }
 
     // Confirm receipt of cover updates
     if (confirmIds.length > 0) {
       try {
-        // POST /ConfirmaRecebimentoProcessosComCapaAtualizada - API expects array directly
         await client.post('/ConfirmaRecebimentoProcessosComCapaAtualizada', confirmIds);
         console.log(`Confirmed receipt of ${confirmIds.length} cover updates`);
       } catch (error) {
