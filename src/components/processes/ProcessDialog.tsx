@@ -29,6 +29,11 @@ interface ProcessDialogProps {
 interface PartnerService {
   id: string;
   service_name: string;
+}
+
+interface ClientSystem {
+  id: string;
+  name: string;
   office_code: number | null;
 }
 
@@ -41,9 +46,11 @@ const UF_OPTIONS = [
 export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogProps) {
   const [loading, setLoading] = useState(false);
   const [services, setServices] = useState<PartnerService[]>([]);
+  const [clientSystems, setClientSystems] = useState<ClientSystem[]>([]);
   const [formData, setFormData] = useState({
     processNumber: "",
     serviceId: "",
+    clientSystemId: "",
     officeCode: "",
     uf: "",
     instance: "1",
@@ -55,11 +62,19 @@ export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogPr
     }
   }, [open]);
 
+  useEffect(() => {
+    if (formData.serviceId) {
+      fetchClientSystems(formData.serviceId);
+    } else {
+      setClientSystems([]);
+    }
+  }, [formData.serviceId]);
+
   const fetchServices = async () => {
     try {
       const { data, error } = await supabase
         .from("partner_services")
-        .select("id, service_name, office_code")
+        .select("id, service_name")
         .eq("service_type", "processes")
         .eq("is_active", true);
 
@@ -70,7 +85,6 @@ export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogPr
         setFormData(prev => ({
           ...prev,
           serviceId: data[0].id,
-          officeCode: data[0].office_code?.toString() || "",
         }));
       }
     } catch (error) {
@@ -78,12 +92,50 @@ export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogPr
     }
   };
 
+  const fetchClientSystems = async (serviceId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("client_system_services")
+        .select("client_systems(id, name, office_code)")
+        .eq("partner_service_id", serviceId)
+        .eq("is_active", true);
+
+      if (error) throw error;
+
+      const clients = (data || [])
+        .map((item: any) => item.client_systems)
+        .filter((cs: any) => cs && cs.office_code);
+
+      setClientSystems(clients);
+
+      // Auto-select if only one client system
+      if (clients.length === 1) {
+        setFormData(prev => ({
+          ...prev,
+          clientSystemId: clients[0].id,
+          officeCode: clients[0].office_code?.toString() || "",
+        }));
+      }
+    } catch (error) {
+      console.error("Error fetching client systems:", error);
+    }
+  };
+
   const handleServiceChange = (serviceId: string) => {
-    const service = services.find(s => s.id === serviceId);
     setFormData(prev => ({
       ...prev,
       serviceId,
-      officeCode: service?.office_code?.toString() || prev.officeCode,
+      clientSystemId: "",
+      officeCode: "",
+    }));
+  };
+
+  const handleClientSystemChange = (clientSystemId: string) => {
+    const clientSystem = clientSystems.find(cs => cs.id === clientSystemId);
+    setFormData(prev => ({
+      ...prev,
+      clientSystemId,
+      officeCode: clientSystem?.office_code?.toString() || "",
     }));
   };
 
@@ -128,10 +180,12 @@ export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogPr
     setFormData({
       processNumber: "",
       serviceId: services.length === 1 ? services[0].id : "",
-      officeCode: services.length === 1 ? services[0].office_code?.toString() || "" : "",
+      clientSystemId: "",
+      officeCode: "",
       uf: "",
       instance: "1",
     });
+    setClientSystems([]);
   };
 
   return (
@@ -181,6 +235,27 @@ export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogPr
               </div>
             )}
 
+            {clientSystems.length > 0 && (
+              <div className="grid gap-2">
+                <Label htmlFor="clientSystem">Sistema Cliente *</Label>
+                <Select
+                  value={formData.clientSystemId}
+                  onValueChange={handleClientSystemChange}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um sistema cliente" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clientSystems.map((cs) => (
+                      <SelectItem key={cs.id} value={cs.id}>
+                        {cs.name} (Escritório: {cs.office_code})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <Label htmlFor="officeCode">Código do Escritório *</Label>
@@ -191,6 +266,7 @@ export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogPr
                   value={formData.officeCode}
                   onChange={(e) => setFormData(prev => ({ ...prev, officeCode: e.target.value }))}
                   required
+                  disabled={!!formData.clientSystemId}
                 />
               </div>
               <div className="grid gap-2">

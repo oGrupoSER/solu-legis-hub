@@ -18,7 +18,6 @@ export interface ServiceConfig {
   service_url: string;
   nome_relacional: string;
   token: string;
-  office_code: number | null;
   is_active: boolean;
   config: any;
   last_sync_at: string | null;

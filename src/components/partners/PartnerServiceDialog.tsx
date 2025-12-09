@@ -17,7 +17,6 @@ interface PartnerService {
   service_url: string;
   nome_relacional: string;
   token: string;
-  office_code: number | null;
   is_active: boolean;
   config: Record<string, any>;
 }
@@ -37,7 +36,6 @@ const PartnerServiceDialog = ({ open, onOpenChange, partnerId, service }: Partne
     service_url: "",
     nome_relacional: "",
     token: "",
-    office_code: "",
     is_active: true,
     config: "{}"
   });
@@ -50,7 +48,6 @@ const PartnerServiceDialog = ({ open, onOpenChange, partnerId, service }: Partne
         service_url: service.service_url,
         nome_relacional: service.nome_relacional,
         token: service.token,
-        office_code: service.office_code?.toString() || "",
         is_active: service.is_active,
         config: JSON.stringify(service.config, null, 2)
       });
@@ -61,7 +58,6 @@ const PartnerServiceDialog = ({ open, onOpenChange, partnerId, service }: Partne
         service_url: "",
         nome_relacional: "",
         token: "",
-        office_code: "",
         is_active: true,
         config: "{}"
       });
@@ -93,7 +89,6 @@ const PartnerServiceDialog = ({ open, onOpenChange, partnerId, service }: Partne
         service_url: formData.service_url,
         nome_relacional: formData.nome_relacional,
         token: formData.token,
-        office_code: formData.office_code ? parseInt(formData.office_code) : null,
         is_active: formData.is_active,
         config: configJson
       };
@@ -222,19 +217,6 @@ const PartnerServiceDialog = ({ open, onOpenChange, partnerId, service }: Partne
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="office_code">Código de Escritório</Label>
-            <Input
-              id="office_code"
-              type="number"
-              value={formData.office_code}
-              onChange={(e) => setFormData({ ...formData, office_code: e.target.value })}
-              placeholder="11"
-            />
-            <p className="text-sm text-muted-foreground">
-              Código do escritório usado nas chamadas SOAP (ex: 11)
-            </p>
-          </div>
 
           <div className="space-y-2">
             <Label htmlFor="config">Configurações Adicionais (JSON)</Label>

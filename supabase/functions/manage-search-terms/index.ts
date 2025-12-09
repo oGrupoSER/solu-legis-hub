@@ -94,22 +94,19 @@ Deno.serve(async (req) => {
       throw new Error('Service is not active');
     }
 
-    // Resolve office code
-    let officeCode = service.office_code as number | null;
-    if (!officeCode) {
-      const { data: cs } = await supabase
-        .from('client_systems')
-        .select('office_code')
-        .eq('is_active', true)
-        .not('office_code', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      officeCode = (cs as any)?.office_code ?? null;
-    }
+    // Get office_code from client_systems linked via client_system_services
+    const { data: clientServiceData } = await supabase
+      .from('client_system_services')
+      .select('client_systems(office_code)')
+      .eq('partner_service_id', service_id)
+      .eq('is_active', true)
+      .limit(1)
+      .maybeSingle();
+
+    const officeCode = (clientServiceData?.client_systems as any)?.office_code as number | null;
 
     if (!officeCode) {
-      throw new Error('Office code is required. Configure it on the service or client system.');
+      throw new Error('Nenhum Sistema Cliente com código de escritório vinculado a este serviço.');
     }
 
     // Resolve SOAP endpoint
