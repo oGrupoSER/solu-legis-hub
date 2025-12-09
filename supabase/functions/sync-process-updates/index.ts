@@ -185,11 +185,11 @@ async function syncGroupers(client: RestClient, supabase: any, service: any): Pr
         .eq('cod_processo', grouper.codProcesso)
         .maybeSingle();
 
-      // Auto-create process if not found
+      // Auto-create process if not found - use upsert to avoid duplicates
       if (!process) {
         const { data: newProcess, error: createError } = await supabase
           .from('processes')
-          .insert({
+          .upsert({
             cod_processo: grouper.codProcesso,
             cod_escritorio: grouper.codEscritorio || null,
             process_number: grouper.numProcesso || grouper.titulo || `PROC-${grouper.codProcesso}`,
@@ -199,6 +199,8 @@ async function syncGroupers(client: RestClient, supabase: any, service: any): Pr
             status_code: 4, // Cadastrado
             status_description: 'Cadastrado',
             raw_data: { codProcesso: grouper.codProcesso, source: 'grouper_sync' },
+          }, {
+            onConflict: 'cod_processo',
           })
           .select('id')
           .single();
@@ -277,11 +279,11 @@ async function syncDependencies(client: RestClient, supabase: any, service: any)
         .eq('cod_processo', dep.codProcesso)
         .maybeSingle();
 
-      // Auto-create process if not found
+      // Auto-create process if not found - use upsert to avoid duplicates
       if (!process) {
         const { data: newProcess, error: createError } = await supabase
           .from('processes')
-          .insert({
+          .upsert({
             cod_processo: dep.codProcesso,
             cod_escritorio: dep.codEscritorio || null,
             process_number: dep.numProcesso || dep.titulo || `PROC-${dep.codProcesso}`,
@@ -291,6 +293,8 @@ async function syncDependencies(client: RestClient, supabase: any, service: any)
             status_code: 4,
             status_description: 'Cadastrado',
             raw_data: { codProcesso: dep.codProcesso, source: 'dependency_sync' },
+          }, {
+            onConflict: 'cod_processo',
           })
           .select('id')
           .single();
