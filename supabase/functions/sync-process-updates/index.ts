@@ -178,12 +178,38 @@ async function syncGroupers(client: RestClient, supabase: any, service: any): Pr
     const confirmIds: number[] = [];
 
     for (const grouper of data) {
-      // Find or create process
-      const { data: process } = await supabase
+      // Find or create process - auto-create if not exists
+      let { data: process } = await supabase
         .from('processes')
         .select('id')
         .eq('cod_processo', grouper.codProcesso)
         .maybeSingle();
+
+      // Auto-create process if not found
+      if (!process) {
+        const { data: newProcess, error: createError } = await supabase
+          .from('processes')
+          .insert({
+            cod_processo: grouper.codProcesso,
+            cod_escritorio: grouper.codEscritorio || null,
+            process_number: grouper.numProcesso || grouper.titulo || `PROC-${grouper.codProcesso}`,
+            tribunal: grouper.tribunal || null,
+            partner_service_id: service.id,
+            partner_id: service.partner_id,
+            status_code: 4, // Cadastrado
+            status_description: 'Cadastrado',
+            raw_data: { codProcesso: grouper.codProcesso, source: 'grouper_sync' },
+          })
+          .select('id')
+          .single();
+
+        if (createError) {
+          console.error('Error creating process from grouper:', createError);
+        } else {
+          process = newProcess;
+          console.log(`Auto-created process for codProcesso: ${grouper.codProcesso}`);
+        }
+      }
 
       const { error } = await supabase
         .from('process_groupers')
@@ -244,11 +270,38 @@ async function syncDependencies(client: RestClient, supabase: any, service: any)
     const confirmIds: number[] = [];
 
     for (const dep of data) {
-      const { data: process } = await supabase
+      // Find or create process - auto-create if not exists
+      let { data: process } = await supabase
         .from('processes')
         .select('id')
         .eq('cod_processo', dep.codProcesso)
         .maybeSingle();
+
+      // Auto-create process if not found
+      if (!process) {
+        const { data: newProcess, error: createError } = await supabase
+          .from('processes')
+          .insert({
+            cod_processo: dep.codProcesso,
+            cod_escritorio: dep.codEscritorio || null,
+            process_number: dep.numProcesso || dep.titulo || `PROC-${dep.codProcesso}`,
+            instance: dep.instancia ? String(dep.instancia) : null,
+            partner_service_id: service.id,
+            partner_id: service.partner_id,
+            status_code: 4,
+            status_description: 'Cadastrado',
+            raw_data: { codProcesso: dep.codProcesso, source: 'dependency_sync' },
+          })
+          .select('id')
+          .single();
+
+        if (createError) {
+          console.error('Error creating process from dependency:', createError);
+        } else {
+          process = newProcess;
+          console.log(`Auto-created process for codProcesso: ${dep.codProcesso}`);
+        }
+      }
 
       const { error } = await supabase
         .from('process_dependencies')
