@@ -101,18 +101,52 @@ serve(async (req) => {
           console.log(`Synced ${depsSynced} dependencies`);
         }
 
-        // 3. Sync Movements (Andamentos)
+        // 3. Sync Movements (Andamentos) - Loop until no more data
         if (syncType === 'full' || syncType === 'movements') {
-          const movementsSynced = await syncMovements(client, supabase, service);
-          totalSynced += movementsSynced;
-          console.log(`Synced ${movementsSynced} movements`);
+          let totalMovements = 0;
+          let batchCount = 0;
+          const maxBatches = 20; // Safety limit
+          
+          while (batchCount < maxBatches) {
+            const movementsSynced = await syncMovements(client, supabase, service);
+            totalMovements += movementsSynced;
+            batchCount++;
+            
+            if (movementsSynced === 0 || movementsSynced < 500) {
+              break; // No more data or last batch
+            }
+            console.log(`Movements batch ${batchCount}: ${movementsSynced} synced`);
+          }
+          
+          totalSynced += totalMovements;
+          console.log(`Total synced ${totalMovements} movements in ${batchCount} batches`);
         }
 
-        // 4. Sync Documents
+        // 4. Sync Documents - Loop until no more data
         if (syncType === 'full' || syncType === 'documents') {
-          const docsSynced = await syncDocuments(client, supabase, service);
-          totalSynced += docsSynced;
-          console.log(`Synced ${docsSynced} documents`);
+          let totalDocs = 0;
+          let batchCount = 0;
+          const maxBatches = 20; // Safety limit
+          
+          while (batchCount < maxBatches) {
+            const docsSynced = await syncDocuments(client, supabase, service);
+            totalDocs += docsSynced;
+            batchCount++;
+            
+            if (docsSynced === 0 || docsSynced < 500) {
+              break; // No more data or last batch
+            }
+            console.log(`Documents batch ${batchCount}: ${docsSynced} synced`);
+          }
+          
+          totalSynced += totalDocs;
+          console.log(`Total synced ${totalDocs} documents in ${batchCount} batches`);
+        }
+
+        // 4.1 Link orphan documents to processes
+        if (syncType === 'full' || syncType === 'documents') {
+          const linkedDocs = await linkOrphanDocuments(supabase);
+          console.log(`Linked ${linkedDocs} orphan documents to processes`);
         }
 
         // 5. Sync Covers (Capas) with Parties and Lawyers
@@ -473,6 +507,77 @@ async function syncDocuments(client: RestClient, supabase: any, service: any): P
     return data.length;
   } catch (error) {
     console.error('Error syncing documents:', error);
+    return 0;
+  }
+}
+
+/**
+ * Link orphan documents to processes and movements
+ * Updates documents that have cod_processo but no process_id
+ */
+async function linkOrphanDocuments(supabase: any): Promise<number> {
+  try {
+    // Get orphan documents (have cod_processo but no process_id)
+    const { data: orphanDocs, error: orphanError } = await supabase
+      .from('process_documents')
+      .select('id, cod_processo, cod_andamento')
+      .is('process_id', null)
+      .not('cod_processo', 'is', null)
+      .limit(1000);
+
+    if (orphanError || !orphanDocs?.length) {
+      console.log('No orphan documents to link');
+      return 0;
+    }
+
+    console.log(`Found ${orphanDocs.length} orphan documents to link`);
+
+    // Get unique codProcesso values
+    const uniqueCodProcessos = [...new Set(orphanDocs.map((d: any) => d.cod_processo))];
+    const uniqueCodAndamentos = [...new Set(orphanDocs.map((d: any) => d.cod_andamento).filter(Boolean))];
+
+    // Get process mappings
+    const { data: processes } = await supabase
+      .from('processes')
+      .select('id, cod_processo')
+      .in('cod_processo', uniqueCodProcessos);
+
+    const processMap = new Map((processes || []).map((p: any) => [p.cod_processo, p.id]));
+
+    // Get movement mappings if any
+    let movementMap = new Map();
+    if (uniqueCodAndamentos.length > 0) {
+      const { data: movements } = await supabase
+        .from('process_movements')
+        .select('id, cod_andamento')
+        .in('cod_andamento', uniqueCodAndamentos);
+      
+      movementMap = new Map((movements || []).map((m: any) => [m.cod_andamento, m.id]));
+    }
+
+    // Update documents in batches
+    let linkedCount = 0;
+    for (const doc of orphanDocs) {
+      const processId = processMap.get(doc.cod_processo);
+      const movementId = doc.cod_andamento ? movementMap.get(doc.cod_andamento) : null;
+
+      if (processId) {
+        const { error } = await supabase
+          .from('process_documents')
+          .update({ 
+            process_id: processId,
+            movement_id: movementId
+          })
+          .eq('id', doc.id);
+
+        if (!error) linkedCount++;
+      }
+    }
+
+    console.log(`Linked ${linkedCount} documents to processes`);
+    return linkedCount;
+  } catch (error) {
+    console.error('Error linking orphan documents:', error);
     return 0;
   }
 }
