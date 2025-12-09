@@ -533,22 +533,59 @@ async function syncCovers(client: RestClient, supabase: any, service: any): Prom
 
     if (missingCodProcessos.length > 0) {
       console.log(`Auto-creating ${missingCodProcessos.length} missing processes from covers`);
-      // Get numProcesso from coversData for missing processes
-      const processInserts = missingCodProcessos.map(codProcesso => {
+      
+      // Insert each missing process one by one to handle errors gracefully
+      for (const codProcesso of missingCodProcessos) {
         const cover = coversData.find((c: any) => c.codProcesso === codProcesso);
-        return {
-          process_number: cover?.numProcesso || `unknown-${codProcesso}`,
-          cod_processo: codProcesso,
-          cod_escritorio: cover?.codEscritorio || null,
-          partner_service_id: service.id,
-          partner_id: service.partner_id,
-          status_code: 4,
-          status_description: 'Cadastrado',
-          raw_data: { source: 'cover_sync', codProcesso },
-        };
-      });
-
-      await supabase.from('processes').upsert(processInserts, { onConflict: 'cod_processo' });
+        const processNumber = cover?.numProcesso || `unknown-${codProcesso}`;
+        
+        // Try to update existing process by cod_processo first
+        const { data: existingByCod } = await supabase
+          .from('processes')
+          .select('id')
+          .eq('cod_processo', codProcesso)
+          .single();
+        
+        if (existingByCod) {
+          console.log(`Process already exists for cod_processo: ${codProcesso}`);
+          continue;
+        }
+        
+        // Insert new process
+        const { error: insertError } = await supabase
+          .from('processes')
+          .insert({
+            process_number: processNumber,
+            cod_processo: codProcesso,
+            cod_escritorio: cover?.codEscritorio || null,
+            partner_service_id: service.id,
+            partner_id: service.partner_id,
+            status_code: 4,
+            status_description: 'Cadastrado',
+            raw_data: { source: 'cover_sync', codProcesso },
+          });
+        
+        if (insertError) {
+          // If process_number already exists, try to update it with cod_processo
+          if (insertError.code === '23505') {
+            console.log(`Process number ${processNumber} already exists, updating cod_processo`);
+            const { error: updateError } = await supabase
+              .from('processes')
+              .update({ 
+                cod_processo: codProcesso,
+                cod_escritorio: cover?.codEscritorio || null,
+              })
+              .eq('process_number', processNumber)
+              .is('cod_processo', null);
+            
+            if (updateError) {
+              console.error(`Error updating process ${processNumber}:`, updateError);
+            }
+          } else {
+            console.error(`Error inserting process ${processNumber}:`, insertError);
+          }
+        }
+      }
     }
 
     // Re-fetch processes after auto-creation
