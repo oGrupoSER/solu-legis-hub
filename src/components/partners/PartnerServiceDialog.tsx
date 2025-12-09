@@ -41,8 +41,8 @@ const SERVICE_TYPE_LABELS: Record<string, string> = {
 const getConfigHelp = (serviceType: string): { example: string; description: string } | null => {
   if (serviceType === "diary_status") {
     return {
-      example: '{\n  "tipoDataFiltro": 1\n}',
-      description: 'O campo "tipoDataFiltro" define como filtrar a data na consulta. Valores: 1 = Data de publicação, 2 = Data de disponibilização.',
+      example: '{ "tipoDataFiltro": 1 }',
+      description: 'O campo "tipoDataFiltro" define como filtrar a data na consulta. Valores: 1 = Data de publicação, 2 = Data de disponibilização. A data é calculada automaticamente (data atual) a cada sincronização.',
     };
   }
   return null;
