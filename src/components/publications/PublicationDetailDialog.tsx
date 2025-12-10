@@ -121,7 +121,7 @@ export function PublicationDetailDialog({
             <TabsTrigger value="raw">JSON Original</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="content" className="space-y-4">
+          <TabsContent value="content" className="space-y-4 overflow-hidden">
             <ScrollArea className="h-[500px] w-full rounded-md border p-4">
               <div className="flex gap-2 mb-4">
                 <Button onClick={handleCopyContent} variant="outline" size="sm" className="gap-2">
@@ -133,11 +133,11 @@ export function PublicationDetailDialog({
                   Imprimir
                 </Button>
               </div>
-              <div className="space-y-4">
-                <div>
+              <div className="space-y-4 max-w-full">
+                <div className="overflow-hidden">
                   <h3 className="text-sm font-medium text-muted-foreground mb-2">Conteúdo da Publicação</h3>
-                  <div className="prose prose-sm max-w-none">
-                    <div className="text-foreground whitespace-pre-wrap break-words leading-relaxed">
+                  <div className="prose prose-sm max-w-none overflow-hidden">
+                    <div className="text-foreground whitespace-pre-wrap break-all leading-relaxed overflow-hidden" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                       <HighlightedContent
                         content={publication.content || "Sem conteúdo disponível"}
                         terms={publication.matched_terms || []}
@@ -262,7 +262,7 @@ export function PublicationDetailDialog({
             </ScrollArea>
           </TabsContent>
 
-          <TabsContent value="raw" className="space-y-4">
+          <TabsContent value="raw" className="space-y-4 overflow-hidden">
             <div className="flex gap-2">
               <Button onClick={handleCopyJson} variant="outline" size="sm" className="gap-2">
                 <Copy className="h-4 w-4" />
@@ -274,9 +274,9 @@ export function PublicationDetailDialog({
               </Button>
             </div>
 
-            <ScrollArea className="h-[450px] w-full rounded-md border">
-              <pre className="p-4 text-xs whitespace-pre-wrap break-words overflow-wrap-anywhere">
-                <code className="language-json font-mono">
+            <ScrollArea className="h-[450px] w-full rounded-md border overflow-hidden">
+              <pre className="p-4 text-xs whitespace-pre-wrap overflow-hidden max-w-full" style={{ wordBreak: 'break-all', overflowWrap: 'anywhere' }}>
+                <code className="language-json font-mono block max-w-full">
                   {JSON.stringify(publication.raw_data, null, 2)}
                 </code>
               </pre>
