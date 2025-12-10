@@ -59,13 +59,14 @@ Deno.serve(async (req) => {
             break;
 
           case 'processes':
-            // Same pattern - use confirmation endpoint with confirmar=false
+            // Use ConfirmaRecebimentoAgrupador endpoint with confirmar=false
+            // Processes are confirmed via their groupers (cod_agrupador)
             const baseProcessUrl = service_url.replace('/BuscaProcessosCadastrados', '');
-            endpoint = `${baseProcessUrl}/ConfirmaRecebimentoProcesso?nomeRelacional=${encodeURIComponent(nome_relacional)}&token=${encodeURIComponent(token)}&confirmar=false`;
+            endpoint = `${baseProcessUrl}/ConfirmaRecebimentoAgrupador?nomeRelacional=${encodeURIComponent(nome_relacional)}&token=${encodeURIComponent(token)}&confirmar=false`;
             break;
 
           case 'documents':
-            // Same pattern - use confirmation endpoint with confirmar=false
+            // Use ConfirmaRecebimentoDocumento endpoint with confirmar=false
             const baseDocUrl = service_url.replace('/BuscaProcessosCadastrados', '');
             endpoint = `${baseDocUrl}/ConfirmaRecebimentoDocumento?nomeRelacional=${encodeURIComponent(nome_relacional)}&token=${encodeURIComponent(token)}&confirmar=false`;
             break;
