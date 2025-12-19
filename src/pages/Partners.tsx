@@ -110,7 +110,7 @@ const Partners = () => {
             <div className="flex items-center gap-3">
               <Building2 className="h-6 w-6 text-primary" />
               <div>
-                <CardTitle>Parceiros</CardTitle>
+                <CardTitle>Solucionare</CardTitle>
                 <CardDescription>
                   Gerencie os parceiros e integradores de APIs
                 </CardDescription>
