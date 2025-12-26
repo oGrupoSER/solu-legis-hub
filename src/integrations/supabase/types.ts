@@ -394,29 +394,68 @@ export type Database = {
       partners: {
         Row: {
           api_base_url: string | null
+          bairro: string | null
+          cep: string | null
+          cidade: string | null
+          cnpj: string | null
+          complemento: string | null
           created_at: string | null
           description: string | null
+          email: string | null
+          estado: string | null
           id: string
+          inscricao_estadual: string | null
+          inscricao_municipal: string | null
           is_active: boolean | null
+          logradouro: string | null
           name: string
+          numero: string | null
+          razao_social: string | null
+          telefone: string | null
           updated_at: string | null
         }
         Insert: {
           api_base_url?: string | null
+          bairro?: string | null
+          cep?: string | null
+          cidade?: string | null
+          cnpj?: string | null
+          complemento?: string | null
           created_at?: string | null
           description?: string | null
+          email?: string | null
+          estado?: string | null
           id?: string
+          inscricao_estadual?: string | null
+          inscricao_municipal?: string | null
           is_active?: boolean | null
+          logradouro?: string | null
           name: string
+          numero?: string | null
+          razao_social?: string | null
+          telefone?: string | null
           updated_at?: string | null
         }
         Update: {
           api_base_url?: string | null
+          bairro?: string | null
+          cep?: string | null
+          cidade?: string | null
+          cnpj?: string | null
+          complemento?: string | null
           created_at?: string | null
           description?: string | null
+          email?: string | null
+          estado?: string | null
           id?: string
+          inscricao_estadual?: string | null
+          inscricao_municipal?: string | null
           is_active?: boolean | null
+          logradouro?: string | null
           name?: string
+          numero?: string | null
+          razao_social?: string | null
+          telefone?: string | null
           updated_at?: string | null
         }
         Relationships: []
