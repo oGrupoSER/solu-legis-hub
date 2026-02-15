@@ -1,217 +1,103 @@
 
-# Plano de Reestruturação: Hub Juridico - Modelo de Consumo Compartilhado
+# Reorganizacao do Menu e Telas por Servico
 
-## Contexto e Diagnóstico Atual
+## Situacao Atual
 
-### Problemas Identificados
+O menu atual tem 15 itens em uma lista plana, sem agrupamento logico. As telas misturam cadastro de termos/processos com visualizacao dos dados recebidos. A tela "Termos de Busca" e generica para todos os tipos de termos, e a tela "Distribuicoes" mistura cadastro de nomes com listagem de distribuicoes recebidas.
 
-1. **office_code no lugar errado**: O `office_code` está em `client_systems`, mas deveria estar no cadastro do parceiro (ou no `partner_services`). O escritório Solucionare pertence ao contrato do Hub Juridico com a Solucionare, não ao cliente.
+## Nova Estrutura do Menu
 
-2. **Sem controle de duplicidade de termos/processos entre clientes**: Hoje, se dois clientes solicitam o mesmo termo ou processo, o sistema registraria duas vezes na Solucionare, gerando custo dobrado.
-
-3. **Termos sem vínculo com clientes**: Os `search_terms` estão ligados ao `partner_service_id` mas não aos clientes que os solicitaram. Não há como saber qual cliente pediu qual termo.
-
-4. **Processos sem vínculo com clientes**: Tabela `processes` não tem relação com `client_systems`.
-
-5. **Serviço de Distribuições não configurado**: Não existe `partner_service` do tipo `distributions` cadastrado. Também não existem distribuições sincronizadas (0 registros).
-
-6. **Termos de publicação sem relação com clientes**: Os 9 termos existentes estão no serviço "Publicações - Termos e Publicações" mas sem vínculo a nenhum cliente específico.
-
-### Estado Atual das Integrações
-
-| Serviço | Cadastro Termos | Sync Dados | Serviço Configurado | Dados |
-|---------|----------------|------------|---------------------|-------|
-| Publicações | manage-publication-terms (SOAP) + manage-search-terms (SOAP) | sync-publications (REST) | Sim (2 serviços) | 65 publicações |
-| Distribuições | manage-distribution-terms (REST V3) | sync-distributions (REST V3) | **Nao** (sem partner_service tipo distributions) | 0 registros |
-| Processos | sync-process-management (REST V3) | sync-process-updates (REST V3) | Sim | 591 processos |
-
----
-
-## Mudanças Propostas
-
-### Fase 1: Reestruturação do Banco de Dados
-
-#### 1.1 Mover `office_code` para `partners`
-- Adicionar coluna `office_code` (integer) na tabela `partners`
-- Migrar o valor existente (15, do cliente Infojudiciais) para o parceiro Solucionare
-- O `office_code` em `client_systems` pode ser mantido temporariamente mas deixa de ser usado nas integrações
-
-#### 1.2 Criar tabelas de junção cliente-item (consumo compartilhado)
-
-**`client_search_terms`** - Relaciona clientes aos termos de busca (publicações e distribuições):
-- `id` (uuid, PK)
-- `client_system_id` (uuid, FK -> client_systems)
-- `search_term_id` (uuid, FK -> search_terms)
-- `created_at` (timestamp)
-
-**`client_processes`** - Relaciona clientes aos processos monitorados:
-- `id` (uuid, PK)
-- `client_system_id` (uuid, FK -> client_systems)
-- `process_id` (uuid, FK -> processes)
-- `created_at` (timestamp)
-
-Ambas com unique constraint em (client_system_id, search_term_id/process_id) e RLS.
-
-#### 1.3 Atualizar `search_terms`
-- Adicionar coluna `solucionare_code` (integer, nullable) para armazenar o `codNome` retornado pela Solucionare
-- Isso facilita operações de editar/ativar/desativar/excluir sem precisar buscar pelo nome
-
-### Fase 2: Lógica de Deduplicação no Cadastro
-
-#### 2.1 Regra geral para os 3 serviços
-
-Ao receber uma solicitação de cadastro (via API ou tela):
+O menu sera reorganizado em grupos logicos com submenus para cada servico:
 
 ```text
-1. Verificar se o item (termo/processo) ja existe no banco
-2. SE existe:
-   - Apenas criar vinculo em client_search_terms ou client_processes
-   - NAO registrar na Solucionare
-   - Retornar sucesso indicando "vinculado a item existente"
-3. SE nao existe:
-   - Registrar na Solucionare (SOAP/REST)
-   - Inserir na tabela local (search_terms / processes)
-   - Criar vinculo com o cliente
+--- Principal ---
+  Dashboard
+
+--- Servicos ---
+  Publicacoes
+    > Termos             (CRUD de termos de publicacao)
+    > Recortes           (dados recebidos via sync)
+  Distribuicoes
+    > Nomes Monitorados  (CRUD de nomes/termos de distribuicao)
+    > Distribuicoes      (dados recebidos via sync)
+  Processos
+    > Processos CNJ      (CRUD de numeros de processos)
+    > Andamentos         (dados de movimentacoes recebidos)
+
+--- Integracao ---
+  Status Tribunais
+  Reversao Confirmacoes
+  Logs de Sincronizacao
+
+--- Cadastros ---
+  Parceiros
+  Clientes
+
+--- Sistema ---
+  Monitoramento de API
+  Playground de API
+  Relatorios
+  Configuracoes
+  Ajuda
 ```
 
-#### 2.2 Regra para remoção
+## Paginas a Criar
 
-```text
-1. Remover vinculo do cliente (client_search_terms / client_processes)
-2. Verificar se outros clientes usam o mesmo item
-3. SE nenhum outro cliente usa:
-   - Remover da Solucionare (SOAP/REST)
-   - Desativar/remover do banco local
-4. SE outros clientes usam:
-   - Manter na Solucionare
-   - Apenas confirmar remoção do vinculo
-```
+### 1. Termos de Publicacao (`/publications/terms`)
+- Reutiliza a logica atual do `SearchTerms.tsx`, filtrando apenas termos com `term_type` em ("name", "office")
+- CRUD completo: cadastrar, editar, ativar/desativar, excluir termos
+- Coluna de clientes vinculados (via `client_search_terms`)
+- Botao de sincronizar termos com parceiro (SOAP)
+- Filtros por tipo (nome/escritorio), status, busca textual
 
-### Fase 3: Atualizar Edge Functions
+### 2. Nomes Monitorados de Distribuicao (`/distributions/terms`)
+- Reutiliza a logica de cadastro de nomes que hoje esta embutida na tela `Distributions.tsx`
+- CRUD: cadastrar nomes, ativar/desativar, excluir
+- Coluna de clientes vinculados
+- Filtros e busca
 
-#### 3.1 `manage-search-terms` (Publicações SOAP)
-- Buscar `office_code` do `partners` em vez de `client_systems`
-- Receber `client_system_id` como parametro
-- Implementar deduplicação: verificar se termo ja existe antes de cadastrar no SOAP
-- Criar vínculo em `client_search_terms`
-- Na remoção, verificar se outros clientes usam o termo
+### 3. Andamentos de Processos (`/processes/movements`)
+- Nova tela que lista todas as movimentacoes/andamentos recebidos via sincronizacao
+- Dados das tabelas `process_movements`, com join em `processes`
+- Filtros por processo, tipo de andamento, periodo
+- Informacao de documentos associados
 
-#### 3.2 `manage-distribution-terms` (Distribuições REST V3)
-- Receber `client_system_id` como parametro
-- Implementar mesma lógica de deduplicação
-- Criar vínculo em `client_search_terms`
+## Paginas a Ajustar
 
-#### 3.3 `sync-process-management` (Processos REST V3)
-- Buscar `office_code` do `partners` em vez de `client_systems`
-- Receber `client_system_id` como parametro
-- Verificar se processo (por `process_number`) ja existe antes de registrar na Solucionare
-- Criar vínculo em `client_processes`
+### 4. Publicacoes (`/publications`) - ja existe
+- Permanece como esta, mostrando os recortes de diarios oficiais recebidos
+- Breadcrumb atualizado
 
-#### 3.4 `manage-publication-terms` (Publicações SOAP - legado)
-- Avaliar se pode ser consolidado com `manage-search-terms` ou mantido separado
-- Aplicar mesma lógica de deduplicação
+### 5. Distribuicoes (`/distributions`) - refatorar
+- Remover o dialog de cadastro de nomes (movido para `/distributions/terms`)
+- Manter apenas a listagem de distribuicoes recebidas via sync
+- Adicionar mais detalhes e filtros
 
-### Fase 4: Atualizar Frontend
+### 6. Processos (`/processes`) - ja existe
+- Permanece como tela de CRUD de numeros CNJ
+- Coluna de clientes vinculados ja implementada
 
-#### 4.1 Cadastro de Parceiros (`PartnerDialog.tsx`)
-- Adicionar campo `office_code` (Código do Escritório Solucionare)
-- Este campo identifica o escritório concentrador de todas as APIs
+## Mudancas no Codigo
 
-#### 4.2 Cadastro de Processos (`ProcessDialog.tsx`)
-- Manter seleção de cliente para vínculo
-- Buscar `office_code` do parceiro (via `partner_services -> partners`)
-- Verificar duplicidade antes de enviar para Solucionare
+### Arquivos novos:
+- `src/pages/PublicationTerms.tsx` - CRUD de termos de publicacao
+- `src/pages/DistributionTerms.tsx` - CRUD de nomes de distribuicao
+- `src/pages/ProcessMovements.tsx` - Listagem de andamentos
 
-#### 4.3 Tela de Termos de Busca
-- Mostrar quais clientes estão vinculados a cada termo
-- Permitir vincular/desvincular clientes
-- Indicar visualmente termos compartilhados entre múltiplos clientes
+### Arquivos a editar:
+- `src/components/layout/AppSidebar.tsx` - Nova estrutura de menu com grupos e submenus usando `Collapsible` dentro de `SidebarGroup`
+- `src/App.tsx` - Adicionar novas rotas (`/publications/terms`, `/distributions/terms`, `/processes/movements`)
+- `src/pages/Distributions.tsx` - Remover dialog de cadastro de nomes, manter apenas listagem de dados recebidos
+- Remover `src/pages/SearchTerms.tsx` da navegacao (funcionalidade sera dividida entre PublicationTerms e DistributionTerms)
 
-#### 4.4 Tela de Processos
-- Mostrar quais clientes estão vinculados a cada processo
-- Indicar processos compartilhados
+### Detalhes tecnicos:
 
-### Fase 5: APIs Externas (Opcional neste momento)
+**AppSidebar.tsx** usara `SidebarGroup` com `SidebarGroupLabel` para cada grupo, e `Collapsible` para os submenus dos 3 servicos. Cada servico tera um item colapsavel com dois subitens (Cadastro e Dados).
 
-As APIs externas (`api-processes`, `api-distributions`, `api-publications`) ja usam token de autenticação que identifica o cliente. Será necessário:
-- Filtrar resultados baseado nos vínculos em `client_processes` e `client_search_terms`
-- Cliente so vê processos/publicações/distribuições vinculados a ele
+**PublicationTerms.tsx** filtrara `search_terms` com `term_type IN ('name', 'office')` e `partner_services.service_type = 'terms'` ou `'publications'`. Tera os mesmos componentes de CRUD que o SearchTerms atual.
 
----
+**DistributionTerms.tsx** filtrara `search_terms` com `term_type = 'distribution'` e usara o `manage-distribution-terms` Edge Function para operacoes CRUD.
 
-## Detalhes Técnicos
+**ProcessMovements.tsx** consultara `process_movements` com join em `processes` para mostrar numero do processo, e tera filtros por periodo, tipo de andamento e busca textual.
 
-### Migration SQL (Fase 1)
-
-```sql
--- Adicionar office_code ao parceiro
-ALTER TABLE public.partners ADD COLUMN IF NOT EXISTS office_code integer;
-
--- Tabela de vinculo cliente <-> termos
-CREATE TABLE public.client_search_terms (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  client_system_id uuid NOT NULL REFERENCES public.client_systems(id) ON DELETE CASCADE,
-  search_term_id uuid NOT NULL REFERENCES public.search_terms(id) ON DELETE CASCADE,
-  created_at timestamptz DEFAULT now(),
-  UNIQUE(client_system_id, search_term_id)
-);
-
--- Tabela de vinculo cliente <-> processos
-CREATE TABLE public.client_processes (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  client_system_id uuid NOT NULL REFERENCES public.client_systems(id) ON DELETE CASCADE,
-  process_id uuid NOT NULL REFERENCES public.processes(id) ON DELETE CASCADE,
-  created_at timestamptz DEFAULT now(),
-  UNIQUE(client_system_id, process_id)
-);
-
--- Adicionar solucionare_code ao search_terms
-ALTER TABLE public.search_terms ADD COLUMN IF NOT EXISTS solucionare_code integer;
-
--- RLS e indexes para as novas tabelas
--- (ambas seguem o mesmo padrao das tabelas existentes)
-```
-
-### Fluxo de Deduplicação (Exemplo: Termo de Publicação)
-
-```text
-Cliente Infojudiciais solicita termo "EMPRESA XYZ"
-  -> Busca em search_terms WHERE term = "EMPRESA XYZ" AND term_type = "name"
-  -> Nao encontrado
-  -> Cadastra na Solucionare via SOAP (cadastrar)
-  -> Insere em search_terms
-  -> Insere em client_search_terms (Infojudiciais <-> termo)
-
-Cliente Growhats solicita mesmo termo "EMPRESA XYZ"  
-  -> Busca em search_terms WHERE term = "EMPRESA XYZ" AND term_type = "name"
-  -> Encontrado! (id: xxx)
-  -> NAO cadastra na Solucionare (economia de custo)
-  -> Insere em client_search_terms (Growhats <-> termo existente)
-
-Cliente Infojudiciais remove termo "EMPRESA XYZ"
-  -> Remove de client_search_terms (Infojudiciais <-> termo)
-  -> Verifica: outros clientes usam? -> Sim (Growhats)
-  -> NAO remove da Solucionare
-  -> Termo continua ativo
-
-Cliente Growhats remove termo "EMPRESA XYZ"
-  -> Remove de client_search_terms (Growhats <-> termo)
-  -> Verifica: outros clientes usam? -> Nao
-  -> Remove da Solucionare via SOAP (excluirNome)
-  -> Desativa termo no banco local
-```
-
-### Ordem de Implementação
-
-1. Migration do banco (tabelas + colunas)
-2. Atualizar `PartnerDialog.tsx` com campo `office_code`
-3. Atualizar as 4 Edge Functions com logica de deduplicação
-4. Atualizar `ProcessDialog.tsx` para buscar `office_code` do parceiro
-5. Atualizar telas de termos e processos para mostrar vinculos com clientes
-6. Criar `partner_service` tipo `distributions` (configuração manual ou via tela)
-
-### Pontos de Atenção
-
-- Os 591 processos existentes e 9 termos existentes precisarão ser vinculados retroativamente ao cliente Infojudiciais (que é o unico ativo hoje)
-- O serviço de Distribuições precisa ser configurado como `partner_service` antes de poder ser usado
-- A confirmação de recebimento continua desabilitada (sistema legado é o oficial)
+A rota `/search-terms` sera mantida como redirect ou removida do menu, ja que sua funcionalidade sera coberta pelas novas telas especificas.
