@@ -1,97 +1,41 @@
 
-# Cadastrar Servico de Distribuicoes e Corrigir Edge Functions
+# Correcao da Autenticacao da API V3 de Distribuicoes
 
-## Problema Atual
+## Problema Identificado
 
-Nao existe um `partner_service` do tipo `distributions` cadastrado no parceiro Solucionare. Alem disso, as Edge Functions `manage-distribution-terms` e `sync-distributions` possuem chamadas incorretas aos endpoints da API V3 de Distribuicoes.
+A API `AutenticaAPI` retorna o token JWT como uma **string simples** (ex: `"eyJ..."`) e nao como um objeto JSON `{token: "eyJ..."}`.
 
-## Diferencas Encontradas (Codigo Atual vs Documentacao)
+No codigo atual, fazemos:
+```text
+const data = await response.json();  // data = "eyJ..." (string)
+return data.token;                   // retorna undefined!
+```
 
-### manage-distribution-terms
+O `undefined` e passado no header `Authorization: Bearer undefined`, causando "Token invalido" em todas as chamadas subsequentes.
 
-| Acao | Codigo Atual (ERRADO) | Documentacao (CORRETO) |
-|------|----------------------|----------------------|
-| listNames | GET `/BuscaNomesCadastrados` sem params | GET `/BuscaNomesCadastrados?codEscritorio={codEscritorio}` |
-| registerName | POST `/CadastrarNome` sem codEscritorio/codTipoConsulta | POST `/CadastrarNome` com `codEscritorio`, `codTipoConsulta`, `listInstancias`, `listAbrangencias` (obrigatorios) |
-| activateName | PUT `/AtivarNome?codNome=X` | PATCH `/AtivarNome` com body `{codNome: X}` |
-| deactivateName | PUT `/DesativarNome?codNome=X` | PATCH `/DesativarNome` com body `{codNome: X}` |
-| deleteName | DELETE `/ExcluirNome?codNome=X` | DELETE `/ExcluirNome` com body `{codNome: X}` |
+## Correcao
 
-### sync-distributions
+### Arquivo: `supabase/functions/manage-distribution-terms/index.ts`
 
-| Acao | Codigo Atual (ERRADO) | Documentacao (CORRETO) |
-|------|----------------------|----------------------|
-| BuscaNovas | GET `/BuscaNovasDistribuicoes?termo=X` | GET `/BuscaNovasDistribuicoes?codEscritorio={codEscritorio}` |
-| ConfirmaRecebimento | POST com `{ids: [...]}` | POST com `{distribuicoes: [{codEscritorio, codProcesso}]}` |
+Na funcao `authenticate()`, linha 33-34:
+- Mudar de `return data.token` para `return typeof data === 'string' ? data.replace(/^"|"$/g, '') : data.token || data`
+- Isso trata ambos os cenarios: string pura ou objeto com campo token
 
-## Plano de Implementacao
+### Arquivo: `supabase/functions/sync-distributions/index.ts`
 
-### Passo 1: Cadastrar partner_service de distribuicoes
+Na funcao `authenticateAPI()`, linha 41-42:
+- Mesma correcao: `return typeof data === 'string' ? data.replace(/^"|"$/g, '') : data.token || data`
 
-Inserir via SQL migration um novo registro em `partner_services`:
-- `partner_id`: `0eb613d6-819d-4d2c-9a7e-4e5b6592c22e` (Solucionare)
-- `service_name`: "API V3 Distribuicoes"
-- `service_type`: "distributions"
-- `service_url`: `http://online.solucionarelj.com.br:9090/WebApiDistribuicoesV3/api/distribuicoes`
-- `nome_relacional`: "ORBO"
-- `token`: (mesmo token dos outros servicos do parceiro)
+Alem disso, adicionar logs de debug na autenticacao para facilitar troubleshooting futuro:
+- Log do status da resposta
+- Log do tipo do dado retornado (sem expor o token completo)
 
-O token sera copiado dos servicos existentes do mesmo parceiro.
+### Deploy
 
-### Passo 2: Corrigir manage-distribution-terms Edge Function
-
-Correcoes no `supabase/functions/manage-distribution-terms/index.ts`:
-
-- **listNames**: Adicionar `codEscritorio` como query param obrigatorio (buscar do partner via `getOfficeCode`)
-- **registerName**: Enviar body completo com `codEscritorio`, `codTipoConsulta: 1`, `listInstancias: [instancia]`, `listAbrangencias: [abrangencia]`
-- **activateName**: Mudar de PUT com query param para PATCH com body `{codNome}`
-- **deactivateName**: Mudar de PUT com query param para PATCH com body `{codNome}`
-- **deleteName**: Mudar de DELETE com query param para DELETE com body `{codNome}`
-
-### Passo 3: Corrigir sync-distributions Edge Function
-
-Correcoes no `supabase/functions/sync-distributions/index.ts`:
-
-- **BuscaNovasDistribuicoes**: Usar `?codEscritorio={officeCode}` em vez de `?termo=`; buscar `office_code` do parceiro
-- **ConfirmaRecebimentoDistribuicoes**: Corrigir formato do body para `{distribuicoes: [{codEscritorio, codProcesso}]}`
-- Remover loop por termo individual: a API retorna todas distribuicoes do escritorio de uma vez
-
-### Passo 4: Deploy das Edge Functions
-
-Fazer deploy das duas funcoes corrigidas:
+Deploy das duas Edge Functions corrigidas:
 - `manage-distribution-terms`
 - `sync-distributions`
 
-## Detalhes Tecnicos
+## Impacto
 
-### Formato correto CadastrarNome (body):
-```text
-{
-  "codEscritorio": 15,
-  "nome": "Joao da Silva",
-  "codTipoConsulta": 1,
-  "listInstancias": [1],
-  "listAbrangencias": ["NACIONAL"]
-}
-```
-
-### Formato correto BuscaNovasDistribuicoes (resposta):
-```text
-[{
-  "codProcesso": 1,
-  "codEscritorio": 15,
-  "numeroProcesso": "0001234-56.2025.8.26.0100",
-  "instancia": 1,
-  "tribunal": "TJSP",
-  "comarca": "Sao Paulo",
-  "autor": [{nome, cpf, cnpj}],
-  "reu": [{nome, cpf, cnpj}],
-  "dataDistribuicao": "2025-01-15",
-  ...
-}]
-```
-
-### URL base do servico:
-`http://online.solucionarelj.com.br:9090/WebApiDistribuicoesV3/api/distribuicoes`
-
-Todos os endpoints sao relativos a essa URL base (ex: `/AutenticaAPI`, `/CadastrarNome`, `/BuscaNomesCadastrados`, `/BuscaNovasDistribuicoes`).
+Correcao pontual em 2 linhas (uma em cada funcao). Nao altera nenhuma outra logica. Apos a correcao, o botao "Sincronizar" na tela de Nomes Monitorados devera funcionar corretamente.
