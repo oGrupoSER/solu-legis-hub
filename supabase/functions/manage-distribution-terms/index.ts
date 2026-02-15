@@ -105,18 +105,63 @@ serve(async (req) => {
 
     switch (action) {
       case 'listNames': {
-        // CORRECTED: codEscritorio is required as query param
+        // Try fetching from API first
+        let apiNames: any[] = [];
         try {
-          result = await apiRequest(service.service_url, `/BuscaNomesCadastrados?codEscritorio=${officeCode}`, jwtToken);
+          apiNames = await apiRequest(service.service_url, `/BuscaNomesCadastrados?codEscritorio=${officeCode}`, jwtToken);
+          if (!Array.isArray(apiNames)) apiNames = [];
         } catch (e: any) {
-          // API returns 400 when no names are registered yet — treat as empty list
           if (e.message?.includes('400')) {
-            console.log('[listNames] No names found (400), returning empty array');
-            result = [];
+            console.log('[listNames] No names found via API (400)');
+            apiNames = [];
           } else {
             throw e;
           }
         }
+
+        // Sync API names to search_terms
+        for (const name of apiNames) {
+          const termo = name.nome || name.Nome || name.term;
+          if (!termo) continue;
+          const solCode = name.codNome || name.CodNome || null;
+          const isActive = name.ativo !== undefined ? !!name.ativo : true;
+
+          const { data: existing } = await supabase.from('search_terms')
+            .select('id').eq('term', termo).eq('term_type', 'distribution')
+            .eq('partner_service_id', serviceId).maybeSingle();
+
+          if (existing) {
+            await supabase.from('search_terms').update({ is_active: isActive, solucionare_code: solCode, updated_at: new Date().toISOString() }).eq('id', existing.id);
+          } else {
+            await supabase.from('search_terms').insert({ term: termo, term_type: 'distribution', partner_service_id: serviceId, partner_id: service.partner_id, is_active: isActive, solucionare_code: solCode });
+          }
+        }
+
+        // Also populate from synced distributions (terms already returned by API but registered via legacy)
+        if (apiNames.length === 0) {
+          console.log('[listNames] API empty, populating from distributions table');
+          const { data: distTerms } = await supabase
+            .from('distributions')
+            .select('term')
+            .eq('partner_service_id', serviceId)
+            .not('term', 'is', null);
+
+          const uniqueTerms = [...new Set((distTerms || []).map((d: any) => d.term).filter(Boolean))];
+          console.log(`[listNames] Found ${uniqueTerms.length} unique terms from distributions`);
+
+          for (const termo of uniqueTerms) {
+            const { data: existing } = await supabase.from('search_terms')
+              .select('id').eq('term', termo as string).eq('term_type', 'distribution')
+              .eq('partner_service_id', serviceId).maybeSingle();
+
+            if (!existing) {
+              await supabase.from('search_terms').insert({ term: termo as string, term_type: 'distribution', partner_service_id: serviceId, partner_id: service.partner_id, is_active: true });
+            }
+          }
+          apiNames = uniqueTerms.map(t => ({ nome: t }));
+        }
+
+        result = apiNames;
         break;
       }
 
