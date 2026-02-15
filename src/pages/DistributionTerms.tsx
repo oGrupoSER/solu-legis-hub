@@ -13,7 +13,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Plus, Search, Loader2, Users, Download } from "lucide-react";
+import { Plus, Search, Loader2, Users, Download, RefreshCw } from "lucide-react";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 
 interface DistributionTerm {
@@ -83,6 +83,24 @@ export default function DistributionTerms() {
     onError: (error) => toast.error(`Erro ao cadastrar: ${error.message}`),
   });
 
+  // Sync mutation - fetches names from partner and updates local DB
+  const syncMutation = useMutation({
+    mutationFn: async () => {
+      if (!services || services.length === 0) throw new Error("Nenhum serviço de distribuições ativo");
+      const { data, error } = await supabase.functions.invoke("manage-distribution-terms", {
+        body: { action: "listNames", serviceId: services[0].id },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["distribution-terms"] });
+      const count = data?.names?.length || data?.length || 0;
+      toast.success(`Sincronização concluída: ${count} nomes encontrados`);
+    },
+    onError: (error) => toast.error(`Erro ao sincronizar: ${error.message}`),
+  });
+
   // Toggle active mutation
   const toggleMutation = useMutation({
     mutationFn: async ({ id, activate }: { id: string; activate: boolean }) => {
@@ -148,6 +166,10 @@ export default function DistributionTerms() {
           <p className="text-muted-foreground mt-1">Gerencie os nomes monitorados para novas distribuições</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => syncMutation.mutate()} disabled={syncMutation.isPending} className="gap-2">
+            <RefreshCw className={`h-4 w-4 ${syncMutation.isPending ? "animate-spin" : ""}`} />
+            {syncMutation.isPending ? "Sincronizando..." : "Sincronizar"}
+          </Button>
           <Button variant="outline" onClick={handleExport} className="gap-2">
             <Download className="h-4 w-4" /> Exportar
           </Button>
