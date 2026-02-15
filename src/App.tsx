@@ -23,6 +23,9 @@ import ProcessDetails from "./pages/ProcessDetails";
 import Distributions from "./pages/Distributions";
 import CourtStatus from "./pages/CourtStatus";
 import ConfirmationReversal from "./pages/ConfirmationReversal";
+import PublicationTerms from "./pages/PublicationTerms";
+import DistributionTerms from "./pages/DistributionTerms";
+import ProcessMovements from "./pages/ProcessMovements";
 
 const queryClient = new QueryClient();
 
@@ -44,7 +47,10 @@ const App = () => (
                 <Route path="/clients" element={<Clients />} />
                 <Route path="/processes" element={<Processes />} />
                 <Route path="/processes/:id" element={<ProcessDetails />} />
+                <Route path="/processes/movements" element={<ProcessMovements />} />
                 <Route path="/distributions" element={<Distributions />} />
+                <Route path="/distributions/terms" element={<DistributionTerms />} />
+                <Route path="/publications/terms" element={<PublicationTerms />} />
                 <Route path="/court-status" element={<CourtStatus />} />
                 <Route path="/confirmation-reversal" element={<ConfirmationReversal />} />
                 <Route path="/sync-logs" element={<SyncLogs />} />
