@@ -31,7 +31,10 @@ async function authenticate(service: ServiceConfig): Promise<string> {
   });
   if (!response.ok) throw new Error(`Authentication failed: ${response.status}`);
   const data = await response.json();
-  return data.token;
+  console.log(`[Auth] Response status: ${response.status}, data type: ${typeof data}`);
+  const token = typeof data === 'string' ? data.replace(/^"|"$/g, '') : data.token || data;
+  console.log(`[Auth] Token extracted, length: ${String(token).length}`);
+  return token;
 }
 
 async function apiRequest(baseUrl: string, endpoint: string, jwtToken: string, method = 'GET', body?: any): Promise<any> {
