@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
-import { Info } from "lucide-react";
+import { Info, Eye, EyeOff } from "lucide-react";
 
 interface PartnerService {
   id: string;
@@ -51,6 +51,7 @@ const getConfigHelp = (serviceType: string): { example: string; description: str
 
 const PartnerServiceDialog = ({ open, onOpenChange, partnerId, service }: PartnerServiceDialogProps) => {
   const [isLoading, setIsLoading] = useState(false);
+  const [showToken, setShowToken] = useState(false);
   const [formData, setFormData] = useState({
     service_name: "",
     service_type: "",
@@ -248,14 +249,26 @@ const PartnerServiceDialog = ({ open, onOpenChange, partnerId, service }: Partne
 
           <div className="space-y-2">
             <Label htmlFor="token">Token de Acesso</Label>
-            <Input
-              id="token"
-              type="password"
-              value={formData.token}
-              onChange={(e) => setFormData({ ...formData, token: e.target.value })}
-              placeholder="Token de autenticação"
-              required
-            />
+            <div className="relative">
+              <Input
+                id="token"
+                type={showToken ? "text" : "password"}
+                value={formData.token}
+                onChange={(e) => setFormData({ ...formData, token: e.target.value })}
+                placeholder="Token de autenticação"
+                required
+                className="pr-10"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                onClick={() => setShowToken(!showToken)}
+              >
+                {showToken ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
+              </Button>
+            </div>
           </div>
 
           <div className="space-y-2">
