@@ -97,11 +97,13 @@ serve(async (req) => {
 
     const service = await getService(supabase, serviceId);
     const jwtToken = await authenticate(service);
+    const officeCode = await getOfficeCode(supabase, serviceId);
     let result;
 
     switch (action) {
       case 'listNames': {
-        result = await apiRequest(service.service_url, '/BuscaNomesCadastrados', jwtToken);
+        // CORRECTED: codEscritorio is required as query param
+        result = await apiRequest(service.service_url, `/BuscaNomesCadastrados?codEscritorio=${officeCode}`, jwtToken);
         break;
       }
 
@@ -124,8 +126,13 @@ serve(async (req) => {
         if (existing) {
           termRecord = existing;
         } else {
+          // CORRECTED: Send full body with codEscritorio, codTipoConsulta, listInstancias, listAbrangencias
           result = await apiRequest(service.service_url, '/CadastrarNome', jwtToken, 'POST', {
-            nome, instancia: instancia || 1, abrangencia: abrangencia || 'NACIONAL',
+            codEscritorio: officeCode,
+            nome,
+            codTipoConsulta: 1,
+            listInstancias: [instancia || 1],
+            listAbrangencias: [abrangencia || 'NACIONAL'],
           });
           registeredInSolucionare = true;
 
@@ -156,7 +163,8 @@ serve(async (req) => {
       case 'activateName': {
         const { codNome } = params;
         if (!codNome) throw new Error('codNome is required');
-        result = await apiRequest(service.service_url, `/AtivarNome?codNome=${codNome}`, jwtToken, 'PUT');
+        // CORRECTED: PATCH with body instead of PUT with query param
+        result = await apiRequest(service.service_url, '/AtivarNome', jwtToken, 'PATCH', { codNome });
         await supabase.from('search_terms').update({ is_active: true }).eq('solucionare_code', codNome).eq('partner_service_id', serviceId);
         break;
       }
@@ -164,7 +172,8 @@ serve(async (req) => {
       case 'deactivateName': {
         const { codNome } = params;
         if (!codNome) throw new Error('codNome is required');
-        result = await apiRequest(service.service_url, `/DesativarNome?codNome=${codNome}`, jwtToken, 'PUT');
+        // CORRECTED: PATCH with body instead of PUT with query param
+        result = await apiRequest(service.service_url, '/DesativarNome', jwtToken, 'PATCH', { codNome });
         await supabase.from('search_terms').update({ is_active: false }).eq('solucionare_code', codNome).eq('partner_service_id', serviceId);
         break;
       }
@@ -182,12 +191,14 @@ serve(async (req) => {
         if (termRecord && client_system_id) {
           const noMoreClients = await unlinkAndCheck(supabase, termRecord.id, client_system_id);
           if (noMoreClients) {
-            result = await apiRequest(service.service_url, `/ExcluirNome?codNome=${codNome}`, jwtToken, 'DELETE');
+            // CORRECTED: DELETE with body instead of query param
+            result = await apiRequest(service.service_url, '/ExcluirNome', jwtToken, 'DELETE', { codNome });
             removedFromSolucionare = true;
             await supabase.from('search_terms').update({ is_active: false }).eq('id', termRecord.id);
           }
         } else {
-          result = await apiRequest(service.service_url, `/ExcluirNome?codNome=${codNome}`, jwtToken, 'DELETE');
+          // CORRECTED: DELETE with body instead of query param
+          result = await apiRequest(service.service_url, '/ExcluirNome', jwtToken, 'DELETE', { codNome });
           removedFromSolucionare = true;
           if (termo) {
             await supabase.from('search_terms').delete()
@@ -207,16 +218,16 @@ serve(async (req) => {
       }
 
       case 'activateOffice': {
-        const { codEscritorio } = params;
-        if (!codEscritorio) throw new Error('codEscritorio is required');
-        result = await apiRequest(service.service_url, `/AtivarEscritorio?codEscritorio=${codEscritorio}`, jwtToken, 'PUT');
+        const { codEscritorio: codEsc } = params;
+        if (!codEsc) throw new Error('codEscritorio is required');
+        result = await apiRequest(service.service_url, `/AtivarEscritorio?codEscritorio=${codEsc}`, jwtToken, 'PUT');
         break;
       }
 
       case 'deactivateOffice': {
-        const { codEscritorio } = params;
-        if (!codEscritorio) throw new Error('codEscritorio is required');
-        result = await apiRequest(service.service_url, `/DesativarEscritorio?codEscritorio=${codEscritorio}`, jwtToken, 'PUT');
+        const { codEscritorio: codEsc } = params;
+        if (!codEsc) throw new Error('codEscritorio is required');
+        result = await apiRequest(service.service_url, `/DesativarEscritorio?codEscritorio=${codEsc}`, jwtToken, 'PUT');
         break;
       }
 
