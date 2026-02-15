@@ -86,7 +86,7 @@ export default function DistributionTerms() {
   // Sync mutation - fetches names from partner and updates local DB
   const syncMutation = useMutation({
     mutationFn: async () => {
-      if (!services || services.length === 0) throw new Error("Nenhum serviço de distribuições ativo");
+      if (!services || services.length === 0) throw new Error("Nenhum serviço de distribuições ativo. Cadastre um serviço do tipo 'distributions' em Cadastros > Parceiros > Serviços.");
       const { data, error } = await supabase.functions.invoke("manage-distribution-terms", {
         body: { action: "listNames", serviceId: services[0].id },
       });
