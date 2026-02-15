@@ -106,7 +106,17 @@ serve(async (req) => {
     switch (action) {
       case 'listNames': {
         // CORRECTED: codEscritorio is required as query param
-        result = await apiRequest(service.service_url, `/BuscaNomesCadastrados?codEscritorio=${officeCode}`, jwtToken);
+        try {
+          result = await apiRequest(service.service_url, `/BuscaNomesCadastrados?codEscritorio=${officeCode}`, jwtToken);
+        } catch (e: any) {
+          // API returns 400 when no names are registered yet — treat as empty list
+          if (e.message?.includes('400')) {
+            console.log('[listNames] No names found (400), returning empty array');
+            result = [];
+          } else {
+            throw e;
+          }
+        }
         break;
       }
 
