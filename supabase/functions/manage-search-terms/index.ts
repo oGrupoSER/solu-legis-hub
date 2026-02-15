@@ -1,7 +1,11 @@
 /**
  * Edge Function: manage-search-terms
  * Complete SOAP administration for offices and search names
- * Methods: cadastrar, editar, ativar, desativar, excluir, listar
+ * Now with shared consumption (deduplication) logic:
+ * - office_code sourced from partners table
+ * - client_system_id links items to requesting client
+ * - Deduplication: only registers with Solucionare if item is new to Hub
+ * - Removal: only removes from Solucionare when no clients remain linked
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.77.0';
@@ -18,7 +22,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Resolve correct Solucionare endpoint and namespace from a WSDL URL
 function resolveSolucionareEndpoint(serviceUrl: string): { endpoint: string; namespace: string } {
   try {
     const u = new URL(serviceUrl);
@@ -43,6 +46,7 @@ function resolveSolucionareEndpoint(serviceUrl: string): { endpoint: string; nam
 
 interface ManageRequest {
   service_id: string;
+  client_system_id?: string; // Optional: links the term to a client
   action: 'cadastrar_nome' | 'editar_nome' | 'ativar_nome' | 'desativar_nome' | 'excluir_nome' |
           'cadastrar_escritorio' | 'ativar_escritorio' | 'desativar_escritorio' |
           'listar_nomes' | 'listar_escritorios' | 'sync_all';
@@ -51,69 +55,86 @@ interface ManageRequest {
     cod_nome?: number;
     escritorio?: string;
     cod_escritorio?: number;
-    instancias?: number[]; // Array of instance codes for coverage
-    variacoes?: string[]; // Array of name variations
+    instancias?: number[];
+    variacoes?: string[];
   };
 }
 
-interface ManageResult {
-  success: boolean;
-  action: string;
-  data?: any;
-  error?: string;
+/**
+ * Get office_code from partners table (via partner_services -> partners)
+ */
+async function getOfficeCode(serviceId: string): Promise<number> {
+  const { data, error } = await supabase
+    .from('partner_services')
+    .select('partners(office_code)')
+    .eq('id', serviceId)
+    .single();
+
+  if (error) throw new Error(`Failed to fetch service: ${error.message}`);
+  
+  const officeCode = (data?.partners as any)?.office_code as number | null;
+  if (!officeCode) {
+    throw new Error('Parceiro não possui código de escritório configurado. Configure o office_code no cadastro do parceiro.');
+  }
+  return officeCode;
+}
+
+/**
+ * Link a search term to a client system (deduplication junction)
+ */
+async function linkTermToClient(termId: string, clientSystemId: string): Promise<void> {
+  const { error } = await supabase
+    .from('client_search_terms')
+    .upsert(
+      { client_system_id: clientSystemId, search_term_id: termId },
+      { onConflict: 'client_system_id,search_term_id' }
+    );
+  if (error) console.error('Error linking term to client:', error);
+}
+
+/**
+ * Unlink a search term from a client and check if others still use it
+ */
+async function unlinkTermFromClient(termId: string, clientSystemId: string): Promise<boolean> {
+  // Remove the link
+  await supabase
+    .from('client_search_terms')
+    .delete()
+    .eq('client_system_id', clientSystemId)
+    .eq('search_term_id', termId);
+
+  // Check remaining links
+  const { count } = await supabase
+    .from('client_search_terms')
+    .select('*', { count: 'exact', head: true })
+    .eq('search_term_id', termId);
+
+  return (count || 0) === 0; // true = no more clients, safe to remove from Solucionare
 }
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
     const request: ManageRequest = await req.json();
-    const { service_id, action, data } = request;
+    const { service_id, client_system_id, action, data } = request;
 
-    if (!service_id) {
-      throw new Error('service_id is required');
-    }
+    if (!service_id) throw new Error('service_id is required');
 
     console.log(`=== Manage Search Terms ===`);
-    console.log(`Action: ${action}`);
-    console.log(`Service ID: ${service_id}`);
-    console.log(`Data:`, JSON.stringify(data));
+    console.log(`Action: ${action}, Client: ${client_system_id || 'none'}`);
 
-    // Get service configuration
     const service = await getServiceById(service_id);
-    if (!service) {
-      throw new Error('Service not found');
-    }
-
+    if (!service) throw new Error('Service not found');
     validateService(service);
+    if (!service.is_active) throw new Error('Service is not active');
 
-    if (!service.is_active) {
-      throw new Error('Service is not active');
-    }
+    // Get office_code from partners table
+    const officeCode = await getOfficeCode(service_id);
 
-    // Get office_code from client_systems linked via client_system_services
-    const { data: clientServiceData } = await supabase
-      .from('client_system_services')
-      .select('client_systems(office_code)')
-      .eq('partner_service_id', service_id)
-      .eq('is_active', true)
-      .limit(1)
-      .maybeSingle();
-
-    const officeCode = (clientServiceData?.client_systems as any)?.office_code as number | null;
-
-    if (!officeCode) {
-      throw new Error('Nenhum Sistema Cliente com código de escritório vinculado a este serviço.');
-    }
-
-    // Resolve SOAP endpoint
     const { endpoint, namespace } = resolveSolucionareEndpoint(service.service_url);
-    console.log('Resolved endpoint:', endpoint);
-
-    // Initialize SOAP client
     const soapClient = new SoapClient({
       serviceUrl: endpoint,
       nomeRelacional: service.nome_relacional,
@@ -121,65 +142,46 @@ Deno.serve(async (req) => {
       namespace,
     });
 
-    let result: ManageResult = {
-      success: true,
-      action,
-    };
+    let result: any = { success: true, action };
 
     switch (action) {
-      // ========== NAME OPERATIONS ==========
       case 'cadastrar_nome':
-        result.data = await cadastrarNome(soapClient, supabase, service, officeCode, data!);
+        result.data = await cadastrarNome(soapClient, service, officeCode, data!, client_system_id);
         break;
-
       case 'editar_nome':
-        result.data = await editarNome(soapClient, supabase, service, officeCode, data!);
+        result.data = await editarNome(soapClient, service, officeCode, data!);
         break;
-
       case 'ativar_nome':
-        result.data = await ativarNome(soapClient, supabase, service, officeCode, data!);
+        result.data = await ativarNome(soapClient, service, officeCode, data!);
         break;
-
       case 'desativar_nome':
-        result.data = await desativarNome(soapClient, supabase, service, officeCode, data!);
+        result.data = await desativarNome(soapClient, service, officeCode, data!);
         break;
-
       case 'excluir_nome':
-        result.data = await excluirNome(soapClient, supabase, service, officeCode, data!);
+        result.data = await excluirNome(soapClient, service, officeCode, data!, client_system_id);
         break;
-
       case 'listar_nomes':
         result.data = await listarNomes(soapClient, officeCode);
         break;
-
-      // ========== OFFICE OPERATIONS ==========
       case 'cadastrar_escritorio':
-        result.data = await cadastrarEscritorio(soapClient, supabase, service, data!);
+        result.data = await cadastrarEscritorio(soapClient, service, data!, client_system_id);
         break;
-
       case 'ativar_escritorio':
-        result.data = await ativarEscritorio(soapClient, supabase, service, data!);
+        result.data = await ativarEscritorio(soapClient, service, data!);
         break;
-
       case 'desativar_escritorio':
-        result.data = await desativarEscritorio(soapClient, supabase, service, data!);
+        result.data = await desativarEscritorio(soapClient, service, data!);
         break;
-
       case 'listar_escritorios':
         result.data = await listarEscritorios(soapClient, officeCode);
         break;
-
-      // ========== SYNC ALL ==========
       case 'sync_all':
-        result.data = await syncAll(soapClient, supabase, service, officeCode);
+        result.data = await syncAll(soapClient, service, officeCode);
         await updateLastSync(service_id);
         break;
-
       default:
         throw new Error(`Invalid action: ${action}`);
     }
-
-    console.log('Result:', JSON.stringify(result));
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -188,384 +190,286 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Error:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
-    
     return new Response(
-      JSON.stringify({
-        success: false,
-        error: message,
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
+      JSON.stringify({ success: false, error: message }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
 
-// ========== NAME OPERATIONS ==========
+// ========== NAME OPERATIONS (with deduplication) ==========
 
 async function cadastrarNome(
-  soapClient: SoapClient,
-  supabase: any,
-  service: any,
-  officeCode: number,
-  data: any
+  soapClient: SoapClient, service: any, officeCode: number, data: any, clientSystemId?: string
 ): Promise<any> {
+  if (!data.nome) throw new Error('Nome is required');
   console.log('Cadastrando nome:', data.nome);
 
-  if (!data.nome) {
-    throw new Error('Nome is required');
-  }
-
-  // Call SOAP method to register name
-  const soapResult = await soapClient.call('cadastrar', {
-    codEscritorio: officeCode,
-    nome: data.nome,
-    variacoes: data.variacoes?.join('|') || '',
-  });
-
-  console.log('SOAP cadastrar result:', soapResult);
-
-  // Insert into local database
-  const { data: inserted, error } = await supabase
+  // DEDUPLICATION: Check if term already exists
+  const { data: existing } = await supabase
     .from('search_terms')
-    .insert({
-      term: data.nome,
-      term_type: 'name',
-      partner_id: service.partner_id,
-      partner_service_id: service.id,
-      is_active: true,
-    })
-    .select()
-    .single();
+    .select('id, solucionare_code')
+    .eq('term', data.nome)
+    .eq('term_type', 'name')
+    .eq('partner_service_id', service.id)
+    .maybeSingle();
 
-  if (error) {
-    console.error('Error inserting term:', error);
-    throw error;
-  }
+  let termRecord;
+  let registeredInSolucionare = false;
 
-  // Insert variations as separate terms
-  if (data.variacoes && Array.isArray(data.variacoes)) {
-    for (const variacao of data.variacoes) {
-      await supabase.from('search_terms').insert({
-        term: variacao,
+  if (existing) {
+    console.log('Term already exists locally, skipping Solucionare registration');
+    termRecord = existing;
+  } else {
+    // Register with Solucionare (new to the Hub)
+    const soapResult = await soapClient.call('cadastrar', {
+      codEscritorio: officeCode,
+      nome: data.nome,
+      variacoes: data.variacoes?.join('|') || '',
+    });
+    console.log('SOAP cadastrar result:', soapResult);
+    registeredInSolucionare = true;
+
+    // Extract solucionare_code if returned
+    const solCode = soapResult?.codNome || soapResult?.cod_nome || null;
+
+    const { data: inserted, error } = await supabase
+      .from('search_terms')
+      .insert({
+        term: data.nome,
         term_type: 'name',
         partner_id: service.partner_id,
         partner_service_id: service.id,
         is_active: true,
-      });
+        solucionare_code: solCode,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    termRecord = inserted;
+
+    // Insert variations
+    if (data.variacoes && Array.isArray(data.variacoes)) {
+      for (const variacao of data.variacoes) {
+        await supabase.from('search_terms').insert({
+          term: variacao,
+          term_type: 'name',
+          partner_id: service.partner_id,
+          partner_service_id: service.id,
+          is_active: true,
+        });
+      }
     }
   }
 
-  return { soapResult, local: inserted };
+  // Link to client if provided
+  if (clientSystemId && termRecord?.id) {
+    await linkTermToClient(termRecord.id, clientSystemId);
+  }
+
+  return { local: termRecord, registeredInSolucionare, linkedToClient: !!clientSystemId };
 }
 
 async function editarNome(
-  soapClient: SoapClient,
-  supabase: any,
-  service: any,
-  officeCode: number,
-  data: any
+  soapClient: SoapClient, service: any, officeCode: number, data: any
 ): Promise<any> {
-  console.log('Editando nome:', data.cod_nome, '->', data.nome);
+  if (!data.cod_nome) throw new Error('cod_nome is required');
 
-  if (!data.cod_nome) {
-    throw new Error('cod_nome is required');
-  }
-
-  // Call SOAP method to update name instances/coverage
   const soapResult = await soapClient.call('editarInstanciaAbrangenciaNome', {
     codEscritorio: officeCode,
     codNome: data.cod_nome,
     instancias: data.instancias?.join(',') || '',
   });
 
-  console.log('SOAP editar result:', soapResult);
-
-  // Update local if name provided
   if (data.nome) {
-    const { error } = await supabase
+    await supabase
       .from('search_terms')
-      .update({
-        term: data.nome,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('term', data.nome)
+      .update({ term: data.nome, updated_at: new Date().toISOString() })
+      .eq('solucionare_code', data.cod_nome)
       .eq('partner_service_id', service.id);
-
-    if (error) console.error('Error updating local term:', error);
   }
 
   return { soapResult };
 }
 
 async function ativarNome(
-  soapClient: SoapClient,
-  supabase: any,
-  service: any,
-  officeCode: number,
-  data: any
+  soapClient: SoapClient, service: any, officeCode: number, data: any
 ): Promise<any> {
-  console.log('Ativando nome:', data.cod_nome || data.nome);
+  if (!data.cod_nome && !data.nome) throw new Error('cod_nome or nome is required');
 
-  if (!data.cod_nome && !data.nome) {
-    throw new Error('cod_nome or nome is required');
-  }
-
-  // Call SOAP method
   const soapResult = await soapClient.call('ativarNome', {
     codEscritorio: officeCode,
     codNome: data.cod_nome || 0,
   });
 
-  console.log('SOAP ativar result:', soapResult);
-
-  // Update local database
-  if (data.nome) {
-    await supabase
-      .from('search_terms')
-      .update({ is_active: true, updated_at: new Date().toISOString() })
-      .eq('term', data.nome)
-      .eq('partner_service_id', service.id);
-  }
-
+  const updateFilter = data.cod_nome
+    ? supabase.from('search_terms').update({ is_active: true, updated_at: new Date().toISOString() }).eq('solucionare_code', data.cod_nome).eq('partner_service_id', service.id)
+    : supabase.from('search_terms').update({ is_active: true, updated_at: new Date().toISOString() }).eq('term', data.nome).eq('partner_service_id', service.id);
+  
+  await updateFilter;
   return { soapResult };
 }
 
 async function desativarNome(
-  soapClient: SoapClient,
-  supabase: any,
-  service: any,
-  officeCode: number,
-  data: any
+  soapClient: SoapClient, service: any, officeCode: number, data: any
 ): Promise<any> {
-  console.log('Desativando nome:', data.cod_nome || data.nome);
+  if (!data.cod_nome && !data.nome) throw new Error('cod_nome or nome is required');
 
-  if (!data.cod_nome && !data.nome) {
-    throw new Error('cod_nome or nome is required');
-  }
-
-  // Call SOAP method
   const soapResult = await soapClient.call('desativarNome', {
     codEscritorio: officeCode,
     codNome: data.cod_nome || 0,
   });
 
-  console.log('SOAP desativar result:', soapResult);
-
-  // Update local database
-  if (data.nome) {
-    await supabase
-      .from('search_terms')
-      .update({ is_active: false, updated_at: new Date().toISOString() })
-      .eq('term', data.nome)
-      .eq('partner_service_id', service.id);
-  }
-
+  const updateFilter = data.cod_nome
+    ? supabase.from('search_terms').update({ is_active: false, updated_at: new Date().toISOString() }).eq('solucionare_code', data.cod_nome).eq('partner_service_id', service.id)
+    : supabase.from('search_terms').update({ is_active: false, updated_at: new Date().toISOString() }).eq('term', data.nome).eq('partner_service_id', service.id);
+  
+  await updateFilter;
   return { soapResult };
 }
 
 async function excluirNome(
-  soapClient: SoapClient,
-  supabase: any,
-  service: any,
-  officeCode: number,
-  data: any
+  soapClient: SoapClient, service: any, officeCode: number, data: any, clientSystemId?: string
 ): Promise<any> {
-  console.log('Excluindo nome:', data.cod_nome || data.nome);
+  if (!data.cod_nome && !data.nome) throw new Error('cod_nome or nome is required');
 
-  if (!data.cod_nome && !data.nome) {
-    throw new Error('cod_nome or nome is required');
+  // Find the term record
+  let termQuery = supabase.from('search_terms').select('id, solucionare_code').eq('partner_service_id', service.id).eq('term_type', 'name');
+  if (data.cod_nome) termQuery = termQuery.eq('solucionare_code', data.cod_nome);
+  else if (data.nome) termQuery = termQuery.eq('term', data.nome);
+  
+  const { data: termRecord } = await termQuery.maybeSingle();
+
+  let removedFromSolucionare = false;
+
+  if (termRecord && clientSystemId) {
+    // DEDUPLICATION: Unlink client first, only remove from Solucionare if no clients remain
+    const noMoreClients = await unlinkTermFromClient(termRecord.id, clientSystemId);
+    
+    if (noMoreClients) {
+      console.log('No more clients linked, removing from Solucionare');
+      await soapClient.call('excluirNome', {
+        codEscritorio: officeCode,
+        codNome: data.cod_nome || termRecord.solucionare_code || 0,
+      });
+      removedFromSolucionare = true;
+
+      await supabase.from('search_terms').update({ is_active: false, updated_at: new Date().toISOString() }).eq('id', termRecord.id);
+    } else {
+      console.log('Other clients still linked, keeping in Solucionare');
+    }
+  } else {
+    // No client context: direct removal (legacy behavior)
+    await soapClient.call('excluirNome', {
+      codEscritorio: officeCode,
+      codNome: data.cod_nome || 0,
+    });
+    removedFromSolucionare = true;
+
+    if (data.nome) {
+      await supabase.from('search_terms').delete().eq('term', data.nome).eq('partner_service_id', service.id);
+    }
   }
 
-  // Call SOAP method
-  const soapResult = await soapClient.call('excluirNome', {
-    codEscritorio: officeCode,
-    codNome: data.cod_nome || 0,
-  });
-
-  console.log('SOAP excluir result:', soapResult);
-
-  // Delete from local database
-  if (data.nome) {
-    await supabase
-      .from('search_terms')
-      .delete()
-      .eq('term', data.nome)
-      .eq('partner_service_id', service.id);
-  }
-
-  return { soapResult };
+  return { removedFromSolucionare };
 }
 
 async function listarNomes(soapClient: SoapClient, officeCode: number): Promise<any> {
-  console.log('Listando nomes para escritório:', officeCode);
-
-  const result = await soapClient.call('getNomesPesquisa', {
-    codEscritorio: officeCode,
-  });
-
-  console.log(`Found ${Array.isArray(result) ? result.length : 0} names`);
-  return result;
+  return await soapClient.call('getNomesPesquisa', { codEscritorio: officeCode });
 }
 
 // ========== OFFICE OPERATIONS ==========
 
 async function cadastrarEscritorio(
-  soapClient: SoapClient,
-  supabase: any,
-  service: any,
-  data: any
+  soapClient: SoapClient, service: any, data: any, clientSystemId?: string
 ): Promise<any> {
-  console.log('Cadastrando escritório:', data.escritorio);
+  if (!data.escritorio) throw new Error('escritorio name is required');
 
-  if (!data.escritorio) {
-    throw new Error('escritorio name is required');
-  }
-
-  // Call SOAP method
-  const soapResult = await soapClient.call('cadastrarEscritorio', {
-    escritorio: data.escritorio,
-  });
-
-  console.log('SOAP cadastrarEscritorio result:', soapResult);
-
-  // Insert into local database
-  const { data: inserted, error } = await supabase
+  // DEDUPLICATION: Check if office already exists
+  const { data: existing } = await supabase
     .from('search_terms')
-    .insert({
-      term: data.escritorio,
-      term_type: 'office',
-      partner_id: service.partner_id,
-      partner_service_id: service.id,
-      is_active: true,
-    })
-    .select()
-    .single();
+    .select('id')
+    .eq('term', data.escritorio)
+    .eq('term_type', 'office')
+    .eq('partner_service_id', service.id)
+    .maybeSingle();
 
-  if (error) {
-    console.error('Error inserting office:', error);
-    throw error;
+  let termRecord;
+  let registeredInSolucionare = false;
+
+  if (existing) {
+    termRecord = existing;
+  } else {
+    const soapResult = await soapClient.call('cadastrarEscritorio', { escritorio: data.escritorio });
+    registeredInSolucionare = true;
+
+    const { data: inserted, error } = await supabase
+      .from('search_terms')
+      .insert({
+        term: data.escritorio,
+        term_type: 'office',
+        partner_id: service.partner_id,
+        partner_service_id: service.id,
+        is_active: true,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    termRecord = inserted;
   }
 
-  return { soapResult, local: inserted };
+  if (clientSystemId && termRecord?.id) {
+    await linkTermToClient(termRecord.id, clientSystemId);
+  }
+
+  return { local: termRecord, registeredInSolucionare };
 }
 
-async function ativarEscritorio(
-  soapClient: SoapClient,
-  supabase: any,
-  service: any,
-  data: any
-): Promise<any> {
-  console.log('Ativando escritório:', data.cod_escritorio);
-
-  if (!data.cod_escritorio) {
-    throw new Error('cod_escritorio is required');
-  }
-
-  // Call SOAP method
-  const soapResult = await soapClient.call('ativarEscritorio', {
-    codEscritorio: data.cod_escritorio,
-  });
-
-  console.log('SOAP ativarEscritorio result:', soapResult);
-
-  // Update local database
+async function ativarEscritorio(soapClient: SoapClient, service: any, data: any): Promise<any> {
+  if (!data.cod_escritorio) throw new Error('cod_escritorio is required');
+  const soapResult = await soapClient.call('ativarEscritorio', { codEscritorio: data.cod_escritorio });
   if (data.escritorio) {
-    await supabase
-      .from('search_terms')
-      .update({ is_active: true, updated_at: new Date().toISOString() })
-      .eq('term', data.escritorio)
-      .eq('term_type', 'office')
-      .eq('partner_service_id', service.id);
+    await supabase.from('search_terms').update({ is_active: true, updated_at: new Date().toISOString() })
+      .eq('term', data.escritorio).eq('term_type', 'office').eq('partner_service_id', service.id);
   }
-
   return { soapResult };
 }
 
-async function desativarEscritorio(
-  soapClient: SoapClient,
-  supabase: any,
-  service: any,
-  data: any
-): Promise<any> {
-  console.log('Desativando escritório:', data.cod_escritorio);
-
-  if (!data.cod_escritorio) {
-    throw new Error('cod_escritorio is required');
-  }
-
-  // Call SOAP method
-  const soapResult = await soapClient.call('desativarEscritorio', {
-    codEscritorio: data.cod_escritorio,
-  });
-
-  console.log('SOAP desativarEscritorio result:', soapResult);
-
-  // Update local database
+async function desativarEscritorio(soapClient: SoapClient, service: any, data: any): Promise<any> {
+  if (!data.cod_escritorio) throw new Error('cod_escritorio is required');
+  const soapResult = await soapClient.call('desativarEscritorio', { codEscritorio: data.cod_escritorio });
   if (data.escritorio) {
-    await supabase
-      .from('search_terms')
-      .update({ is_active: false, updated_at: new Date().toISOString() })
-      .eq('term', data.escritorio)
-      .eq('term_type', 'office')
-      .eq('partner_service_id', service.id);
+    await supabase.from('search_terms').update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq('term', data.escritorio).eq('term_type', 'office').eq('partner_service_id', service.id);
   }
-
   return { soapResult };
 }
 
 async function listarEscritorios(soapClient: SoapClient, officeCode: number): Promise<any> {
-  console.log('Listando escritórios');
-
-  // Some APIs may require different method names
   try {
-    const result = await soapClient.call('getEscritorios', {
-      codEscritorio: officeCode,
-    });
-    console.log(`Found ${Array.isArray(result) ? result.length : 0} offices`);
-    return result;
-  } catch (error) {
-    // Fallback: try alternative method name
-    console.log('Trying alternative method: buscarEscritorios');
-    const result = await soapClient.call('buscarEscritorios', {
-      codEscritorio: officeCode,
-    });
-    return result;
+    return await soapClient.call('getEscritorios', { codEscritorio: officeCode });
+  } catch {
+    return await soapClient.call('buscarEscritorios', { codEscritorio: officeCode });
   }
 }
 
 // ========== SYNC ALL ==========
 
-async function syncAll(
-  soapClient: SoapClient,
-  supabase: any,
-  service: any,
-  officeCode: number
-): Promise<any> {
+async function syncAll(soapClient: SoapClient, service: any, officeCode: number): Promise<any> {
   console.log('=== Syncing all terms ===');
+  const stats = { namesImported: 0, namesUpdated: 0, officesImported: 0, officesUpdated: 0, errors: [] as string[] };
 
-  const stats = {
-    namesImported: 0,
-    namesUpdated: 0,
-    officesImported: 0,
-    officesUpdated: 0,
-    errors: [] as string[],
-  };
-
-  // Sync names
   try {
     const names = await soapClient.call('getNomesPesquisa', { codEscritorio: officeCode });
-    
     if (Array.isArray(names)) {
-      console.log(`Found ${names.length} names to sync`);
-
       for (const nameObj of names) {
         try {
           const searchName = nameObj.nome || nameObj.term;
           if (!searchName) continue;
+          const solCode = nameObj.codNome || nameObj.cod_nome || null;
 
-          // Check if exists
           const { data: existing } = await supabase
             .from('search_terms')
             .select('id')
@@ -575,59 +479,26 @@ async function syncAll(
             .maybeSingle();
 
           if (existing) {
-            await supabase
-              .from('search_terms')
-              .update({ is_active: true, updated_at: new Date().toISOString() })
+            await supabase.from('search_terms')
+              .update({ is_active: true, solucionare_code: solCode, updated_at: new Date().toISOString() })
               .eq('id', existing.id);
             stats.namesUpdated++;
           } else {
             await supabase.from('search_terms').insert({
-              term: searchName,
-              term_type: 'name',
-              partner_id: service.partner_id,
-              partner_service_id: service.id,
-              is_active: true,
+              term: searchName, term_type: 'name',
+              partner_id: service.partner_id, partner_service_id: service.id,
+              is_active: true, solucionare_code: solCode,
             });
             stats.namesImported++;
           }
-
-          // Sync variations
-          if (nameObj.variacoes && Array.isArray(nameObj.variacoes)) {
-            for (const variacao of nameObj.variacoes) {
-              const variacaoTerm = variacao.termo || variacao;
-              if (!variacaoTerm) continue;
-
-              const { data: existingVar } = await supabase
-                .from('search_terms')
-                .select('id')
-                .eq('term', variacaoTerm)
-                .eq('term_type', 'name')
-                .eq('partner_service_id', service.id)
-                .maybeSingle();
-
-              if (!existingVar) {
-                await supabase.from('search_terms').insert({
-                  term: variacaoTerm,
-                  term_type: 'name',
-                  partner_id: service.partner_id,
-                  partner_service_id: service.id,
-                  is_active: true,
-                });
-                stats.namesImported++;
-              }
-            }
-          }
         } catch (e) {
-          const msg = e instanceof Error ? e.message : 'Unknown error';
-          stats.errors.push(`Name sync error: ${msg}`);
+          stats.errors.push(`Name sync error: ${e instanceof Error ? e.message : 'Unknown'}`);
         }
       }
     }
   } catch (error) {
-    const msg = error instanceof Error ? error.message : 'Unknown error';
-    stats.errors.push(`Failed to fetch names: ${msg}`);
+    stats.errors.push(`Failed to fetch names: ${error instanceof Error ? error.message : 'Unknown'}`);
   }
 
-  console.log('Sync stats:', stats);
   return stats;
 }
