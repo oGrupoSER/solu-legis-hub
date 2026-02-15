@@ -109,10 +109,10 @@ async function syncDistributions(
     const { error: insertError } = await supabase
       .from('distributions')
       .upsert({
-        process_number: dist.numeroProcesso,
-        tribunal: dist.tribunal || null,
-        term: null,
-        distribution_date: dist.dataDistribuicao || null,
+        process_number: dist.numeroProcesso || dist.NumeroProcesso,
+        tribunal: dist.tribunal || dist.Tribunal || null,
+        term: dist.nomePesquisado || dist.termo || dist.Termo || null,
+        distribution_date: dist.dataDistribuicao || dist.DataDistribuicao || null,
         partner_service_id: service.id,
         partner_id: service.partner_id,
         raw_data: dist,
