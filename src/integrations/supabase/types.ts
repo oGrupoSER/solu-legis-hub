@@ -109,6 +109,78 @@ export type Database = {
           },
         ]
       }
+      client_processes: {
+        Row: {
+          client_system_id: string
+          created_at: string | null
+          id: string
+          process_id: string
+        }
+        Insert: {
+          client_system_id: string
+          created_at?: string | null
+          id?: string
+          process_id: string
+        }
+        Update: {
+          client_system_id?: string
+          created_at?: string | null
+          id?: string
+          process_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_processes_client_system_id_fkey"
+            columns: ["client_system_id"]
+            isOneToOne: false
+            referencedRelation: "client_systems"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_processes_process_id_fkey"
+            columns: ["process_id"]
+            isOneToOne: false
+            referencedRelation: "processes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_search_terms: {
+        Row: {
+          client_system_id: string
+          created_at: string | null
+          id: string
+          search_term_id: string
+        }
+        Insert: {
+          client_system_id: string
+          created_at?: string | null
+          id?: string
+          search_term_id: string
+        }
+        Update: {
+          client_system_id?: string
+          created_at?: string | null
+          id?: string
+          search_term_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_search_terms_client_system_id_fkey"
+            columns: ["client_system_id"]
+            isOneToOne: false
+            referencedRelation: "client_systems"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_search_terms_search_term_id_fkey"
+            columns: ["search_term_id"]
+            isOneToOne: false
+            referencedRelation: "search_terms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_system_services: {
         Row: {
           client_system_id: string
@@ -410,6 +482,7 @@ export type Database = {
           logradouro: string | null
           name: string
           numero: string | null
+          office_code: number | null
           razao_social: string | null
           telefone: string | null
           updated_at: string | null
@@ -432,6 +505,7 @@ export type Database = {
           logradouro?: string | null
           name: string
           numero?: string | null
+          office_code?: number | null
           razao_social?: string | null
           telefone?: string | null
           updated_at?: string | null
@@ -454,6 +528,7 @@ export type Database = {
           logradouro?: string | null
           name?: string
           numero?: string | null
+          office_code?: number | null
           razao_social?: string | null
           telefone?: string | null
           updated_at?: string | null
@@ -1028,6 +1103,7 @@ export type Database = {
           is_active: boolean | null
           partner_id: string | null
           partner_service_id: string | null
+          solucionare_code: number | null
           term: string
           term_type: string
           updated_at: string | null
@@ -1038,6 +1114,7 @@ export type Database = {
           is_active?: boolean | null
           partner_id?: string | null
           partner_service_id?: string | null
+          solucionare_code?: number | null
           term: string
           term_type: string
           updated_at?: string | null
@@ -1048,6 +1125,7 @@ export type Database = {
           is_active?: boolean | null
           partner_id?: string | null
           partner_service_id?: string | null
+          solucionare_code?: number | null
           term?: string
           term_type?: string
           updated_at?: string | null

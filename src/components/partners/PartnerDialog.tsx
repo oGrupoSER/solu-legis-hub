@@ -15,6 +15,7 @@ interface Partner {
   name: string;
   description: string | null;
   is_active: boolean;
+  office_code?: number | null;
   cnpj?: string | null;
   razao_social?: string | null;
   inscricao_estadual?: string | null;
@@ -48,6 +49,7 @@ export const PartnerDialog = ({ open, onOpenChange, partner }: PartnerDialogProp
     name: "",
     description: "",
     is_active: true,
+    office_code: "",
     cnpj: "",
     razao_social: "",
     inscricao_estadual: "",
@@ -69,6 +71,7 @@ export const PartnerDialog = ({ open, onOpenChange, partner }: PartnerDialogProp
         name: partner.name,
         description: partner.description || "",
         is_active: partner.is_active,
+        office_code: partner.office_code?.toString() || "",
         cnpj: partner.cnpj || "",
         razao_social: partner.razao_social || "",
         inscricao_estadual: partner.inscricao_estadual || "",
@@ -88,6 +91,7 @@ export const PartnerDialog = ({ open, onOpenChange, partner }: PartnerDialogProp
         name: "",
         description: "",
         is_active: true,
+        office_code: "",
         cnpj: "",
         razao_social: "",
         inscricao_estadual: "",
@@ -141,6 +145,7 @@ export const PartnerDialog = ({ open, onOpenChange, partner }: PartnerDialogProp
     try {
       const dataToSave = {
         ...formData,
+        office_code: formData.office_code ? parseInt(formData.office_code, 10) : null,
         cnpj: formData.cnpj || null,
         razao_social: formData.razao_social || null,
         inscricao_estadual: formData.inscricao_estadual || null,
@@ -213,6 +218,19 @@ export const PartnerDialog = ({ open, onOpenChange, partner }: PartnerDialogProp
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     rows={3}
                   />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="office_code">Código do Escritório (Solucionare)</Label>
+                  <Input
+                    id="office_code"
+                    type="number"
+                    value={formData.office_code}
+                    onChange={(e) => setFormData({ ...formData, office_code: e.target.value })}
+                    placeholder="Ex: 15"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Identificador do escritório concentrador nas APIs do parceiro
+                  </p>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
