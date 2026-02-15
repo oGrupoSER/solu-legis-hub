@@ -38,8 +38,11 @@ async function authenticateAPI(service: DistributionService): Promise<string> {
     body: JSON.stringify({ nomeRelacional: service.nome_relacional, token: service.token }),
   });
   if (!response.ok) throw new Error(`Authentication failed: ${response.status} ${response.statusText}`);
-  const data: AuthResponse = await response.json();
-  return data.token;
+  const data = await response.json();
+  console.log(`[Auth] Response status: ${response.status}, data type: ${typeof data}`);
+  const token = typeof data === 'string' ? data.replace(/^"|"$/g, '') : data.token || data;
+  console.log(`[Auth] Token extracted, length: ${String(token).length}`);
+  return token;
 }
 
 async function apiRequest(baseUrl: string, endpoint: string, jwtToken: string, method = 'GET', body?: any): Promise<any> {
