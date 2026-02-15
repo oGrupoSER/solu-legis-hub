@@ -1,6 +1,7 @@
 /**
  * Manage Distribution Terms Edge Function
  * CRUD operations for distribution names/offices in Solucionare WebAPI V3
+ * Now with shared consumption (deduplication) logic
  */
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
@@ -22,80 +23,65 @@ interface ServiceConfig {
   token: string;
 }
 
-/**
- * Authenticate with Solucionare API
- */
 async function authenticate(service: ServiceConfig): Promise<string> {
   const response = await fetch(`${service.service_url}/AutenticaAPI`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      nomeRelacional: service.nome_relacional,
-      token: service.token,
-    }),
+    body: JSON.stringify({ nomeRelacional: service.nome_relacional, token: service.token }),
   });
-
-  if (!response.ok) {
-    throw new Error(`Authentication failed: ${response.status}`);
-  }
-
+  if (!response.ok) throw new Error(`Authentication failed: ${response.status}`);
   const data = await response.json();
   return data.token;
 }
 
-/**
- * Make authenticated API request
- */
-async function apiRequest(
-  baseUrl: string,
-  endpoint: string,
-  jwtToken: string,
-  method: string = 'GET',
-  body?: any
-): Promise<any> {
+async function apiRequest(baseUrl: string, endpoint: string, jwtToken: string, method = 'GET', body?: any): Promise<any> {
   const url = `${baseUrl}${endpoint}`;
-  console.log(`API Request: ${method} ${url}`);
-
   const options: RequestInit = {
     method,
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${jwtToken}`,
-    },
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${jwtToken}` },
   };
-
-  if (body && method !== 'GET') {
-    options.body = JSON.stringify(body);
-  }
+  if (body && method !== 'GET') options.body = JSON.stringify(body);
 
   const response = await fetch(url, options);
-
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(`API request failed: ${response.status} - ${errorText}`);
   }
-
   const contentType = response.headers.get('content-type');
-  if (contentType?.includes('application/json')) {
-    return await response.json();
-  }
-  return await response.text();
+  return contentType?.includes('application/json') ? await response.json() : await response.text();
 }
 
-/**
- * Get service configuration
- */
 async function getService(supabase: any, serviceId: string): Promise<ServiceConfig> {
-  const { data, error } = await supabase
-    .from('partner_services')
-    .select('*')
-    .eq('id', serviceId)
-    .single();
-
+  const { data, error } = await supabase.from('partner_services').select('*').eq('id', serviceId).single();
   if (error) throw error;
   if (!data) throw new Error('Service not found');
-  
   return data;
+}
+
+async function getOfficeCode(supabase: any, serviceId: string): Promise<number> {
+  const { data, error } = await supabase
+    .from('partner_services')
+    .select('partners(office_code)')
+    .eq('id', serviceId)
+    .single();
+  if (error) throw error;
+  const officeCode = (data?.partners as any)?.office_code as number | null;
+  if (!officeCode) throw new Error('Parceiro não possui código de escritório configurado.');
+  return officeCode;
+}
+
+async function linkTermToClient(supabase: any, termId: string, clientSystemId: string): Promise<void> {
+  await supabase
+    .from('client_search_terms')
+    .upsert({ client_system_id: clientSystemId, search_term_id: termId }, { onConflict: 'client_system_id,search_term_id' });
+}
+
+async function unlinkAndCheck(supabase: any, termId: string, clientSystemId: string): Promise<boolean> {
+  await supabase.from('client_search_terms').delete()
+    .eq('client_system_id', clientSystemId).eq('search_term_id', termId);
+  const { count } = await supabase.from('client_search_terms')
+    .select('*', { count: 'exact', head: true }).eq('search_term_id', termId);
+  return (count || 0) === 0;
 }
 
 serve(async (req) => {
@@ -106,189 +92,136 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    const { action, serviceId, ...params } = await req.json();
-
-    if (!serviceId) {
-      throw new Error('serviceId is required');
-    }
+    const { action, serviceId, client_system_id, ...params } = await req.json();
+    if (!serviceId) throw new Error('serviceId is required');
 
     const service = await getService(supabase, serviceId);
     const jwtToken = await authenticate(service);
-
     let result;
 
     switch (action) {
-      // ============ NAMES (NOMES) ============
-      
       case 'listNames': {
-        // Get registered names
-        result = await apiRequest(
-          service.service_url,
-          '/BuscaNomesCadastrados',
-          jwtToken
-        );
+        result = await apiRequest(service.service_url, '/BuscaNomesCadastrados', jwtToken);
         break;
       }
 
       case 'registerName': {
-        // Register new name for distribution monitoring
         const { nome, instancia, abrangencia } = params;
         if (!nome) throw new Error('nome is required');
-        
-        result = await apiRequest(
-          service.service_url,
-          '/CadastrarNome',
-          jwtToken,
-          'POST',
-          { nome, instancia: instancia || 1, abrangencia: abrangencia || 'NACIONAL' }
-        );
 
-        // Also save to local database
-        await supabase.from('search_terms').insert({
-          term: nome,
-          term_type: 'distribution',
-          partner_service_id: serviceId,
-          partner_id: service.partner_id,
-          is_active: true,
-        });
+        // DEDUPLICATION: Check if term exists
+        const { data: existing } = await supabase
+          .from('search_terms')
+          .select('id, solucionare_code')
+          .eq('term', nome)
+          .eq('term_type', 'distribution')
+          .eq('partner_service_id', serviceId)
+          .maybeSingle();
+
+        let termRecord;
+        let registeredInSolucionare = false;
+
+        if (existing) {
+          termRecord = existing;
+        } else {
+          result = await apiRequest(service.service_url, '/CadastrarNome', jwtToken, 'POST', {
+            nome, instancia: instancia || 1, abrangencia: abrangencia || 'NACIONAL',
+          });
+          registeredInSolucionare = true;
+
+          const solCode = result?.codNome || null;
+          const { data: inserted } = await supabase.from('search_terms').insert({
+            term: nome, term_type: 'distribution',
+            partner_service_id: serviceId, partner_id: service.partner_id,
+            is_active: true, solucionare_code: solCode,
+          }).select().single();
+          termRecord = inserted;
+        }
+
+        if (client_system_id && termRecord?.id) {
+          await linkTermToClient(supabase, termRecord.id, client_system_id);
+        }
+
+        result = { registeredInSolucionare, local: termRecord, linkedToClient: !!client_system_id };
         break;
       }
 
       case 'editNameScope': {
-        // Edit name instance/scope
         const { codNome, instancia, abrangencia } = params;
         if (!codNome) throw new Error('codNome is required');
-        
-        result = await apiRequest(
-          service.service_url,
-          '/EditarInstanciaAbrangenciaNome',
-          jwtToken,
-          'PUT',
-          { codNome, instancia, abrangencia }
-        );
+        result = await apiRequest(service.service_url, '/EditarInstanciaAbrangenciaNome', jwtToken, 'PUT', { codNome, instancia, abrangencia });
         break;
       }
 
       case 'activateName': {
-        // Activate a name
         const { codNome } = params;
         if (!codNome) throw new Error('codNome is required');
-        
-        result = await apiRequest(
-          service.service_url,
-          `/AtivarNome?codNome=${codNome}`,
-          jwtToken,
-          'PUT'
-        );
-
-        // Update local database
-        await supabase
-          .from('search_terms')
-          .update({ is_active: true })
-          .eq('partner_service_id', serviceId)
-          .eq('term_type', 'distribution');
+        result = await apiRequest(service.service_url, `/AtivarNome?codNome=${codNome}`, jwtToken, 'PUT');
+        await supabase.from('search_terms').update({ is_active: true }).eq('solucionare_code', codNome).eq('partner_service_id', serviceId);
         break;
       }
 
       case 'deactivateName': {
-        // Deactivate a name
         const { codNome } = params;
         if (!codNome) throw new Error('codNome is required');
-        
-        result = await apiRequest(
-          service.service_url,
-          `/DesativarNome?codNome=${codNome}`,
-          jwtToken,
-          'PUT'
-        );
-
-        // Update local database
-        await supabase
-          .from('search_terms')
-          .update({ is_active: false })
-          .eq('partner_service_id', serviceId)
-          .eq('term_type', 'distribution');
+        result = await apiRequest(service.service_url, `/DesativarNome?codNome=${codNome}`, jwtToken, 'PUT');
+        await supabase.from('search_terms').update({ is_active: false }).eq('solucionare_code', codNome).eq('partner_service_id', serviceId);
         break;
       }
 
       case 'deleteName': {
-        // Delete a name
         const { codNome, termo } = params;
         if (!codNome) throw new Error('codNome is required');
-        
-        result = await apiRequest(
-          service.service_url,
-          `/ExcluirNome?codNome=${codNome}`,
-          jwtToken,
-          'DELETE'
-        );
 
-        // Delete from local database
-        if (termo) {
-          await supabase
-            .from('search_terms')
-            .delete()
-            .eq('partner_service_id', serviceId)
-            .eq('term', termo)
-            .eq('term_type', 'distribution');
+        // DEDUPLICATION: Check client links
+        const { data: termRecord } = await supabase.from('search_terms').select('id')
+          .eq('solucionare_code', codNome).eq('partner_service_id', serviceId).maybeSingle();
+
+        let removedFromSolucionare = false;
+
+        if (termRecord && client_system_id) {
+          const noMoreClients = await unlinkAndCheck(supabase, termRecord.id, client_system_id);
+          if (noMoreClients) {
+            result = await apiRequest(service.service_url, `/ExcluirNome?codNome=${codNome}`, jwtToken, 'DELETE');
+            removedFromSolucionare = true;
+            await supabase.from('search_terms').update({ is_active: false }).eq('id', termRecord.id);
+          }
+        } else {
+          result = await apiRequest(service.service_url, `/ExcluirNome?codNome=${codNome}`, jwtToken, 'DELETE');
+          removedFromSolucionare = true;
+          if (termo) {
+            await supabase.from('search_terms').delete()
+              .eq('partner_service_id', serviceId).eq('term', termo).eq('term_type', 'distribution');
+          }
         }
+
+        result = { removedFromSolucionare };
         break;
       }
 
-      // ============ OFFICES (ESCRITÓRIOS) ============
-
       case 'registerOffice': {
-        // Register new office
         const { nomeEscritorio, codAbrangencia } = params;
         if (!nomeEscritorio) throw new Error('nomeEscritorio is required');
-        
-        result = await apiRequest(
-          service.service_url,
-          '/CadastrarEscritorio',
-          jwtToken,
-          'POST',
-          { nomeEscritorio, codAbrangencia: codAbrangencia || 1 }
-        );
+        result = await apiRequest(service.service_url, '/CadastrarEscritorio', jwtToken, 'POST', { nomeEscritorio, codAbrangencia: codAbrangencia || 1 });
         break;
       }
 
       case 'activateOffice': {
-        // Activate an office
         const { codEscritorio } = params;
         if (!codEscritorio) throw new Error('codEscritorio is required');
-        
-        result = await apiRequest(
-          service.service_url,
-          `/AtivarEscritorio?codEscritorio=${codEscritorio}`,
-          jwtToken,
-          'PUT'
-        );
+        result = await apiRequest(service.service_url, `/AtivarEscritorio?codEscritorio=${codEscritorio}`, jwtToken, 'PUT');
         break;
       }
 
       case 'deactivateOffice': {
-        // Deactivate an office
         const { codEscritorio } = params;
         if (!codEscritorio) throw new Error('codEscritorio is required');
-        
-        result = await apiRequest(
-          service.service_url,
-          `/DesativarEscritorio?codEscritorio=${codEscritorio}`,
-          jwtToken,
-          'PUT'
-        );
+        result = await apiRequest(service.service_url, `/DesativarEscritorio?codEscritorio=${codEscritorio}`, jwtToken, 'PUT');
         break;
       }
 
-      // ============ SCOPES (ABRANGÊNCIAS) ============
-
       case 'listScopes': {
-        // Get available scopes
-        result = await apiRequest(
-          service.service_url,
-          '/BuscaAbrangencias',
-          jwtToken
-        );
+        result = await apiRequest(service.service_url, '/BuscaAbrangencias', jwtToken);
         break;
       }
 

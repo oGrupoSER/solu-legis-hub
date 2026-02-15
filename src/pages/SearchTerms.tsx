@@ -6,8 +6,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Search, Download, RefreshCw, UserSearch, Building2 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Plus, Search, Download, RefreshCw, Users } from "lucide-react";
 import { toast } from "sonner";
 import { SearchTermDialog } from "@/components/terms/SearchTermDialog";
 import { ManageTermDialog } from "@/components/terms/ManageTermDialog";
@@ -23,8 +23,10 @@ interface SearchTerm {
   partner_service_id: string | null;
   is_active: boolean;
   created_at: string;
+  solucionare_code: number | null;
   partners?: { name: string };
   partner_services?: { service_name: string };
+  client_search_terms?: { client_systems: { id: string; name: string } }[];
 }
 
 interface PartnerService {
@@ -44,13 +46,8 @@ const SearchTerms = () => {
   const [filterStatus, setFilterStatus] = useState("all");
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStats, setSyncStats] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState("names");
   const [termsServices, setTermsServices] = useState<PartnerService[]>([]);
   const [selectedService, setSelectedService] = useState<string>("");
-  const [manageDialogOpen, setManageDialogOpen] = useState(false);
-  const [manageDialogMode, setManageDialogMode] = useState<'create' | 'edit'>('create');
-  const [manageDialogType, setManageDialogType] = useState<'name' | 'office'>('name');
-  const [editingTermData, setEditingTermData] = useState<any>(null);
 
   useEffect(() => {
     fetchTerms();
@@ -65,11 +62,11 @@ const SearchTerms = () => {
     try {
       const { data, error } = await supabase
         .from("search_terms")
-        .select("*, partners(name), partner_services(service_name)")
+        .select("*, partners(name), partner_services(service_name), client_search_terms(client_systems(id, name))")
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setTerms(data || []);
+      setTerms((data as any) || []);
     } catch (error) {
       toast.error("Erro ao carregar termos de busca");
     } finally {
@@ -97,32 +94,20 @@ const SearchTerms = () => {
 
   const applyFilters = () => {
     let filtered = [...terms];
-
-    // Filter by search query
     if (searchQuery) {
-      filtered = filtered.filter((term) =>
-        term.term.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+      filtered = filtered.filter((t) => t.term.toLowerCase().includes(searchQuery.toLowerCase()));
     }
-
-    // Filter by type
     if (filterType !== "all") {
-      filtered = filtered.filter((term) => term.term_type === filterType);
+      filtered = filtered.filter((t) => t.term_type === filterType);
     }
-
-    // Filter by status
     if (filterStatus !== "all") {
-      filtered = filtered.filter((term) => 
-        filterStatus === "active" ? term.is_active : !term.is_active
-      );
+      filtered = filtered.filter((t) => filterStatus === "active" ? t.is_active : !t.is_active);
     }
-
     setFilteredTerms(filtered);
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm("Tem certeza que deseja excluir este termo?")) return;
-
     try {
       const { error } = await supabase.from("search_terms").delete().eq("id", id);
       if (error) throw error;
@@ -141,42 +126,33 @@ const SearchTerms = () => {
   const handleSync = async () => {
     setIsSyncing(true);
     setSyncStats(null);
-    
     try {
-      // Get the first terms service (SOAP)
       const { data: services } = await supabase
-        .from('partner_services')
-        .select('id')
-        .eq('service_type', 'terms')
-        .eq('is_active', true)
-        .limit(1);
+        .from('partner_services').select('id')
+        .eq('service_type', 'terms').eq('is_active', true).limit(1);
 
       if (!services || services.length === 0) {
-        toast.error("Nenhum serviço de termos ativo encontrado. Configure um serviço do tipo 'Termos e Escritórios' primeiro.");
+        toast.error("Nenhum serviço de termos ativo encontrado.");
         return;
       }
 
       const { data, error } = await supabase.functions.invoke('sync-search-terms', {
         body: { serviceId: services[0].id }
       });
-
       if (error) throw error;
 
       setSyncStats(data);
-      
       const totalImported = data.officesImported + data.namesImported;
       const totalUpdated = data.officesUpdated + data.namesUpdated;
       
-      if (data.errors && data.errors.length > 0) {
-        toast.warning(`Sincronização concluída com avisos: ${totalImported} importados, ${totalUpdated} atualizados, ${data.errors.length} erros`);
+      if (data.errors?.length > 0) {
+        toast.warning(`Sincronização concluída com avisos: ${totalImported} importados, ${totalUpdated} atualizados`);
       } else {
         toast.success(`Sincronização concluída: ${totalImported} novos termos, ${totalUpdated} atualizados`);
       }
-      
       fetchTerms();
     } catch (error: any) {
-      console.error('Sync error:', error);
-      toast.error(error.message || "Erro ao sincronizar com Solucionare");
+      toast.error(error.message || "Erro ao sincronizar");
     } finally {
       setIsSyncing(false);
     }
@@ -184,17 +160,16 @@ const SearchTerms = () => {
 
   const handleExport = () => {
     const csv = [
-      ["Termo", "Tipo", "Parceiro", "Serviço", "Status"],
+      ["Termo", "Tipo", "Parceiro", "Serviço", "Status", "Clientes"],
       ...filteredTerms.map((t) => [
         t.term,
         t.term_type,
         t.partners?.name || "-",
         t.partner_services?.service_name || "-",
         t.is_active ? "Ativo" : "Inativo",
+        getClientNames(t).join("; ") || "-",
       ]),
-    ]
-      .map((row) => row.join(","))
-      .join("\n");
+    ].map((row) => row.join(",")).join("\n");
 
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -207,13 +182,17 @@ const SearchTerms = () => {
 
   const getTypeLabel = (type: string) => {
     const types: Record<string, string> = {
-      office: "Escritório",
-      name: "Nome de Pesquisa",
-      processes: "Processos",
-      distributions: "Distribuições",
-      publications: "Publicações",
+      office: "Escritório", name: "Nome de Pesquisa",
+      processes: "Processos", distributions: "Distribuições",
+      publications: "Publicações", distribution: "Distribuição",
     };
     return types[type] || type;
+  };
+
+  const getClientNames = (term: SearchTerm): string[] => {
+    return term.client_search_terms
+      ?.map((cst: any) => cst.client_systems?.name)
+      .filter(Boolean) || [];
   };
 
   if (isLoading) {
@@ -226,37 +205,23 @@ const SearchTerms = () => {
 
   return (
     <div className="container py-8 space-y-6">
-      <BreadcrumbNav
-        items={[
-          { label: "Dashboard", href: "/" },
-          { label: "Termos de Busca" },
-        ]}
-      />
-      
+      <BreadcrumbNav items={[{ label: "Dashboard", href: "/" }, { label: "Termos de Busca" }]} />
+
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Termos de Busca</h1>
-          <p className="text-muted-foreground mt-1">
-            Gerencie os termos utilizados nas buscas e sincronizações
-          </p>
+          <p className="text-muted-foreground mt-1">Gerencie os termos utilizados nas buscas e sincronizações</p>
         </div>
         <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            onClick={handleSync}
-            disabled={isSyncing}
-            className="gap-2"
-          >
+          <Button variant="outline" onClick={handleSync} disabled={isSyncing} className="gap-2">
             <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
             {isSyncing ? 'Sincronizando...' : 'Sincronizar'}
           </Button>
           <Button variant="outline" onClick={handleExport} className="gap-2">
-            <Download className="h-4 w-4" />
-            Exportar
+            <Download className="h-4 w-4" /> Exportar
           </Button>
           <Button onClick={() => setDialogOpen(true)} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Novo Termo
+            <Plus className="h-4 w-4" /> Novo Termo
           </Button>
         </div>
       </div>
@@ -267,7 +232,6 @@ const SearchTerms = () => {
         <Card>
           <CardHeader>
             <CardTitle>Última Sincronização</CardTitle>
-            <CardDescription>Estatísticas da sincronização com Solucionare</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -288,18 +252,16 @@ const SearchTerms = () => {
                 <div className="text-2xl font-bold">{syncStats.namesUpdated}</div>
               </div>
             </div>
-            {syncStats.errors && syncStats.errors.length > 0 && (
+            {syncStats.errors?.length > 0 && (
               <div className="mt-4 p-3 bg-destructive/10 rounded-md">
                 <div className="text-sm font-medium text-destructive mb-1">
-                  {syncStats.errors.length} erro(s) durante a sincronização:
+                  {syncStats.errors.length} erro(s):
                 </div>
                 <ul className="text-xs text-muted-foreground space-y-1">
                   {syncStats.errors.slice(0, 3).map((err: string, idx: number) => (
                     <li key={idx}>{err}</li>
                   ))}
-                  {syncStats.errors.length > 3 && (
-                    <li>... e mais {syncStats.errors.length - 3} erro(s)</li>
-                  )}
+                  {syncStats.errors.length > 3 && <li>... e mais {syncStats.errors.length - 3}</li>}
                 </ul>
               </div>
             )}
@@ -310,37 +272,25 @@ const SearchTerms = () => {
       <Card>
         <CardHeader>
           <CardTitle>Filtros</CardTitle>
-          <CardDescription>Filtre os termos por tipo, status ou busca</CardDescription>
         </CardHeader>
         <CardContent className="flex gap-4">
           <div className="flex-1">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar termo..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
+              <Input placeholder="Buscar termo..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10" />
             </div>
           </div>
           <Select value={filterType} onValueChange={setFilterType}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Tipo" />
-            </SelectTrigger>
+            <SelectTrigger className="w-[200px]"><SelectValue placeholder="Tipo" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos os Tipos</SelectItem>
               <SelectItem value="office">Escritório</SelectItem>
               <SelectItem value="name">Nome de Pesquisa</SelectItem>
-              <SelectItem value="processes">Processos</SelectItem>
-              <SelectItem value="distributions">Distribuições</SelectItem>
-              <SelectItem value="publications">Publicações</SelectItem>
+              <SelectItem value="distribution">Distribuição</SelectItem>
             </SelectContent>
           </Select>
           <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
+            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Status" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos</SelectItem>
               <SelectItem value="active">Ativos</SelectItem>
@@ -360,6 +310,7 @@ const SearchTerms = () => {
                   <TableHead>Tipo</TableHead>
                   <TableHead>Parceiro</TableHead>
                   <TableHead>Serviço</TableHead>
+                  <TableHead>Clientes</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
@@ -367,35 +318,46 @@ const SearchTerms = () => {
               <TableBody>
                 {filteredTerms.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                      Nenhum termo encontrado
-                    </TableCell>
+                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">Nenhum termo encontrado</TableCell>
                   </TableRow>
                 ) : (
-                  filteredTerms.map((term) => (
-                    <TableRow key={term.id}>
-                      <TableCell className="font-medium">{term.term}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{getTypeLabel(term.term_type)}</Badge>
-                      </TableCell>
-                      <TableCell className="text-sm">{term.partners?.name || "-"}</TableCell>
-                      <TableCell className="text-sm">
-                        {term.partner_services?.service_name || "-"}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={term.is_active ? "default" : "secondary"}>
-                          {term.is_active ? "Ativo" : "Inativo"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <TermActionsDropdown
-                          term={term}
-                          onEdit={() => handleEdit(term)}
-                          onRefresh={fetchTerms}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  filteredTerms.map((term) => {
+                    const clients = getClientNames(term);
+                    return (
+                      <TableRow key={term.id}>
+                        <TableCell className="font-medium">{term.term}</TableCell>
+                        <TableCell><Badge variant="outline">{getTypeLabel(term.term_type)}</Badge></TableCell>
+                        <TableCell className="text-sm">{term.partners?.name || "-"}</TableCell>
+                        <TableCell className="text-sm">{term.partner_services?.service_name || "-"}</TableCell>
+                        <TableCell>
+                          {clients.length > 0 ? (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger>
+                                  <Badge variant="secondary" className="gap-1">
+                                    <Users className="h-3 w-3" /> {clients.length}
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <div className="text-xs">{clients.join(", ")}</div>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={term.is_active ? "default" : "secondary"}>
+                            {term.is_active ? "Ativo" : "Inativo"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <TermActionsDropdown term={term} onEdit={() => handleEdit(term)} onRefresh={fetchTerms} />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
@@ -407,10 +369,7 @@ const SearchTerms = () => {
         open={dialogOpen}
         onOpenChange={(open) => {
           setDialogOpen(open);
-          if (!open) {
-            setEditingTerm(null);
-            fetchTerms();
-          }
+          if (!open) { setEditingTerm(null); fetchTerms(); }
         }}
         term={editingTerm}
       />
