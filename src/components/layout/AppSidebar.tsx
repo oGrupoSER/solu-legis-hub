@@ -14,7 +14,7 @@ import {
 
 const mainItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Solucionare", url: "/partners", icon: Building2 },
+  { title: "Parceiros", url: "/partners", icon: Building2 },
   { title: "Clientes", url: "/clients", icon: Users },
   { title: "Processos", url: "/processes", icon: Gavel },
   { title: "Distribuições", url: "/distributions", icon: FolderInput },
