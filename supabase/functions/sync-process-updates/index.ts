@@ -1,16 +1,17 @@
 /**
  * Sync Process Updates Edge Function
- * Synchronizes complete process data from Solucionare API V3:
- * - Groupers (Agrupadores)
- * - Dependencies (Dependências)
- * - Movements (Andamentos)
- * - Documents (Documentos)
- * - Covers (Capas)
+ * MACRO PROCESSO 2: Andamentos
+ * Synchronizes complete process data from Solucionare API V3 for processes with status CADASTRADO:
+ * - Groupers (Agrupadores) - via BuscaAgrupadoresPorEscritorio
+ * - Dependencies (Dependências) - via BuscaDependenciasPorEscritorio
+ * - Movements (Andamentos) - via BuscaNovosAndamentosPorEscritorio
+ * - Documents (Documentos) - via BuscaNovosDocumentosPorEscritorio
+ * - Covers (Capas) - via BuscaProcessosComCapaAtualizada
  * - Parties (Partes/Polos)
  * - Lawyers (Advogados)
  * 
- * API V3 uses query params for authentication (nomeRelacional + token)
- * All BuscaNovos* endpoints return max 500 items and require confirmation via ConfirmaRecebimento*
+ * All endpoints use PorEscritorio variants that filter at the API level by codEscritorio.
+ * office_code is MANDATORY (sourced from partners table).
  */
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
@@ -39,7 +40,7 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const { serviceId, syncType = 'full' } = body;
 
-    console.log(`Starting process updates sync. Type: ${syncType}`);
+    console.log(`Starting process updates sync (Macro Processo 2 - Andamentos). Type: ${syncType}`);
 
     // Get services
     let services;
@@ -72,19 +73,19 @@ serve(async (req) => {
       try {
         validateService(service);
 
-        // Get partner's office_code to filter sync data
+        // Get partner's office_code - MANDATORY for PorEscritorio endpoints
         const { data: partnerData } = await supabase
           .from('partners')
           .select('office_code')
           .eq('id', service.partner_id)
           .single();
         
-        const partnerOfficeCode = partnerData?.office_code as number | null;
-        if (partnerOfficeCode) {
-          console.log(`Filtering sync data by partner office_code: ${partnerOfficeCode}`);
-        } else {
-          console.log('WARNING: Partner has no office_code configured, importing all data');
+        const officeCode = partnerData?.office_code as number | null;
+        if (!officeCode) {
+          throw new Error('Partner has no office_code configured. office_code is mandatory for PorEscritorio endpoints.');
         }
+
+        console.log(`Using office_code: ${officeCode} for PorEscritorio endpoints`);
 
         await logger.start({
           partner_service_id: service.id,
@@ -96,39 +97,39 @@ serve(async (req) => {
           baseUrl: service.service_url,
           nomeRelacional: service.nome_relacional,
           token: service.token,
-          authInQuery: true, // API V3 requires auth via query params
+          authInQuery: true,
         });
         client.setLogger(logger);
 
         let totalSynced = 0;
 
-        // 1. Sync Groupers (Agrupadores)
+        // 1. Sync Groupers (Agrupadores) - BuscaAgrupadoresPorEscritorio
         if (syncType === 'full' || syncType === 'groupers') {
-          const groupersSynced = await syncGroupers(client, supabase, service, partnerOfficeCode);
+          const groupersSynced = await syncGroupers(client, supabase, service, officeCode);
           totalSynced += groupersSynced;
           console.log(`Synced ${groupersSynced} groupers`);
         }
 
-        // 2. Sync Dependencies
+        // 2. Sync Dependencies - BuscaDependenciasPorEscritorio
         if (syncType === 'full' || syncType === 'dependencies') {
-          const depsSynced = await syncDependencies(client, supabase, service, partnerOfficeCode);
+          const depsSynced = await syncDependencies(client, supabase, service, officeCode);
           totalSynced += depsSynced;
           console.log(`Synced ${depsSynced} dependencies`);
         }
 
-        // 3. Sync Movements (Andamentos) - Loop until no more data
+        // 3. Sync Movements (Andamentos) - BuscaNovosAndamentosPorEscritorio - Loop until no more data
         if (syncType === 'full' || syncType === 'movements') {
           let totalMovements = 0;
           let batchCount = 0;
-          const maxBatches = 20; // Safety limit
+          const maxBatches = 20;
           
           while (batchCount < maxBatches) {
-            const movementsSynced = await syncMovements(client, supabase, service, partnerOfficeCode);
+            const movementsSynced = await syncMovements(client, supabase, service, officeCode);
             totalMovements += movementsSynced;
             batchCount++;
             
             if (movementsSynced === 0 || movementsSynced < 500) {
-              break; // No more data or last batch
+              break;
             }
             console.log(`Movements batch ${batchCount}: ${movementsSynced} synced`);
           }
@@ -137,19 +138,19 @@ serve(async (req) => {
           console.log(`Total synced ${totalMovements} movements in ${batchCount} batches`);
         }
 
-        // 4. Sync Documents - Loop until no more data
+        // 4. Sync Documents - BuscaNovosDocumentosPorEscritorio - Loop until no more data
         if (syncType === 'full' || syncType === 'documents') {
           let totalDocs = 0;
           let batchCount = 0;
-          const maxBatches = 20; // Safety limit
+          const maxBatches = 20;
           
           while (batchCount < maxBatches) {
-            const docsSynced = await syncDocuments(client, supabase, service, partnerOfficeCode);
+            const docsSynced = await syncDocuments(client, supabase, service, officeCode);
             totalDocs += docsSynced;
             batchCount++;
             
             if (docsSynced === 0 || docsSynced < 500) {
-              break; // No more data or last batch
+              break;
             }
             console.log(`Documents batch ${batchCount}: ${docsSynced} synced`);
           }
@@ -164,9 +165,9 @@ serve(async (req) => {
           console.log(`Linked ${linkedDocs} orphan documents to processes`);
         }
 
-        // 5. Sync Covers (Capas) with Parties and Lawyers
+        // 5. Sync Covers (Capas) with Parties and Lawyers - BuscaProcessosComCapaAtualizada
         if (syncType === 'full' || syncType === 'covers') {
-          const coversSynced = await syncCovers(client, supabase, service, partnerOfficeCode);
+          const coversSynced = await syncCovers(client, supabase, service, officeCode);
           totalSynced += coversSynced;
           console.log(`Synced ${coversSynced} covers`);
         }
@@ -210,37 +211,27 @@ serve(async (req) => {
 
 /**
  * Sync Groupers (Agrupadores)
- * GET /BuscaNovosAgrupadores - returns max 500 unconfirmed groupers
- * POST /ConfirmaRecebimentoAgrupador - confirms receipt
+ * GET /BuscaAgrupadoresPorEscritorio?codEscritorio={code} - returns max 500 unconfirmed groupers filtered by office
  */
-async function syncGroupers(client: RestClient, supabase: any, service: any, officeCodeFilter: number | null): Promise<number> {
+async function syncGroupers(client: RestClient, supabase: any, service: any, officeCode: number): Promise<number> {
   try {
-    let data = await client.get('/BuscaNovosAgrupadores');
+    const data = await client.get('/BuscaAgrupadoresPorEscritorio', { codEscritorio: officeCode });
     
     if (!Array.isArray(data) || data.length === 0) {
       console.log('No new groupers found');
       return 0;
     }
 
-    // Filter by partner office_code
-    if (officeCodeFilter) {
-      const beforeCount = data.length;
-      data = data.filter((g: any) => g.codEscritorio === officeCodeFilter);
-      console.log(`Filtered groupers: ${beforeCount} -> ${data.length} (office_code=${officeCodeFilter})`);
-      if (data.length === 0) return 0;
-    }
-
-    console.log(`Found ${data.length} new groupers`);
+    console.log(`Found ${data.length} new groupers (filtered by codEscritorio=${officeCode})`);
 
     // Step 1: Get unique codProcesso values and create processes in batch
     const uniqueCodProcessos = [...new Set(data.map((g: any) => g.codProcesso).filter(Boolean))];
     
-    // Batch upsert all processes first
     const processInserts = uniqueCodProcessos.map(codProcesso => {
       const grouper = data.find((g: any) => g.codProcesso === codProcesso);
       return {
         cod_processo: codProcesso,
-        cod_escritorio: grouper?.codEscritorio || null,
+        cod_escritorio: officeCode,
         process_number: grouper?.numProcesso || grouper?.titulo || `PROC-${codProcesso}`,
         tribunal: grouper?.tribunal || null,
         partner_service_id: service.id,
@@ -298,10 +289,6 @@ async function syncGroupers(client: RestClient, supabase: any, service: any, off
     }
 
     // DISABLED: Do not confirm receipt - legacy system is the official confirmer
-    // const confirmIds = data.map((g: any) => g.codAgrupador);
-    // if (confirmIds.length > 0) {
-    //   await confirmReceipt(client, supabase, 'groupers', confirmIds);
-    // }
     console.log(`Skipping confirmation for ${data.length} groupers (legacy system handles confirmations)`);
 
     return data.length;
@@ -313,37 +300,27 @@ async function syncGroupers(client: RestClient, supabase: any, service: any, off
 
 /**
  * Sync Dependencies
- * GET /BuscaNovasDependencias - returns max 500 unconfirmed dependencies
- * POST /ConfirmaRecebimentoDependencia - confirms receipt
+ * GET /BuscaDependenciasPorEscritorio?codEscritorio={code} - returns max 500 unconfirmed dependencies filtered by office
  */
-async function syncDependencies(client: RestClient, supabase: any, service: any, officeCodeFilter: number | null): Promise<number> {
+async function syncDependencies(client: RestClient, supabase: any, service: any, officeCode: number): Promise<number> {
   try {
-    let data = await client.get('/BuscaNovasDependencias');
+    const data = await client.get('/BuscaDependenciasPorEscritorio', { codEscritorio: officeCode });
     
     if (!Array.isArray(data) || data.length === 0) {
       console.log('No new dependencies found');
       return 0;
     }
 
-    // Filter by partner office_code
-    if (officeCodeFilter) {
-      const beforeCount = data.length;
-      data = data.filter((d: any) => d.codEscritorio === officeCodeFilter);
-      console.log(`Filtered dependencies: ${beforeCount} -> ${data.length} (office_code=${officeCodeFilter})`);
-      if (data.length === 0) return 0;
-    }
-
-    console.log(`Found ${data.length} new dependencies`);
+    console.log(`Found ${data.length} new dependencies (filtered by codEscritorio=${officeCode})`);
 
     // Step 1: Get unique codProcesso values and create processes in batch
     const uniqueCodProcessos = [...new Set(data.map((d: any) => d.codProcesso).filter(Boolean))];
     
-    // Batch upsert all processes first
     const processInserts = uniqueCodProcessos.map(codProcesso => {
       const dep = data.find((d: any) => d.codProcesso === codProcesso);
       return {
         cod_processo: codProcesso,
-        cod_escritorio: dep?.codEscritorio || null,
+        cod_escritorio: officeCode,
         process_number: dep?.numProcesso || dep?.titulo || `PROC-${codProcesso}`,
         instance: dep?.instancia ? String(dep.instancia) : null,
         partner_service_id: service.id,
@@ -396,10 +373,6 @@ async function syncDependencies(client: RestClient, supabase: any, service: any,
     }
 
     // DISABLED: Do not confirm receipt - legacy system is the official confirmer
-    // const confirmIds = data.map((d: any) => d.codDependencia);
-    // if (confirmIds.length > 0) {
-    //   await confirmReceipt(client, supabase, 'dependencies', confirmIds);
-    // }
     console.log(`Skipping confirmation for ${data.length} dependencies (legacy system handles confirmations)`);
 
     return data.length;
@@ -411,38 +384,18 @@ async function syncDependencies(client: RestClient, supabase: any, service: any,
 
 /**
  * Sync Movements (Andamentos)
- * GET /BuscaNovosAndamentos - returns max 500 unconfirmed movements
- * POST /ConfirmaRecebimentoAndamento - confirms receipt
+ * GET /BuscaNovosAndamentosPorEscritorio?codEscritorio={code} - returns max 500 unconfirmed movements filtered by office
  */
-async function syncMovements(client: RestClient, supabase: any, service: any, officeCodeFilter: number | null): Promise<number> {
+async function syncMovements(client: RestClient, supabase: any, service: any, officeCode: number): Promise<number> {
   try {
-    let data = await client.get('/BuscaNovosAndamentos');
+    const data = await client.get('/BuscaNovosAndamentosPorEscritorio', { codEscritorio: officeCode });
     
     if (!Array.isArray(data) || data.length === 0) {
       console.log('No new movements found');
       return 0;
     }
 
-    // Filter by partner office_code (movements have codEscritorio in some cases, or filter via known processes)
-    if (officeCodeFilter) {
-      const beforeCount = data.length;
-      // Movements may have codEscritorio field
-      if (data[0]?.codEscritorio !== undefined) {
-        data = data.filter((m: any) => m.codEscritorio === officeCodeFilter);
-      } else {
-        // Filter by checking if codProcesso belongs to our office
-        const knownProcesses = await supabase
-          .from('processes')
-          .select('cod_processo')
-          .eq('cod_escritorio', officeCodeFilter);
-        const knownSet = new Set((knownProcesses?.data || []).map((p: any) => p.cod_processo));
-        data = data.filter((m: any) => knownSet.has(m.codProcesso));
-      }
-      console.log(`Filtered movements: ${beforeCount} -> ${data.length} (office_code=${officeCodeFilter})`);
-      if (data.length === 0) return 0;
-    }
-
-    console.log(`Found ${data.length} new movements`);
+    console.log(`Found ${data.length} new movements (filtered by codEscritorio=${officeCode})`);
 
     // Get unique codProcesso values
     const uniqueCodProcessos = [...new Set(data.map((m: any) => m.codProcesso).filter(Boolean))];
@@ -478,10 +431,6 @@ async function syncMovements(client: RestClient, supabase: any, service: any, of
     }
 
     // DISABLED: Do not confirm receipt - legacy system is the official confirmer
-    // const confirmIds = data.map((m: any) => m.codAndamento);
-    // if (confirmIds.length > 0) {
-    //   await confirmReceipt(client, supabase, 'movements', confirmIds);
-    // }
     console.log(`Skipping confirmation for ${data.length} movements (legacy system handles confirmations)`);
 
     return data.length;
@@ -493,36 +442,18 @@ async function syncMovements(client: RestClient, supabase: any, service: any, of
 
 /**
  * Sync Documents
- * GET /BuscaNovosDocumentos - returns max 500 unconfirmed documents
- * POST /ConfirmaRecebimentoDocumento - confirms receipt
+ * GET /BuscaNovosDocumentosPorEscritorio?codEscritorio={code} - returns max 500 unconfirmed documents filtered by office
  */
-async function syncDocuments(client: RestClient, supabase: any, service: any, officeCodeFilter: number | null): Promise<number> {
+async function syncDocuments(client: RestClient, supabase: any, service: any, officeCode: number): Promise<number> {
   try {
-    let data = await client.get('/BuscaNovosDocumentos');
+    const data = await client.get('/BuscaNovosDocumentosPorEscritorio', { codEscritorio: officeCode });
     
     if (!Array.isArray(data) || data.length === 0) {
       console.log('No new documents found');
       return 0;
     }
 
-    // Filter by partner office_code
-    if (officeCodeFilter) {
-      const beforeCount = data.length;
-      if (data[0]?.codEscritorio !== undefined) {
-        data = data.filter((d: any) => d.codEscritorio === officeCodeFilter);
-      } else {
-        const knownProcesses = await supabase
-          .from('processes')
-          .select('cod_processo')
-          .eq('cod_escritorio', officeCodeFilter);
-        const knownSet = new Set((knownProcesses?.data || []).map((p: any) => p.cod_processo));
-        data = data.filter((d: any) => knownSet.has(d.codProcesso));
-      }
-      console.log(`Filtered documents: ${beforeCount} -> ${data.length} (office_code=${officeCodeFilter})`);
-      if (data.length === 0) return 0;
-    }
-
-    console.log(`Found ${data.length} new documents`);
+    console.log(`Found ${data.length} new documents (filtered by codEscritorio=${officeCode})`);
 
     // Get unique codProcesso and codAndamento values
     const uniqueCodProcessos = [...new Set(data.map((d: any) => d.codProcesso).filter(Boolean))];
@@ -569,10 +500,6 @@ async function syncDocuments(client: RestClient, supabase: any, service: any, of
     }
 
     // DISABLED: Do not confirm receipt - legacy system is the official confirmer
-    // const confirmIds = data.map((d: any) => d.codDocumento);
-    // if (confirmIds.length > 0) {
-    //   await confirmReceipt(client, supabase, 'documents', confirmIds);
-    // }
     console.log(`Skipping confirmation for ${data.length} documents (legacy system handles confirmations)`);
 
     return data.length;
@@ -584,11 +511,9 @@ async function syncDocuments(client: RestClient, supabase: any, service: any, of
 
 /**
  * Link orphan documents to processes and movements
- * Updates documents that have cod_processo but no process_id
  */
 async function linkOrphanDocuments(supabase: any): Promise<number> {
   try {
-    // Get orphan documents (have cod_processo but no process_id)
     const { data: orphanDocs, error: orphanError } = await supabase
       .from('process_documents')
       .select('id, cod_processo, cod_andamento')
@@ -603,11 +528,9 @@ async function linkOrphanDocuments(supabase: any): Promise<number> {
 
     console.log(`Found ${orphanDocs.length} orphan documents to link`);
 
-    // Get unique codProcesso values
     const uniqueCodProcessos = [...new Set(orphanDocs.map((d: any) => d.cod_processo))];
     const uniqueCodAndamentos = [...new Set(orphanDocs.map((d: any) => d.cod_andamento).filter(Boolean))];
 
-    // Get process mappings
     const { data: processes } = await supabase
       .from('processes')
       .select('id, cod_processo')
@@ -615,7 +538,6 @@ async function linkOrphanDocuments(supabase: any): Promise<number> {
 
     const processMap = new Map((processes || []).map((p: any) => [p.cod_processo, p.id]));
 
-    // Get movement mappings if any
     let movementMap = new Map();
     if (uniqueCodAndamentos.length > 0) {
       const { data: movements } = await supabase
@@ -626,7 +548,6 @@ async function linkOrphanDocuments(supabase: any): Promise<number> {
       movementMap = new Map((movements || []).map((m: any) => [m.cod_andamento, m.id]));
     }
 
-    // Update documents in batches
     let linkedCount = 0;
     for (const doc of orphanDocs) {
       const processId = processMap.get(doc.cod_processo);
@@ -635,10 +556,7 @@ async function linkOrphanDocuments(supabase: any): Promise<number> {
       if (processId) {
         const { error } = await supabase
           .from('process_documents')
-          .update({ 
-            process_id: processId,
-            movement_id: movementId
-          })
+          .update({ process_id: processId, movement_id: movementId })
           .eq('id', doc.id);
 
         if (!error) linkedCount++;
@@ -655,29 +573,20 @@ async function linkOrphanDocuments(supabase: any): Promise<number> {
 
 /**
  * Sync Covers (Capas) with Parties and Lawyers
- * GET /BuscaProcessosComCapaAtualizada - returns list of codProcesso with updated covers
+ * GET /BuscaProcessosComCapaAtualizada?codEscritorio={code} - returns list of codProcesso with updated covers
  * POST /BuscaDadosCapaEStatusVariosProcessos - gets cover details for multiple processes
- * POST /ConfirmaRecebimentoProcessosComCapaAtualizada - confirms receipt
  */
-async function syncCovers(client: RestClient, supabase: any, service: any, officeCodeFilter: number | null): Promise<number> {
+async function syncCovers(client: RestClient, supabase: any, service: any, officeCode: number): Promise<number> {
   try {
-    // First get processes with updated covers
-    let processesWithUpdates = await client.get('/BuscaProcessosComCapaAtualizada');
+    // Get processes with updated covers - filtered by codEscritorio
+    let processesWithUpdates = await client.get('/BuscaProcessosComCapaAtualizada', { codEscritorio: officeCode });
     
     if (!Array.isArray(processesWithUpdates) || processesWithUpdates.length === 0) {
       console.log('No processes with updated covers found');
       return 0;
     }
 
-    // Filter by partner office_code
-    if (officeCodeFilter) {
-      const beforeCount = processesWithUpdates.length;
-      processesWithUpdates = processesWithUpdates.filter((p: any) => p.codEscritorio === officeCodeFilter);
-      console.log(`Filtered covers: ${beforeCount} -> ${processesWithUpdates.length} (office_code=${officeCodeFilter})`);
-      if (processesWithUpdates.length === 0) return 0;
-    }
-
-    console.log(`Found ${processesWithUpdates.length} processes with updated covers`);
+    console.log(`Found ${processesWithUpdates.length} processes with updated covers (filtered by codEscritorio=${officeCode})`);
 
     // Create a map from codProcesso to codProcessoCapaAtualizada for confirmation
     const confirmationMap = new Map<number, number>();
@@ -706,7 +615,7 @@ async function syncCovers(client: RestClient, supabase: any, service: any, offic
     const uniqueCodProcessos = [...new Set(coversData.map((c: any) => c.codProcesso).filter(Boolean))];
     const uniqueCodAgrupadores = [...new Set(coversData.map((c: any) => c.codAgrupador).filter(Boolean))];
 
-    // First, auto-create any processes that don't exist yet
+    // Auto-create any processes that don't exist yet
     const { data: existingProcesses } = await supabase
       .from('processes')
       .select('id, cod_processo')
@@ -718,30 +627,24 @@ async function syncCovers(client: RestClient, supabase: any, service: any, offic
     if (missingCodProcessos.length > 0) {
       console.log(`Auto-creating ${missingCodProcessos.length} missing processes from covers`);
       
-      // Insert each missing process one by one to handle errors gracefully
       for (const codProcesso of missingCodProcessos) {
         const cover = coversData.find((c: any) => c.codProcesso === codProcesso);
         const processNumber = cover?.numProcesso || `unknown-${codProcesso}`;
         
-        // Try to update existing process by cod_processo first
         const { data: existingByCod } = await supabase
           .from('processes')
           .select('id')
           .eq('cod_processo', codProcesso)
           .single();
         
-        if (existingByCod) {
-          console.log(`Process already exists for cod_processo: ${codProcesso}`);
-          continue;
-        }
+        if (existingByCod) continue;
         
-        // Insert new process
         const { error: insertError } = await supabase
           .from('processes')
           .insert({
             process_number: processNumber,
             cod_processo: codProcesso,
-            cod_escritorio: cover?.codEscritorio || null,
+            cod_escritorio: officeCode,
             partner_service_id: service.id,
             partner_id: service.partner_id,
             status_code: 4,
@@ -750,21 +653,12 @@ async function syncCovers(client: RestClient, supabase: any, service: any, offic
           });
         
         if (insertError) {
-          // If process_number already exists, try to update it with cod_processo
           if (insertError.code === '23505') {
-            console.log(`Process number ${processNumber} already exists, updating cod_processo`);
-            const { error: updateError } = await supabase
+            await supabase
               .from('processes')
-              .update({ 
-                cod_processo: codProcesso,
-                cod_escritorio: cover?.codEscritorio || null,
-              })
+              .update({ cod_processo: codProcesso, cod_escritorio: officeCode })
               .eq('process_number', processNumber)
               .is('cod_processo', null);
-            
-            if (updateError) {
-              console.error(`Error updating process ${processNumber}:`, updateError);
-            }
           } else {
             console.error(`Error inserting process ${processNumber}:`, insertError);
           }
@@ -787,7 +681,6 @@ async function syncCovers(client: RestClient, supabase: any, service: any, offic
     
     const grouperMap = new Map((groupers || []).map((g: any) => [g.cod_agrupador, g.id]));
 
-
     let synced = 0;
     const confirmIds: number[] = [];
     const coverInserts: any[] = [];
@@ -802,7 +695,6 @@ async function syncCovers(client: RestClient, supabase: any, service: any, offic
         continue;
       }
 
-      // Extract cover data from dadosCapa array (API returns nested structure)
       const dadosCapa = Array.isArray(cover.dadosCapa) && cover.dadosCapa.length > 0 
         ? cover.dadosCapa[0] 
         : {};
@@ -810,14 +702,12 @@ async function syncCovers(client: RestClient, supabase: any, service: any, offic
       const codAgrupador = dadosCapa.codAgrupador || cover.codAgrupador || null;
       const grouperId = codAgrupador ? grouperMap.get(codAgrupador) || null : null;
 
-      // Parse valor from string like "R$ 5.000,00" to number
       let valorCausa = null;
       if (dadosCapa.valor) {
         const valorStr = dadosCapa.valor.replace(/[R$\s.]/g, '').replace(',', '.');
         valorCausa = parseFloat(valorStr) || null;
       }
 
-      // Prepare cover insert with data extracted from dadosCapa
       coverInserts.push({
         process_id: processId,
         grouper_id: grouperId,
@@ -839,14 +729,12 @@ async function syncCovers(client: RestClient, supabase: any, service: any, offic
         raw_data: cover,
       });
 
-      // Use codProcessoCapaAtualizada for confirmation if available
       const confirmId = confirmationMap.get(cover.codProcesso);
       if (confirmId) {
         confirmIds.push(confirmId);
       }
       synced++;
 
-      // Collect parties from autor and reu arrays (API structure)
       const allParties = [
         ...(Array.isArray(cover.autor) ? cover.autor : []),
         ...(Array.isArray(cover.reu) ? cover.reu : []),
@@ -868,7 +756,6 @@ async function syncCovers(client: RestClient, supabase: any, service: any, offic
         });
       }
 
-      // Collect lawyers from advogadoProcesso array
       if (Array.isArray(cover.advogadoProcesso)) {
         for (const adv of cover.advogadoProcesso) {
           if (!adv.nome) continue;
@@ -885,7 +772,6 @@ async function syncCovers(client: RestClient, supabase: any, service: any, offic
         }
       }
 
-      // Prepare process update
       processUpdates.push({
         id: processId,
         last_cover_sync_at: new Date().toISOString(),
@@ -906,14 +792,11 @@ async function syncCovers(client: RestClient, supabase: any, service: any, offic
       }
     }
 
-    // Batch upsert parties using new unique index
+    // Batch upsert parties
     if (partyInserts.length > 0) {
       const { error: partyError } = await supabase
         .from('process_parties')
-        .upsert(partyInserts, { 
-          onConflict: 'process_id,nome,tipo_polo',
-          ignoreDuplicates: true 
-        });
+        .upsert(partyInserts, { onConflict: 'process_id,nome,tipo_polo', ignoreDuplicates: true });
       
       if (partyError) {
         console.error('Error batch upserting parties:', partyError);
@@ -922,14 +805,11 @@ async function syncCovers(client: RestClient, supabase: any, service: any, offic
       }
     }
 
-    // Batch upsert lawyers using new unique index
+    // Batch upsert lawyers
     if (lawyerInserts.length > 0) {
       const { error: lawyerError } = await supabase
         .from('process_lawyers')
-        .upsert(lawyerInserts, { 
-          onConflict: 'process_id,cod_processo_polo,nome_advogado',
-          ignoreDuplicates: true 
-        });
+        .upsert(lawyerInserts, { onConflict: 'process_id,cod_processo_polo,nome_advogado', ignoreDuplicates: true });
       
       if (lawyerError) {
         console.error('Error batch upserting lawyers:', lawyerError);
@@ -945,15 +825,6 @@ async function syncCovers(client: RestClient, supabase: any, service: any, offic
     }
 
     // DISABLED: Do not confirm receipt - legacy system is the official confirmer
-    // if (confirmIds.length > 0) {
-    //   try {
-    //     const confirmArray = confirmIds.map(id => ({ codProcessoCapaAtualizada: id }));
-    //     await client.post('/ConfirmaRecebimentoProcessosComCapaAtualizada', confirmArray);
-    //     console.log(`Confirmed receipt of ${confirmIds.length} cover updates`);
-    //   } catch (error) {
-    //     console.error('Error confirming cover receipts:', error);
-    //   }
-    // }
     if (confirmIds.length > 0) {
       console.log(`Skipping confirmation for ${confirmIds.length} cover updates (legacy system handles confirmations)`);
     }
@@ -966,12 +837,7 @@ async function syncCovers(client: RestClient, supabase: any, service: any, offic
 }
 
 /**
- * Confirm receipt of synced items
- * API V3 expects objects with specific property names:
- * - Groupers: { codAgrupador: X }
- * - Dependencies: { codDependencia: X }
- * - Movements: { codAndamento: X }
- * - Documents: { codDocumento: X }
+ * Confirm receipt of synced items (DISABLED - legacy system handles confirmations)
  */
 async function confirmReceipt(client: RestClient, supabase: any, type: string, ids: number[]): Promise<void> {
   try {
@@ -982,7 +848,6 @@ async function confirmReceipt(client: RestClient, supabase: any, type: string, i
       documents: '/ConfirmaRecebimentoDocumento',
     };
 
-    // API expects object format with these property names (not "Confirmado" suffix)
     const confirmPropertyNames: Record<string, string> = {
       groupers: 'codAgrupador',
       dependencies: 'codDependencia',
@@ -994,16 +859,13 @@ async function confirmReceipt(client: RestClient, supabase: any, type: string, i
     const propName = confirmPropertyNames[type];
     if (!endpoint || !propName) return;
 
-    // Confirm in batches of 100 - API expects array of objects
     const batchSize = 100;
     for (let i = 0; i < ids.length; i += batchSize) {
       const batch = ids.slice(i, i + batchSize);
-      // Convert to array of objects with the correct property name
       const confirmArray = batch.map(id => ({ [propName]: id }));
       await client.post(endpoint, confirmArray);
     }
 
-    // Update confirmed status in database
     const tables: Record<string, string> = {
       groupers: 'process_groupers',
       dependencies: 'process_dependencies',

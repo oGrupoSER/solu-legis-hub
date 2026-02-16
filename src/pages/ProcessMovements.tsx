@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Search, Loader2, Download, FileText, ArrowUpDown } from "lucide-react";
+import { Search, Loader2, Download, FileText, ArrowUpDown, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { useNavigate } from "react-router-dom";
@@ -33,6 +33,31 @@ export default function ProcessMovements() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
+  const [syncing, setSyncing] = useState(false);
+
+  const handleSync = async () => {
+    try {
+      setSyncing(true);
+      toast.info("Sincronizando andamentos, documentos, capas...");
+      
+      const { data, error } = await supabase.functions.invoke("sync-process-updates", {
+        body: { syncType: "full" },
+      });
+
+      if (error) throw error;
+      
+      const results = data?.results || [];
+      const totalSynced = results.reduce((acc: number, r: any) => acc + (r.recordsSynced || 0), 0);
+      toast.success(`Sincronização concluída: ${totalSynced} registros sincronizados`);
+      // Refetch data
+      window.location.reload();
+    } catch (error) {
+      console.error("Sync error:", error);
+      toast.error("Erro ao sincronizar andamentos");
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const { data: movements = [], isLoading } = useQuery({
     queryKey: ["process-movements", searchQuery, sortOrder],
@@ -104,11 +129,23 @@ export default function ProcessMovements() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Andamentos</h1>
-          <p className="text-muted-foreground mt-1">Movimentações processuais recebidas via sincronização</p>
+          <p className="text-muted-foreground mt-1">Dados completos dos processos com status Cadastrado (capas, andamentos, documentos, agrupadores, dependências)</p>
         </div>
-        <Button variant="outline" onClick={handleExport} className="gap-2">
-          <Download className="h-4 w-4" /> Exportar
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={handleSync}
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            disabled={syncing}
+          >
+            <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
+            Sincronizar
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleExport} className="gap-2">
+            <Download className="h-4 w-4" /> Exportar
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
