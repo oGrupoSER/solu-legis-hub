@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { ProcessesTable } from "@/components/processes/ProcessesTable";
 import { ProcessDialog } from "@/components/processes/ProcessDialog";
+import { ProcessesStats } from "@/components/processes/ProcessesStats";
 import { supabase } from "@/integrations/supabase/client";
 
 const Processes = () => {
@@ -91,6 +92,8 @@ const Processes = () => {
           </Button>
         </div>
       </div>
+
+      <ProcessesStats refreshTrigger={refreshTrigger} />
 
       <Card>
         <CardHeader>
