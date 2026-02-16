@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileText, Download, ExternalLink, RefreshCw, CloudDownload } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { FileText, Download, ExternalLink, CloudDownload, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -22,10 +23,13 @@ interface ProcessDocumentsTabProps {
   processId: string;
 }
 
+type FilterType = "all" | "available" | "expired";
+
 export function ProcessDocumentsTab({ processId }: ProcessDocumentsTabProps) {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  const [filter, setFilter] = useState<FilterType>("all");
 
   useEffect(() => {
     fetchDocuments();
@@ -62,7 +66,7 @@ export function ProcessDocumentsTab({ processId }: ProcessDocumentsTabProps) {
 
       if (data.downloaded > 0) {
         toast.success(`${data.downloaded} documento(s) baixado(s) com sucesso`);
-        fetchDocuments(); // Refresh to show updated URLs
+        fetchDocuments();
       } else if (data.failed > 0) {
         toast.warning(`${data.failed} documento(s) falharam no download`);
       } else {
@@ -105,8 +109,17 @@ export function ProcessDocumentsTab({ processId }: ProcessDocumentsTabProps) {
   };
 
   const isStoredLocally = (doc: Document) => !!doc.storage_path;
+  const isExpired = (doc: Document) => !doc.storage_path && !doc.documento_url;
 
-  const pendingDownloads = documents.filter(d => !d.storage_path && d.documento_url).length;
+  const filteredDocuments = documents.filter((doc) => {
+    if (filter === "available") return isStoredLocally(doc);
+    if (filter === "expired") return isExpired(doc);
+    return true;
+  });
+
+  const storedCount = documents.filter(isStoredLocally).length;
+  const expiredCount = documents.filter(isExpired).length;
+  const pendingCount = documents.filter(d => !d.storage_path && d.documento_url).length;
 
   if (loading) {
     return (
@@ -145,96 +158,139 @@ export function ProcessDocumentsTab({ processId }: ProcessDocumentsTabProps) {
               <FileText className="h-5 w-5" />
               Documentos ({documents.length})
             </CardTitle>
-            <CardDescription>
-              Documentos anexados ao processo
-              {pendingDownloads > 0 && (
-                <span className="ml-2 text-amber-500">
-                  ({pendingDownloads} pendente{pendingDownloads > 1 ? "s" : ""} de download)
+            <CardDescription className="flex items-center gap-3 mt-1">
+              <span className="inline-flex items-center gap-1 text-green-600">
+                <CheckCircle2 className="h-3.5 w-3.5" /> {storedCount} disponíveis
+              </span>
+              {pendingCount > 0 && (
+                <span className="inline-flex items-center gap-1 text-amber-500">
+                  <CloudDownload className="h-3.5 w-3.5" /> {pendingCount} pendentes
+                </span>
+              )}
+              {expiredCount > 0 && (
+                <span className="inline-flex items-center gap-1 text-destructive">
+                  <XCircle className="h-3.5 w-3.5" /> {expiredCount} expirados
                 </span>
               )}
             </CardDescription>
           </div>
-          {pendingDownloads > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleDownloadAll}
-              disabled={downloading}
-              className="gap-2"
-            >
-              <CloudDownload className={`h-4 w-4 ${downloading ? "animate-pulse" : ""}`} />
-              Baixar Todos
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            <Select value={filter} onValueChange={(v) => setFilter(v as FilterType)}>
+              <SelectTrigger className="w-[180px] h-9">
+                <SelectValue placeholder="Filtrar por" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos ({documents.length})</SelectItem>
+                <SelectItem value="available">Disponíveis ({storedCount})</SelectItem>
+                <SelectItem value="expired">Expirados ({expiredCount})</SelectItem>
+              </SelectContent>
+            </Select>
+            {pendingCount > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadAll}
+                disabled={downloading}
+                className="gap-2"
+              >
+                <CloudDownload className={`h-4 w-4 ${downloading ? "animate-pulse" : ""}`} />
+                Baixar Todos
+              </Button>
+            )}
+          </div>
         </div>
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
-          {documents.map((doc) => (
-            <div
-              key={doc.id}
-              className="flex items-center justify-between border rounded-lg p-4"
-            >
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded bg-muted flex items-center justify-center">
-                  <FileText className="h-5 w-5 text-muted-foreground" />
-                </div>
-                <div>
-                  <p className="font-medium text-sm">
-                    {doc.nome_arquivo || `Documento ${doc.cod_documento}`}
-                  </p>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    {doc.tipo_documento && (
-                      <Badge variant="secondary" className="text-xs">
-                        {doc.tipo_documento}
-                      </Badge>
-                    )}
-                    <span>{formatFileSize(doc.tamanho_bytes)}</span>
-                    <span>Código: {doc.cod_documento}</span>
-                    {isStoredLocally(doc) ? (
-                      <Badge variant="outline" className="text-xs text-green-600 border-green-600">
-                        Armazenado
-                      </Badge>
+          {filteredDocuments.length === 0 && (
+            <div className="text-center py-6 text-muted-foreground text-sm">
+              Nenhum documento encontrado com o filtro selecionado.
+            </div>
+          )}
+          {filteredDocuments.map((doc) => {
+            const stored = isStoredLocally(doc);
+            const expired = isExpired(doc);
+
+            return (
+              <div
+                key={doc.id}
+                className={`flex items-center justify-between border rounded-lg p-4 ${
+                  expired ? "opacity-60 bg-muted/30 border-destructive/30" : ""
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`h-10 w-10 rounded flex items-center justify-center ${
+                    expired ? "bg-destructive/10" : stored ? "bg-green-500/10" : "bg-muted"
+                  }`}>
+                    {expired ? (
+                      <AlertTriangle className="h-5 w-5 text-destructive" />
                     ) : (
-                      <Badge variant="outline" className="text-xs text-amber-500 border-amber-500">
-                        Externo
-                      </Badge>
+                      <FileText className={`h-5 w-5 ${stored ? "text-green-600" : "text-muted-foreground"}`} />
                     )}
                   </div>
+                  <div>
+                    <p className={`font-medium text-sm ${expired ? "line-through text-muted-foreground" : ""}`}>
+                      {doc.nome_arquivo || `Documento ${doc.cod_documento}`}
+                    </p>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      {doc.tipo_documento && (
+                        <Badge variant="secondary" className="text-xs">
+                          {doc.tipo_documento}
+                        </Badge>
+                      )}
+                      <span>{formatFileSize(doc.tamanho_bytes)}</span>
+                      <span>Código: {doc.cod_documento}</span>
+                      {stored ? (
+                        <Badge variant="outline" className="text-xs text-green-600 border-green-600">
+                          <CheckCircle2 className="h-3 w-3 mr-1" />
+                          Disponível
+                        </Badge>
+                      ) : expired ? (
+                        <Badge variant="outline" className="text-xs text-destructive border-destructive">
+                          <XCircle className="h-3 w-3 mr-1" />
+                          Expirado
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs text-amber-500 border-amber-500">
+                          <CloudDownload className="h-3 w-3 mr-1" />
+                          Pendente
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  {!stored && doc.documento_url && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDownloadSingle(doc.id)}
+                      title="Baixar para o Storage"
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
+                  )}
+                  {stored && doc.documento_url && (
+                    <Button variant="outline" size="sm" asChild>
+                      <a 
+                        href={doc.documento_url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="gap-2"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                        Abrir
+                      </a>
+                    </Button>
+                  )}
+                  {expired && (
+                    <span className="text-xs text-destructive italic">Indisponível</span>
+                  )}
                 </div>
               </div>
-              
-              <div className="flex items-center gap-2">
-                {!isStoredLocally(doc) && doc.documento_url && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDownloadSingle(doc.id)}
-                    title="Baixar para o Storage"
-                  >
-                    <Download className="h-4 w-4" />
-                  </Button>
-                )}
-                {doc.documento_url && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    asChild
-                  >
-                    <a 
-                      href={doc.documento_url} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="gap-2"
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                      Abrir
-                    </a>
-                  </Button>
-                )}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </CardContent>
     </Card>
