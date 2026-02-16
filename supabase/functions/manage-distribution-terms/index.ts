@@ -203,7 +203,7 @@ serve(async (req) => {
               await apiRequest(service.service_url, '/CadastrarNome', jwtToken, 'POST', {
                 codEscritorio: officeCode,
                 nome: pt.term,
-                codTipoConsulta: 1,
+                codTipoConsulta: 3,
                 listInstancias: [1],
                 listAbrangencias: [] as string[],
               });
@@ -246,7 +246,7 @@ serve(async (req) => {
           const requestBody = {
             codEscritorio: officeCode,
             nome,
-            codTipoConsulta: 1,
+            codTipoConsulta: 3,
             listInstancias: [instanciaCode],
             listAbrangencias: [] as string[],
           };
