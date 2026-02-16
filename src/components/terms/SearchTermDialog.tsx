@@ -58,6 +58,7 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
       .from("partner_services")
       .select("id, service_name")
       .eq("partner_id", partnerId)
+      .eq("service_type", "terms")
       .eq("is_active", true);
     setServices(data || []);
   };
