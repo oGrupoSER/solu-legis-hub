@@ -35,8 +35,8 @@ export const ProcessesStats = ({ refreshTrigger }: { refreshTrigger?: number }) 
         switch (p.status_code) {
           case 1: s.pending++; break;      // Pendente
           case 4: s.registered++; break;   // Cadastrado
+          case 5: s.archived++; break;     // Arquivado
           case 7: s.error++; break;        // Erro na Validação
-          case 8: s.archived++; break;     // Arquivado
           default: s.other++; break;
         }
       });
