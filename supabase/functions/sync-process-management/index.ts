@@ -254,10 +254,65 @@ serve(async (req) => {
         break;
       }
 
+      case 'send-pending': {
+        // Send locally created processes (solucionare_status='pending') to Solucionare
+        await logger.start({ partner_service_id: service.id, sync_type: 'process_send_pending' });
+
+        const { data: pendingProcesses } = await supabase
+          .from('processes')
+          .select('id, process_number, uf, instance, cod_escritorio')
+          .eq('solucionare_status', 'pending')
+          .eq('partner_service_id', service.id);
+
+        let sent = 0;
+        const errors: string[] = [];
+
+        if (pendingProcesses && pendingProcesses.length > 0) {
+          console.log(`Sending ${pendingProcesses.length} pending processes to Solucionare`);
+          for (const proc of pendingProcesses) {
+            try {
+              const registerData = await client.post('/CadastraNovoProcesso', {
+                numProcesso: proc.process_number,
+                codEscritorio: officeCode,
+                UF: proc.uf || '',
+                instancia: parseInt(proc.instance || '0') || 0,
+              });
+
+              await supabase.from('processes').update({
+                cod_processo: registerData?.codProcesso || null,
+                status_code: 2,
+                status_description: STATUS_CODES[2],
+                solucionare_status: 'synced',
+                raw_data: registerData || {},
+                updated_at: new Date().toISOString(),
+              }).eq('id', proc.id);
+
+              sent++;
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : 'Unknown error';
+              console.error(`Error sending ${proc.process_number}:`, msg);
+              errors.push(`${proc.process_number}: ${msg}`);
+              await supabase.from('processes').update({
+                solucionare_status: 'error',
+                updated_at: new Date().toISOString(),
+              }).eq('id', proc.id);
+            }
+          }
+        }
+
+        await logger.success(sent);
+        result = {
+          success: true,
+          sent,
+          total: pendingProcesses?.length || 0,
+          errors: errors.length > 0 ? errors : undefined,
+        };
+        break;
+      }
+
       case 'sync': {
         // MACRO PROCESSO 1: Sync all processes from Solucionare for this office
         await logger.start({ partner_service_id: service.id, sync_type: 'process_sync' });
-
         console.log(`Syncing processes for codEscritorio=${officeCode} via BuscaProcessos`);
 
         const processesData = await client.get('/BuscaProcessos', { codEscritorio: officeCode });

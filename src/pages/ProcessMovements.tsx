@@ -1,18 +1,32 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Search, Loader2, Download, FileText, ArrowUpDown, RefreshCw } from "lucide-react";
+import { Search, Loader2, Download, FileText, RefreshCw, Eye, Clock, FolderOpen, Users } from "lucide-react";
 import { toast } from "sonner";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { useNavigate } from "react-router-dom";
+
+interface RegisteredProcess {
+  id: string;
+  process_number: string;
+  tribunal: string | null;
+  uf: string | null;
+  instance: string | null;
+  cod_processo: number | null;
+  cod_escritorio: number | null;
+  last_sync_at: string | null;
+  last_cover_sync_at: string | null;
+  movement_count?: number;
+  document_count?: number;
+}
 
 interface Movement {
   id: string;
@@ -20,20 +34,18 @@ interface Movement {
   description: string | null;
   movement_type: string | null;
   tipo_andamento: string | null;
-  movement_date: string | null;
   data_andamento: string | null;
   cod_andamento: number | null;
   created_at: string | null;
   processes?: { process_number: string; tribunal: string | null } | null;
-  document_count?: number;
 }
 
 export default function ProcessMovements() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterType, setFilterType] = useState("all");
-  const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
   const [syncing, setSyncing] = useState(false);
+  const [activeTab, setActiveTab] = useState("processes");
 
   const handleSync = async () => {
     try {
@@ -49,8 +61,8 @@ export default function ProcessMovements() {
       const results = data?.results || [];
       const totalSynced = results.reduce((acc: number, r: any) => acc + (r.recordsSynced || 0), 0);
       toast.success(`Sincronização concluída: ${totalSynced} registros sincronizados`);
-      // Refetch data
-      window.location.reload();
+      queryClient.invalidateQueries({ queryKey: ["registered-processes"] });
+      queryClient.invalidateQueries({ queryKey: ["all-movements"] });
     } catch (error) {
       console.error("Sync error:", error);
       toast.error("Erro ao sincronizar andamentos");
@@ -59,13 +71,69 @@ export default function ProcessMovements() {
     }
   };
 
-  const { data: movements = [], isLoading } = useQuery({
-    queryKey: ["process-movements", searchQuery, sortOrder],
+  // Fetch processes with status Cadastrado (status_code = 4)
+  const { data: processes = [], isLoading: loadingProcesses } = useQuery({
+    queryKey: ["registered-processes", searchQuery],
+    queryFn: async () => {
+      let query = supabase
+        .from("processes")
+        .select("id, process_number, tribunal, uf, instance, cod_processo, cod_escritorio, last_sync_at, last_cover_sync_at")
+        .eq("status_code", 4)
+        .order("process_number");
+
+      if (searchQuery) {
+        query = query.or(`process_number.ilike.%${searchQuery}%,tribunal.ilike.%${searchQuery}%`);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data as RegisteredProcess[];
+    },
+  });
+
+  // Fetch movement counts per process
+  const processIds = processes.map((p) => p.id);
+  const { data: movementCounts = {} } = useQuery({
+    queryKey: ["movement-counts", processIds],
+    enabled: processIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("process_movements")
+        .select("process_id");
+      if (error) throw error;
+      const counts: Record<string, number> = {};
+      data?.forEach((d) => {
+        if (d.process_id) counts[d.process_id] = (counts[d.process_id] || 0) + 1;
+      });
+      return counts;
+    },
+  });
+
+  // Fetch document counts per process
+  const { data: documentCounts = {} } = useQuery({
+    queryKey: ["document-counts", processIds],
+    enabled: processIds.length > 0,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("process_documents")
+        .select("process_id");
+      if (error) throw error;
+      const counts: Record<string, number> = {};
+      data?.forEach((d) => {
+        if (d.process_id) counts[d.process_id] = (counts[d.process_id] || 0) + 1;
+      });
+      return counts;
+    },
+  });
+
+  // Fetch all movements for the movements tab
+  const { data: movements = [], isLoading: loadingMovements } = useQuery({
+    queryKey: ["all-movements", searchQuery],
     queryFn: async () => {
       let query = supabase
         .from("process_movements")
         .select("*, processes(process_number, tribunal)")
-        .order("data_andamento", { ascending: sortOrder === "asc", nullsFirst: false })
+        .order("data_andamento", { ascending: false, nullsFirst: false })
         .limit(200);
 
       if (searchQuery) {
@@ -78,8 +146,8 @@ export default function ProcessMovements() {
     },
   });
 
-  // Get document counts
-  const { data: docCounts = {} } = useQuery({
+  // Fetch doc counts per movement
+  const { data: movDocCounts = {} } = useQuery({
     queryKey: ["movement-doc-counts"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -94,24 +162,16 @@ export default function ProcessMovements() {
     },
   });
 
-  // Get unique movement types for filter
-  const movementTypes = [...new Set(movements.map((m) => m.tipo_andamento).filter(Boolean))].sort();
-
-  const filteredMovements = movements.filter((m) => {
-    if (filterType !== "all" && m.tipo_andamento !== filterType) return false;
-    return true;
-  });
-
   const handleExport = () => {
     const csv = [
       ["Processo", "Tribunal", "Tipo", "Descrição", "Data", "Documentos"],
-      ...filteredMovements.map((m) => [
+      ...movements.map((m) => [
         (m.processes as any)?.process_number || "-",
         (m.processes as any)?.tribunal || "-",
         m.tipo_andamento || m.movement_type || "-",
         (m.description || "").replace(/,/g, ";").substring(0, 100),
         m.data_andamento ? format(new Date(m.data_andamento), "dd/MM/yyyy", { locale: ptBR }) : "-",
-        docCounts[m.id] || 0,
+        movDocCounts[m.id] || 0,
       ]),
     ].map((r) => r.join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
@@ -129,16 +189,10 @@ export default function ProcessMovements() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Andamentos</h1>
-          <p className="text-muted-foreground mt-1">Dados completos dos processos com status Cadastrado (capas, andamentos, documentos, agrupadores, dependências)</p>
+          <p className="text-muted-foreground mt-1">Dados completos dos processos cadastrados (capas, andamentos, documentos, agrupadores, dependências)</p>
         </div>
         <div className="flex gap-2">
-          <Button
-            onClick={handleSync}
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            disabled={syncing}
-          >
+          <Button onClick={handleSync} variant="outline" size="sm" className="gap-2" disabled={syncing}>
             <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
             Sincronizar
           </Button>
@@ -149,109 +203,171 @@ export default function ProcessMovements() {
       </div>
 
       {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Processos Cadastrados</CardTitle></CardHeader>
+          <CardContent><div className="text-2xl font-bold">{processes.length}</div></CardContent>
+        </Card>
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Total de Andamentos</CardTitle></CardHeader>
           <CardContent><div className="text-2xl font-bold">{movements.length}</div></CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Tipos Distintos</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{movementTypes.length}</div></CardContent>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Total de Documentos</CardTitle></CardHeader>
+          <CardContent><div className="text-2xl font-bold">{Object.values(documentCounts).reduce((a, b) => a + b, 0)}</div></CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Com Documentos</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{movements.filter((m) => docCounts[m.id]).length}</div></CardContent>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Com Andamentos</CardTitle></CardHeader>
+          <CardContent><div className="text-2xl font-bold">{processes.filter((p) => movementCounts[p.id]).length}</div></CardContent>
         </Card>
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-6 flex gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar por descrição ou tipo..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10" />
-          </div>
-          <Select value={filterType} onValueChange={setFilterType}>
-            <SelectTrigger className="w-[220px]"><SelectValue placeholder="Tipo de Andamento" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos os Tipos</SelectItem>
-              {movementTypes.map((t) => (
-                <SelectItem key={t} value={t!}>{t}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button variant="outline" size="icon" onClick={() => setSortOrder((s) => s === "desc" ? "asc" : "desc")}>
-            <ArrowUpDown className="h-4 w-4" />
-          </Button>
-        </CardContent>
-      </Card>
+      {/* Search */}
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input placeholder="Buscar..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10" />
+      </div>
 
-      {/* Table */}
-      <Card>
-        <CardContent className="p-0">
-          <div className="border rounded-lg overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Processo</TableHead>
-                  <TableHead>Tribunal</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead className="max-w-[300px]">Descrição</TableHead>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Docs</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="processes" className="gap-2">
+            <Users className="h-4 w-4" /> Processos
+          </TabsTrigger>
+          <TabsTrigger value="movements" className="gap-2">
+            <Clock className="h-4 w-4" /> Andamentos
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="processes">
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8">
-                      <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
-                    </TableCell>
+                    <TableHead>Número do Processo</TableHead>
+                    <TableHead>Escritório</TableHead>
+                    <TableHead>Tribunal</TableHead>
+                    <TableHead>UF</TableHead>
+                    <TableHead>Andamentos</TableHead>
+                    <TableHead>Documentos</TableHead>
+                    <TableHead>Última Sincronização</TableHead>
+                    <TableHead className="w-[60px]">Ações</TableHead>
                   </TableRow>
-                ) : filteredMovements.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                      <FileText className="h-10 w-10 mx-auto mb-2 text-muted-foreground/50" />
-                      Nenhum andamento encontrado
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredMovements.map((mov) => (
-                    <TableRow key={mov.id} className="cursor-pointer hover:bg-muted/50" onClick={() => mov.process_id && navigate(`/processes/${mov.process_id}`)}>
-                      <TableCell className="font-mono text-sm">
-                        {(mov.processes as any)?.process_number || "-"}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{(mov.processes as any)?.tribunal || "-"}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{mov.tipo_andamento || mov.movement_type || "-"}</Badge>
-                      </TableCell>
-                      <TableCell className="max-w-[300px] truncate text-sm">
-                        {mov.description || "-"}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                        {mov.data_andamento
-                          ? format(new Date(mov.data_andamento), "dd/MM/yyyy", { locale: ptBR })
-                          : "-"}
-                      </TableCell>
-                      <TableCell>
-                        {docCounts[mov.id] ? (
-                          <Badge variant="outline" className="gap-1">
-                            <FileText className="h-3 w-3" /> {docCounts[mov.id]}
-                          </Badge>
-                        ) : (
-                          <span className="text-muted-foreground text-sm">-</span>
-                        )}
+                </TableHeader>
+                <TableBody>
+                  {loadingProcesses ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-8">
+                        <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+                  ) : processes.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                        <FileText className="h-10 w-10 mx-auto mb-2 text-muted-foreground/50" />
+                        Nenhum processo com status Cadastrado
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    processes.map((proc) => (
+                      <TableRow key={proc.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/processes/${proc.id}`)}>
+                        <TableCell className="font-mono text-sm">{proc.process_number}</TableCell>
+                        <TableCell>{proc.cod_escritorio || "-"}</TableCell>
+                        <TableCell>{proc.tribunal || "-"}</TableCell>
+                        <TableCell>{proc.uf || "-"}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="gap-1">
+                            <Clock className="h-3 w-3" /> {movementCounts[proc.id] || 0}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="gap-1">
+                            <FolderOpen className="h-3 w-3" /> {documentCounts[proc.id] || 0}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {proc.last_sync_at ? new Date(proc.last_sync_at).toLocaleString("pt-BR") : "-"}
+                        </TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); navigate(`/processes/${proc.id}`); }}>
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="movements">
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Processo</TableHead>
+                    <TableHead>Tribunal</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead className="max-w-[300px]">Descrição</TableHead>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Docs</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loadingMovements ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8">
+                        <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
+                      </TableCell>
+                    </TableRow>
+                  ) : movements.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                        <FileText className="h-10 w-10 mx-auto mb-2 text-muted-foreground/50" />
+                        Nenhum andamento encontrado
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    movements.map((mov) => (
+                      <TableRow key={mov.id} className="cursor-pointer hover:bg-muted/50" onClick={() => mov.process_id && navigate(`/processes/${mov.process_id}`)}>
+                        <TableCell className="font-mono text-sm">
+                          {(mov.processes as any)?.process_number || "-"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{(mov.processes as any)?.tribunal || "-"}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">{mov.tipo_andamento || mov.movement_type || "-"}</Badge>
+                        </TableCell>
+                        <TableCell className="max-w-[300px] truncate text-sm">
+                          {mov.description || "-"}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                          {mov.data_andamento
+                            ? format(new Date(mov.data_andamento), "dd/MM/yyyy", { locale: ptBR })
+                            : "-"}
+                        </TableCell>
+                        <TableCell>
+                          {movDocCounts[mov.id] ? (
+                            <Badge variant="outline" className="gap-1">
+                              <FileText className="h-3 w-3" /> {movDocCounts[mov.id]}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">-</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

@@ -16,8 +16,15 @@ const Processes = () => {
   const handleSync = async () => {
     try {
       setSyncing(true);
-      toast.info("Sincronizando lista de processos CNJ...");
       
+      // Step 1: Send pending processes to Solucionare
+      toast.info("Enviando processos pendentes e sincronizando...");
+      const { data: sendData } = await supabase.functions.invoke("sync-process-management", {
+        body: { action: "send-pending" },
+      });
+      const sent = sendData?.sent || 0;
+
+      // Step 2: Fetch/update from Solucionare
       const { data, error } = await supabase.functions.invoke("sync-process-management", {
         body: { action: "sync" },
       });
@@ -25,8 +32,10 @@ const Processes = () => {
       if (error) throw error;
       
       const synced = data?.synced || 0;
-      const pendingChecked = data?.pendingChecked || 0;
-      toast.success(`Sincronização concluída: ${synced} processos atualizados${pendingChecked > 0 ? `, ${pendingChecked} status verificados` : ''}`);
+      const parts = [];
+      if (sent > 0) parts.push(`${sent} enviados`);
+      if (synced > 0) parts.push(`${synced} atualizados`);
+      toast.success(`Sincronização concluída${parts.length > 0 ? ': ' + parts.join(', ') : ''}`);
       setRefreshTrigger(prev => prev + 1);
     } catch (error) {
       console.error("Sync error:", error);
