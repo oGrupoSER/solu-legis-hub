@@ -7,11 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Search, Download, RefreshCw, Users } from "lucide-react";
+import { Plus, Search, Download, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { SearchTermDialog } from "@/components/terms/SearchTermDialog";
 import { TermActionsDropdown } from "@/components/terms/TermActionsDropdown";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
+import { ClientBadges } from "@/components/shared/ClientBadges";
 
 interface SearchTerm {
   id: string;
@@ -274,22 +275,7 @@ const PublicationTerms = () => {
                         <TableCell className="text-sm">{term.partners?.name || "-"}</TableCell>
                         <TableCell className="text-sm">{term.partner_services?.service_name || "-"}</TableCell>
                         <TableCell>
-                          {clients.length > 0 ? (
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger>
-                                  <Badge variant="secondary" className="gap-1">
-                                    <Users className="h-3 w-3" /> {clients.length}
-                                  </Badge>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <div className="text-xs">{clients.join(", ")}</div>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          ) : (
-                            <span className="text-muted-foreground text-sm">-</span>
-                          )}
+                          <ClientBadges clients={clients} />
                         </TableCell>
                         <TableCell>
                           <Badge variant={term.is_active ? "default" : "secondary"}>

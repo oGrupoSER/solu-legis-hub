@@ -13,8 +13,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Plus, Search, Loader2, Users, Download, RefreshCw } from "lucide-react";
+import { Plus, Search, Loader2, Download, RefreshCw } from "lucide-react";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
+import { ClientBadges } from "@/components/shared/ClientBadges";
 
 interface DistributionTerm {
   id: string;
@@ -308,16 +309,7 @@ export default function DistributionTerms() {
                         <TableCell className="text-sm">{term.partners?.name || "-"}</TableCell>
                         <TableCell className="text-sm">{term.partner_services?.service_name || "-"}</TableCell>
                         <TableCell>
-                          {clients.length > 0 ? (
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger>
-                                  <Badge variant="secondary" className="gap-1"><Users className="h-3 w-3" /> {clients.length}</Badge>
-                                </TooltipTrigger>
-                                <TooltipContent><div className="text-xs">{clients.join(", ")}</div></TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          ) : <span className="text-muted-foreground text-sm">-</span>}
+                          <ClientBadges clients={clients} />
                         </TableCell>
                         <TableCell>
                           <Badge variant={term.is_active ? "default" : "secondary"}>

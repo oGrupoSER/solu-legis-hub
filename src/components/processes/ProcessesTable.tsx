@@ -7,8 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Eye, Search, ChevronLeft, ChevronRight, Users } from "lucide-react";
+import { Eye, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { ClientBadges } from "@/components/shared/ClientBadges";
 
 interface Process {
   id: string;
@@ -138,23 +139,7 @@ export function ProcessesTable() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {clients.length > 0 ? (
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger>
-                            <Badge variant="secondary" className="gap-1">
-                              <Users className="h-3 w-3" />
-                              {clients.length}
-                            </Badge>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <div className="text-xs">{clients.join(", ")}</div>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    ) : (
-                      <span className="text-muted-foreground text-sm">-</span>
-                    )}
+                    <ClientBadges clients={clients} />
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {process.last_sync_at
