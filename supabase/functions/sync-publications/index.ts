@@ -54,12 +54,25 @@ Deno.serve(async (req) => {
       try {
         validateService(service);
 
+        // Get partner's office_code for filtering publications
+        const { data: partnerData } = await supabase
+          .from('partners')
+          .select('office_code')
+          .eq('id', service.partner_id)
+          .single();
+        
+        const partnerOfficeCode = partnerData?.office_code;
+        if (!partnerOfficeCode) {
+          throw new Error(`Partner ${service.partner_id} has no office_code configured. Cannot filter publications.`);
+        }
+
         await logger.start({
           partner_service_id: service.id,
           sync_type: 'publications',
         });
 
         console.log(`Syncing publications for service: ${service.service_name}`);
+        console.log(`Partner office_code filter: ${partnerOfficeCode}`);
         console.log(`Service URL: ${service.service_url}`);
         console.log(`Nome Relacional: ${service.nome_relacional}`);
         console.log(`Token: ${service.token ? '***' + service.token.slice(-4) : 'NOT SET'}`);
@@ -96,11 +109,9 @@ Deno.serve(async (req) => {
 
         // Sync publications using REST API
         if (start_date && end_date) {
-          // Use period search
-          totalSynced = await syncByPeriod(restClient, supabase, service, terms, start_date, end_date);
+          totalSynced = await syncByPeriod(restClient, supabase, service, terms, start_date, end_date, partnerOfficeCode);
         } else {
-          // Use new publications search
-          totalSynced = await syncNewPublications(restClient, supabase, service, terms);
+          totalSynced = await syncNewPublications(restClient, supabase, service, terms, partnerOfficeCode);
         }
 
         // Update last sync timestamp
@@ -168,7 +179,8 @@ async function syncByPeriod(
   service: any,
   terms: any[],
   startDate: string,
-  endDate: string
+  endDate: string,
+  officeCode: number
 ): Promise<number> {
   console.log(`Fetching publications from ${startDate} to ${endDate}`);
 
@@ -186,7 +198,7 @@ async function syncByPeriod(
 
   const publicationsRaw = (result && (result.ArrayOfPublicacoes?.Publicacoes ?? result.Publicacoes ?? result)) || [];
   const publications = Array.isArray(publicationsRaw) ? publicationsRaw : [publicationsRaw];
-  return await processPublications(supabase, service, publications, terms);
+  return await processPublications(supabase, service, publications, terms, officeCode);
 }
 
 /**
@@ -197,7 +209,8 @@ async function syncNewPublications(
   restClient: RestClient,
   supabase: any,
   service: any,
-  terms: any[]
+  terms: any[],
+  officeCode: number
 ): Promise<number> {
   console.log('Fetching publications in batches of up to 500...');
   
@@ -232,7 +245,7 @@ async function syncNewPublications(
       }
       
       // Process batch
-      const synced = await processPublications(supabase, service, publications, terms);
+      const synced = await processPublications(supabase, service, publications, terms, officeCode);
       totalSynced += synced;
       
       console.log(`=== Batch ${batchNumber} Summary ===`);
@@ -290,14 +303,23 @@ async function processPublications(
   supabase: any,
   service: any,
   publications: any[],
-  terms: any[]
+  terms: any[],
+  officeCode: number
 ): Promise<number> {
-  console.log(`Processing ${publications.length} publications...`);
+  console.log(`Processing ${publications.length} publications (filtering by codEscritorio=${officeCode})...`);
   
   const publicationsToInsert = [];
+  let skippedByOffice = 0;
   
   for (const pub of publications) {
     try {
+      // Filter by partner's office code - only keep publications for this office
+      const pubOfficeCode = pub.codEscritorio;
+      if (pubOfficeCode !== undefined && pubOfficeCode !== null && Number(pubOfficeCode) !== officeCode) {
+        skippedByOffice++;
+        continue;
+      }
+
       // Extract publication data according to Solucionare API docs (pages 13-14)
       const codPublicacao = pub.codPublicacao; // Unique ID
       const content = pub.conteudoPublicacao || ''; // Full content
@@ -332,8 +354,10 @@ async function processPublications(
     }
   }
   
+  console.log(`Filtered: ${skippedByOffice} publications skipped (different codEscritorio), ${publicationsToInsert.length} to insert`);
+  
   if (publicationsToInsert.length === 0) {
-    console.log('No valid publications to insert');
+    console.log('No valid publications to insert after office_code filtering');
     return 0;
   }
   
