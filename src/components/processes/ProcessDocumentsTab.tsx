@@ -2,8 +2,9 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileText, Download, ExternalLink } from "lucide-react";
+import { FileText, Download, ExternalLink, RefreshCw, CloudDownload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface Document {
   id: string;
@@ -11,6 +12,7 @@ interface Document {
   tipo_documento: string | null;
   nome_arquivo: string | null;
   documento_url: string | null;
+  storage_path: string | null;
   tamanho_bytes: number | null;
   created_at: string | null;
   is_confirmed: boolean | null;
@@ -23,6 +25,7 @@ interface ProcessDocumentsTabProps {
 export function ProcessDocumentsTab({ processId }: ProcessDocumentsTabProps) {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     fetchDocuments();
@@ -46,12 +49,64 @@ export function ProcessDocumentsTab({ processId }: ProcessDocumentsTabProps) {
     }
   };
 
+  const handleDownloadAll = async () => {
+    try {
+      setDownloading(true);
+      toast.info("Baixando documentos da Solucionare para o Storage...");
+      
+      const { data, error } = await supabase.functions.invoke("download-process-documents", {
+        body: { processId, limit: 50 },
+      });
+
+      if (error) throw error;
+
+      if (data.downloaded > 0) {
+        toast.success(`${data.downloaded} documento(s) baixado(s) com sucesso`);
+        fetchDocuments(); // Refresh to show updated URLs
+      } else if (data.failed > 0) {
+        toast.warning(`${data.failed} documento(s) falharam no download`);
+      } else {
+        toast.info("Todos os documentos já estão armazenados localmente");
+      }
+    } catch (error) {
+      console.error("Error downloading documents:", error);
+      toast.error("Erro ao baixar documentos");
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const handleDownloadSingle = async (docId: string) => {
+    try {
+      toast.info("Baixando documento...");
+      const { data, error } = await supabase.functions.invoke("download-process-documents", {
+        body: { documentId: docId },
+      });
+
+      if (error) throw error;
+
+      if (data.downloaded > 0) {
+        toast.success("Documento baixado com sucesso");
+        fetchDocuments();
+      } else {
+        toast.warning("Não foi possível baixar o documento");
+      }
+    } catch (error) {
+      console.error("Error downloading document:", error);
+      toast.error("Erro ao baixar documento");
+    }
+  };
+
   const formatFileSize = (bytes: number | null) => {
     if (!bytes) return "-";
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
+
+  const isStoredLocally = (doc: Document) => !!doc.storage_path;
+
+  const pendingDownloads = documents.filter(d => !d.storage_path && d.documento_url).length;
 
   if (loading) {
     return (
@@ -84,13 +139,34 @@ export function ProcessDocumentsTab({ processId }: ProcessDocumentsTabProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <FileText className="h-5 w-5" />
-          Documentos ({documents.length})
-        </CardTitle>
-        <CardDescription>
-          Documentos anexados ao processo
-        </CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Documentos ({documents.length})
+            </CardTitle>
+            <CardDescription>
+              Documentos anexados ao processo
+              {pendingDownloads > 0 && (
+                <span className="ml-2 text-amber-500">
+                  ({pendingDownloads} pendente{pendingDownloads > 1 ? "s" : ""} de download)
+                </span>
+              )}
+            </CardDescription>
+          </div>
+          {pendingDownloads > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadAll}
+              disabled={downloading}
+              className="gap-2"
+            >
+              <CloudDownload className={`h-4 w-4 ${downloading ? "animate-pulse" : ""}`} />
+              Baixar Todos
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
@@ -115,27 +191,48 @@ export function ProcessDocumentsTab({ processId }: ProcessDocumentsTabProps) {
                     )}
                     <span>{formatFileSize(doc.tamanho_bytes)}</span>
                     <span>Código: {doc.cod_documento}</span>
+                    {isStoredLocally(doc) ? (
+                      <Badge variant="outline" className="text-xs text-green-600 border-green-600">
+                        Armazenado
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-xs text-amber-500 border-amber-500">
+                        Externo
+                      </Badge>
+                    )}
                   </div>
                 </div>
               </div>
               
-              {doc.documento_url && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  asChild
-                >
-                  <a 
-                    href={doc.documento_url} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="gap-2"
+              <div className="flex items-center gap-2">
+                {!isStoredLocally(doc) && doc.documento_url && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDownloadSingle(doc.id)}
+                    title="Baixar para o Storage"
                   >
-                    <ExternalLink className="h-4 w-4" />
-                    Abrir
-                  </a>
-                </Button>
-              )}
+                    <Download className="h-4 w-4" />
+                  </Button>
+                )}
+                {doc.documento_url && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    asChild
+                  >
+                    <a 
+                      href={doc.documento_url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="gap-2"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      Abrir
+                    </a>
+                  </Button>
+                )}
+              </div>
             </div>
           ))}
         </div>
