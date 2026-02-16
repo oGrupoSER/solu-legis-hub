@@ -205,7 +205,7 @@ serve(async (req) => {
                 nome: pt.term,
                 codTipoConsulta: 1,
                 listInstancias: [1],
-                listAbrangencias: ['NACIONAL'],
+                listAbrangencias: [] as string[],
               });
               await supabase.from('search_terms').update({ solucionare_status: 'synced', updated_at: new Date().toISOString() }).eq('id', pt.id);
               retriedCount++;
@@ -226,8 +226,6 @@ serve(async (req) => {
         if (!nome) throw new Error('nome is required');
 
         const instanciaCode = typeof instancia === 'number' ? instancia : parseInt(instancia) || 1;
-        // listAbrangencias is Collection of string per API docs
-        const abrangenciaStr = typeof abrangencia === 'string' ? abrangencia : String(abrangencia || 'NACIONAL');
 
         // DEDUPLICATION: Check if term exists
         const { data: existing } = await supabase
@@ -244,13 +242,13 @@ serve(async (req) => {
         if (existing) {
           termRecord = existing;
         } else {
-          // Send full body with string abrangencias per API docs
+          // API requires listAbrangencias but existing records all use empty array
           const requestBody = {
             codEscritorio: officeCode,
             nome,
             codTipoConsulta: 1,
             listInstancias: [instanciaCode],
-            listAbrangencias: [abrangenciaStr],
+            listAbrangencias: [] as string[],
           };
           console.log(`[registerName] Request body:`, JSON.stringify(requestBody));
           result = await apiRequest(service.service_url, '/CadastrarNome', jwtToken, 'POST', requestBody);
@@ -358,6 +356,20 @@ serve(async (req) => {
 
       case 'listSystems': {
         result = await apiRequest(service.service_url, '/BuscaStatusSistemas', jwtToken);
+        break;
+      }
+
+      case 'listAllNames': {
+        // Try without any filter to see all names across all offices
+        try {
+          result = await apiRequest(service.service_url, '/BuscaNomesCadastrados', jwtToken);
+        } catch (e: any) {
+          if (e.message?.includes('400')) {
+            result = [];
+          } else {
+            throw e;
+          }
+        }
         break;
       }
 
