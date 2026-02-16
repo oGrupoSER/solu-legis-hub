@@ -16,6 +16,7 @@ import { ptBR } from "date-fns/locale";
 import { Plus, Search, Loader2, Download, RefreshCw } from "lucide-react";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { ClientBadges } from "@/components/shared/ClientBadges";
+import { ClientSelector } from "@/components/shared/ClientSelector";
 
 interface DistributionTerm {
   id: string;
@@ -36,6 +37,8 @@ export default function DistributionTerms() {
   const [newTermDialog, setNewTermDialog] = useState(false);
   const [selectedService, setSelectedService] = useState<string>("");
   const [newTerm, setNewTerm] = useState({ nome: "", instancia: "1", abrangencia: "NACIONAL" });
+  const [selectedClients, setSelectedClients] = useState<string[]>([]);
+  const [clientError, setClientError] = useState(false);
 
   // Fetch distribution terms
   const { data: terms = [], isLoading } = useQuery({
@@ -67,18 +70,42 @@ export default function DistributionTerms() {
 
   // Register name mutation
   const registerMutation = useMutation({
-    mutationFn: async (params: { nome: string; instancia: number; abrangencia: string }) => {
+    mutationFn: async (params: { nome: string; instancia: number; abrangencia: string; clientIds: string[] }) => {
       if (!selectedService) throw new Error("Selecione um serviço");
+      if (params.clientIds.length === 0) throw new Error("Selecione ao menos um cliente");
       const { data, error } = await supabase.functions.invoke("manage-distribution-terms", {
         body: { action: "registerName", serviceId: selectedService, ...params },
       });
       if (error) throw error;
+
+      // After registration, link to clients via search_terms
+      // Find the search_term that was just created/exists for this name
+      const { data: termData } = await supabase
+        .from("search_terms")
+        .select("id")
+        .eq("term", params.nome)
+        .eq("term_type", "distribution")
+        .eq("partner_service_id", selectedService)
+        .maybeSingle();
+
+      if (termData) {
+        // Delete existing links and re-insert
+        await supabase.from("client_search_terms").delete().eq("search_term_id", termData.id);
+        const links = params.clientIds.map((clientId) => ({
+          search_term_id: termData.id,
+          client_system_id: clientId,
+        }));
+        await supabase.from("client_search_terms").insert(links);
+      }
+
       return data;
     },
     onSuccess: () => {
       toast.success("Nome cadastrado com sucesso");
       setNewTermDialog(false);
       setNewTerm({ nome: "", instancia: "1", abrangencia: "NACIONAL" });
+      setSelectedClients([]);
+      setClientError(false);
       queryClient.invalidateQueries({ queryKey: ["distribution-terms"] });
     },
     onError: (error) => toast.error(`Erro ao cadastrar: ${error.message}`),
@@ -223,12 +250,20 @@ export default function DistributionTerms() {
                     </Select>
                   </div>
                 </div>
+
+                <ClientSelector
+                  serviceId={selectedService || undefined}
+                  selectedIds={selectedClients}
+                  onChange={(ids) => { setSelectedClients(ids); setClientError(false); }}
+                  error={clientError}
+                />
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setNewTermDialog(false)}>Cancelar</Button>
                 <Button onClick={() => {
                   if (!newTerm.nome.trim()) { toast.error("Digite um nome"); return; }
-                  registerMutation.mutate({ nome: newTerm.nome, instancia: parseInt(newTerm.instancia), abrangencia: newTerm.abrangencia });
+                  if (selectedClients.length === 0) { setClientError(true); toast.error("Selecione ao menos um cliente"); return; }
+                  registerMutation.mutate({ nome: newTerm.nome, instancia: parseInt(newTerm.instancia), abrangencia: newTerm.abrangencia, clientIds: selectedClients });
                 }} disabled={registerMutation.isPending}>
                   {registerMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Cadastrar

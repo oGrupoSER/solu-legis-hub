@@ -1,26 +1,16 @@
 import { useState, useEffect } from "react";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Info } from "lucide-react";
+import { ClientSelector } from "@/components/shared/ClientSelector";
 
 interface ProcessDialogProps {
   open: boolean;
@@ -34,27 +24,22 @@ interface PartnerService {
   partner_id: string;
 }
 
-interface ClientSystem {
-  id: string;
-  name: string;
-}
-
 const UF_OPTIONS = [
-  "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA",
-  "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN",
-  "RS", "RO", "RR", "SC", "SP", "SE", "TO"
+  "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA",
+  "MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN",
+  "RS","RO","RR","SC","SP","SE","TO"
 ];
 
 export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogProps) {
   const [loading, setLoading] = useState(false);
   const [services, setServices] = useState<PartnerService[]>([]);
-  const [clientSystems, setClientSystems] = useState<ClientSystem[]>([]);
   const [partnerOfficeCode, setPartnerOfficeCode] = useState<number | null>(null);
   const [duplicateInfo, setDuplicateInfo] = useState<string | null>(null);
+  const [selectedClients, setSelectedClients] = useState<string[]>([]);
+  const [clientError, setClientError] = useState(false);
   const [formData, setFormData] = useState({
     processNumber: "",
     serviceId: "",
-    clientSystemId: "",
     uf: "",
     instance: "1",
   });
@@ -68,10 +53,8 @@ export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogPr
 
   useEffect(() => {
     if (formData.serviceId) {
-      fetchClientSystems(formData.serviceId);
       fetchPartnerOfficeCode(formData.serviceId);
     } else {
-      setClientSystems([]);
       setPartnerOfficeCode(null);
     }
   }, [formData.serviceId]);
@@ -80,10 +63,7 @@ export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogPr
   useEffect(() => {
     const checkDuplicate = async () => {
       const pn = formData.processNumber.trim();
-      if (pn.length < 10) {
-        setDuplicateInfo(null);
-        return;
-      }
+      if (pn.length < 10) { setDuplicateInfo(null); return; }
       const { data } = await supabase
         .from("processes")
         .select("id, process_number, client_processes(client_systems(name))")
@@ -96,14 +76,13 @@ export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogPr
           .filter(Boolean) || [];
         setDuplicateInfo(
           clients.length > 0
-            ? `Processo já monitorado (clientes: ${clients.join(", ")}). Será apenas vinculado ao novo cliente.`
-            : "Processo já existe no sistema. Será apenas vinculado ao novo cliente."
+            ? `Processo já monitorado (clientes: ${clients.join(", ")}). Será apenas vinculado ao(s) novo(s) cliente(s).`
+            : "Processo já existe no sistema. Será apenas vinculado ao(s) novo(s) cliente(s)."
         );
       } else {
         setDuplicateInfo(null);
       }
     };
-
     const timeout = setTimeout(checkDuplicate, 500);
     return () => clearTimeout(timeout);
   }, [formData.processNumber]);
@@ -114,29 +93,10 @@ export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogPr
       .select("id, service_name, partner_id")
       .eq("service_type", "processes")
       .eq("is_active", true);
-
     if (error) return;
     setServices(data || []);
     if (data && data.length === 1) {
       setFormData(prev => ({ ...prev, serviceId: data[0].id }));
-    }
-  };
-
-  const fetchClientSystems = async (serviceId: string) => {
-    const { data, error } = await supabase
-      .from("client_system_services")
-      .select("client_systems(id, name)")
-      .eq("partner_service_id", serviceId)
-      .eq("is_active", true);
-
-    if (error) return;
-    const clients = (data || [])
-      .map((item: any) => item.client_systems)
-      .filter(Boolean);
-
-    setClientSystems(clients);
-    if (clients.length === 1) {
-      setFormData(prev => ({ ...prev, clientSystemId: clients[0].id }));
     }
   };
 
@@ -146,7 +106,6 @@ export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogPr
       .select("partners(office_code)")
       .eq("id", serviceId)
       .single();
-
     const oc = (data?.partners as any)?.office_code as number | null;
     setPartnerOfficeCode(oc);
   };
@@ -159,6 +118,12 @@ export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogPr
       return;
     }
 
+    if (selectedClients.length === 0) {
+      setClientError(true);
+      toast.error("Selecione ao menos um cliente");
+      return;
+    }
+
     if (!partnerOfficeCode) {
       toast.error("Parceiro não possui código de escritório configurado");
       return;
@@ -167,25 +132,28 @@ export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogPr
     try {
       setLoading(true);
 
-      const { data, error } = await supabase.functions.invoke("sync-process-management", {
-        body: {
-          action: "register",
-          serviceId: formData.serviceId || undefined,
-          processNumber: formData.processNumber.trim(),
-          clientSystemId: formData.clientSystemId || undefined,
-          uf: formData.uf || undefined,
-          instance: parseInt(formData.instance) || 0,
-        },
-      });
+      // Register for each selected client
+      for (const clientId of selectedClients) {
+        const { data, error } = await supabase.functions.invoke("sync-process-management", {
+          body: {
+            action: "register",
+            serviceId: formData.serviceId || undefined,
+            processNumber: formData.processNumber.trim(),
+            clientSystemId: clientId,
+            uf: formData.uf || undefined,
+            instance: parseInt(formData.instance) || 0,
+          },
+        });
 
-      if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || "Erro ao cadastrar processo");
-
-      if (data.registeredInSolucionare) {
-        toast.success("Processo registrado com sucesso na Solucionare");
-      } else {
-        toast.success("Processo vinculado ao cliente (já existia no sistema)");
+        if (error) throw error;
+        if (!data?.success) throw new Error(data?.error || "Erro ao cadastrar processo");
       }
+
+      toast.success(
+        selectedClients.length > 1
+          ? `Processo vinculado a ${selectedClients.length} clientes`
+          : "Processo cadastrado com sucesso"
+      );
 
       onSuccess();
     } catch (error) {
@@ -200,11 +168,11 @@ export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogPr
     setFormData({
       processNumber: "",
       serviceId: services.length === 1 ? services[0].id : "",
-      clientSystemId: "",
       uf: "",
       instance: "1",
     });
-    setClientSystems([]);
+    setSelectedClients([]);
+    setClientError(false);
     setDuplicateInfo(null);
     setPartnerOfficeCode(null);
   };
@@ -247,11 +215,9 @@ export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogPr
                 <Label htmlFor="service">Serviço</Label>
                 <Select
                   value={formData.serviceId}
-                  onValueChange={(v) => setFormData(prev => ({ ...prev, serviceId: v, clientSystemId: "" }))}
+                  onValueChange={(v) => setFormData(prev => ({ ...prev, serviceId: v }))}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione um serviço" />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Selecione um serviço" /></SelectTrigger>
                   <SelectContent>
                     {services.map((s) => (
                       <SelectItem key={s.id} value={s.id}>{s.service_name}</SelectItem>
@@ -261,24 +227,12 @@ export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogPr
               </div>
             )}
 
-            {clientSystems.length > 0 && (
-              <div className="grid gap-2">
-                <Label htmlFor="clientSystem">Sistema Cliente *</Label>
-                <Select
-                  value={formData.clientSystemId}
-                  onValueChange={(v) => setFormData(prev => ({ ...prev, clientSystemId: v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione um sistema cliente" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clientSystems.map((cs) => (
-                      <SelectItem key={cs.id} value={cs.id}>{cs.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+            <ClientSelector
+              serviceId={formData.serviceId || undefined}
+              selectedIds={selectedClients}
+              onChange={(ids) => { setSelectedClients(ids); setClientError(false); }}
+              error={clientError}
+            />
 
             {partnerOfficeCode && (
               <div className="grid gap-2">
@@ -294,9 +248,7 @@ export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogPr
                   value={formData.uf}
                   onValueChange={(v) => setFormData(prev => ({ ...prev, uf: v }))}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
                     {UF_OPTIONS.map((uf) => (
                       <SelectItem key={uf} value={uf}>{uf}</SelectItem>
@@ -310,9 +262,7 @@ export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogPr
                   value={formData.instance}
                   onValueChange={(v) => setFormData(prev => ({ ...prev, instance: v }))}
                 >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="0">Todas</SelectItem>
                     <SelectItem value="1">1ª Instância</SelectItem>

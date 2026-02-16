@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
+import { ClientSelector } from "@/components/shared/ClientSelector";
 
 interface SearchTermDialogProps {
   open: boolean;
@@ -22,6 +23,8 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
     partner_service_id: "",
     is_active: true,
   });
+  const [selectedClients, setSelectedClients] = useState<string[]>([]);
+  const [clientError, setClientError] = useState(false);
   const [partners, setPartners] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -40,6 +43,11 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
         if (term.partner_id) {
           fetchServices(term.partner_id);
         }
+        // Load existing client links
+        fetchTermClients(term.id);
+      } else {
+        setSelectedClients([]);
+        setClientError(false);
       }
     }
   }, [open, term]);
@@ -50,10 +58,7 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
   };
 
   const fetchServices = async (partnerId: string) => {
-    if (!partnerId) {
-      setServices([]);
-      return;
-    }
+    if (!partnerId) { setServices([]); return; }
     const { data } = await supabase
       .from("partner_services")
       .select("id, service_name")
@@ -63,8 +68,23 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
     setServices(data || []);
   };
 
+  const fetchTermClients = async (termId: string) => {
+    const { data } = await supabase
+      .from("client_search_terms")
+      .select("client_system_id")
+      .eq("search_term_id", termId);
+    setSelectedClients((data || []).map((d) => d.client_system_id));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (selectedClients.length === 0) {
+      setClientError(true);
+      toast.error("Selecione ao menos um cliente");
+      return;
+    }
+    setClientError(false);
     setIsLoading(true);
 
     try {
@@ -74,19 +94,30 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
         partner_service_id: formData.partner_service_id || null,
       };
 
+      let termId: string;
+
       if (term) {
-        const { error } = await supabase
-          .from("search_terms")
-          .update(dataToSave)
-          .eq("id", term.id);
+        const { error } = await supabase.from("search_terms").update(dataToSave).eq("id", term.id);
         if (error) throw error;
-        toast.success("Termo atualizado com sucesso");
+        termId = term.id;
       } else {
-        const { error } = await supabase.from("search_terms").insert(dataToSave);
+        const { data: inserted, error } = await supabase.from("search_terms").insert(dataToSave).select("id").single();
         if (error) throw error;
-        toast.success("Termo criado com sucesso");
+        termId = inserted.id;
       }
 
+      // Sync client links
+      await supabase.from("client_search_terms").delete().eq("search_term_id", termId);
+      if (selectedClients.length > 0) {
+        const links = selectedClients.map((clientId) => ({
+          search_term_id: termId,
+          client_system_id: clientId,
+        }));
+        const { error: linkError } = await supabase.from("client_search_terms").insert(links);
+        if (linkError) throw linkError;
+      }
+
+      toast.success(term ? "Termo atualizado com sucesso" : "Termo criado com sucesso");
       onOpenChange(false);
     } catch (error: any) {
       toast.error(error.message || "Erro ao salvar termo");
@@ -119,13 +150,8 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
 
           <div className="space-y-2">
             <Label htmlFor="type">Tipo</Label>
-            <Select
-              value={formData.term_type}
-              onValueChange={(value) => setFormData({ ...formData, term_type: value })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
+            <Select value={formData.term_type} onValueChange={(value) => setFormData({ ...formData, term_type: value })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="office">Escritório</SelectItem>
                 <SelectItem value="name">Nome de Pesquisa</SelectItem>
@@ -143,15 +169,11 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
                 fetchServices(partnerId);
               }}
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione um parceiro" />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Selecione um parceiro" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Nenhum</SelectItem>
                 {partners.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name}
-                  </SelectItem>
+                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -166,20 +188,23 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
                   setFormData({ ...formData, partner_service_id: value === "none" ? "" : value })
                 }
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione um serviço" />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Selecione um serviço" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Nenhum</SelectItem>
                   {services.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.service_name}
-                    </SelectItem>
+                    <SelectItem key={s.id} value={s.id}>{s.service_name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
           )}
+
+          <ClientSelector
+            serviceId={formData.partner_service_id || undefined}
+            selectedIds={selectedClients}
+            onChange={(ids) => { setSelectedClients(ids); setClientError(false); }}
+            error={clientError}
+          />
 
           <div className="flex items-center justify-between">
             <Label htmlFor="active">Termo Ativo</Label>
@@ -191,9 +216,7 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
           </div>
 
           <div className="flex justify-end gap-2 pt-4">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancelar
-            </Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
             <Button type="submit" disabled={isLoading}>
               {isLoading ? "Salvando..." : term ? "Atualizar" : "Criar"}
             </Button>
