@@ -251,7 +251,6 @@ serve(async (req) => {
 
         console.log(`Syncing processes for codEscritorio=${officeCode} via BuscaProcessos`);
 
-        // Call BuscaProcessos (endpoint 17) to get all registered processes
         const processesData = await client.get('/BuscaProcessos', { codEscritorio: officeCode });
 
         if (!Array.isArray(processesData) || processesData.length === 0) {
@@ -261,24 +260,37 @@ serve(async (req) => {
           break;
         }
 
-        console.log(`BuscaProcessos returned ${processesData.length} processes`);
+        console.log(`BuscaProcessos returned ${processesData.length} raw records`);
+
+        // Filter by office code (API may return all offices) and deduplicate by process_number
+        const filtered = processesData.filter((p: any) => p.codEscritorio === officeCode);
+        console.log(`Filtered to ${filtered.length} processes for codEscritorio=${officeCode} (from ${processesData.length} total)`);
+
+        const processMap = new Map<string, any>();
+        for (const proc of filtered) {
+          const pn = proc.numProcesso || proc.numCNJ || null;
+          if (!pn) continue;
+          const existing = processMap.get(pn);
+          const currentStatus = proc.codStatus || proc.statusCode || 2;
+          if (!existing || currentStatus > (existing.codStatus || existing.statusCode || 2)) {
+            processMap.set(pn, proc);
+          }
+        }
+
+        console.log(`After deduplication: ${processMap.size} unique processes`);
 
         let synced = 0;
 
-        for (const proc of processesData) {
-          const processNumber = proc.numProcesso || proc.numCNJ || null;
+        for (const [processNumber, proc] of processMap) {
           const codProcesso = proc.codProcesso || null;
           const statusCode = proc.codStatus || proc.statusCode || 2;
 
-          if (!processNumber && !codProcesso) {
-            console.log('Skipping process with no identifiers:', proc);
-            continue;
-          }
-
           const upsertData: any = {
+            process_number: processNumber,
             partner_service_id: service.id,
             partner_id: service.partner_id,
             cod_escritorio: officeCode,
+            cod_processo: codProcesso,
             status_code: statusCode,
             status_description: STATUS_CODES[statusCode] || proc.descricaoStatus || 'Desconhecido',
             solucionare_status: 'synced',
@@ -286,46 +298,27 @@ serve(async (req) => {
             updated_at: new Date().toISOString(),
           };
 
-          if (codProcesso) upsertData.cod_processo = codProcesso;
-          if (processNumber) upsertData.process_number = processNumber;
           if (proc.tribunal) upsertData.tribunal = proc.tribunal;
           if (proc.uf) upsertData.uf = proc.uf;
           if (proc.instancia) upsertData.instance = String(proc.instancia);
 
-          // Try upsert by cod_processo first, then by process_number
-          if (codProcesso) {
-            const { error } = await supabase
-              .from('processes')
-              .upsert({ ...upsertData, process_number: processNumber || `PROC-${codProcesso}` }, { onConflict: 'cod_processo' });
-            
-            if (error) {
-              console.error(`Error upserting process ${codProcesso}:`, error);
-              // Try by process_number as fallback
-              if (processNumber) {
-                const { error: err2 } = await supabase
-                  .from('processes')
-                  .upsert(upsertData, { onConflict: 'process_number' });
-                if (err2) console.error(`Fallback upsert also failed for ${processNumber}:`, err2);
-                else synced++;
-              }
-            } else {
-              synced++;
-            }
-          } else if (processNumber) {
-            const { error } = await supabase
-              .from('processes')
-              .upsert(upsertData, { onConflict: 'process_number' });
-            if (error) console.error(`Error upserting process ${processNumber}:`, error);
-            else synced++;
+          const { error } = await supabase
+            .from('processes')
+            .upsert(upsertData, { onConflict: 'process_number' });
+
+          if (error) {
+            console.error(`Error upserting process ${processNumber} (cod=${codProcesso}):`, error);
+          } else {
+            synced++;
           }
         }
 
-        // Also check status of pending processes
+        // Check status of pending processes
         const { data: pendingProcesses } = await supabase
           .from('processes')
           .select('id, cod_processo, process_number')
           .eq('cod_escritorio', officeCode)
-          .in('status_code', [2, 7]) // Validando or Erro na Validação
+          .in('status_code', [2, 7])
           .not('cod_processo', 'is', null);
 
         if (pendingProcesses && pendingProcesses.length > 0) {
@@ -351,6 +344,7 @@ serve(async (req) => {
           message: `Synced ${synced} processes from Solucionare`,
           synced,
           total: processesData.length,
+          uniqueProcesses: processMap.size,
           pendingChecked: pendingProcesses?.length || 0,
         };
         break;
