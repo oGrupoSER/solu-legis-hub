@@ -83,6 +83,103 @@ export type Database = {
           },
         ]
       }
+      api_delivery_cursors: {
+        Row: {
+          batch_size: number
+          client_system_id: string
+          confirmed_at: string | null
+          created_at: string
+          id: string
+          last_delivered_at: string | null
+          last_delivered_id: string | null
+          pending_confirmation: boolean
+          service_type: string
+          total_delivered: number
+          updated_at: string
+        }
+        Insert: {
+          batch_size?: number
+          client_system_id: string
+          confirmed_at?: string | null
+          created_at?: string
+          id?: string
+          last_delivered_at?: string | null
+          last_delivered_id?: string | null
+          pending_confirmation?: boolean
+          service_type: string
+          total_delivered?: number
+          updated_at?: string
+        }
+        Update: {
+          batch_size?: number
+          client_system_id?: string
+          confirmed_at?: string | null
+          created_at?: string
+          id?: string
+          last_delivered_at?: string | null
+          last_delivered_id?: string | null
+          pending_confirmation?: boolean
+          service_type?: string
+          total_delivered?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_delivery_cursors_client_system_id_fkey"
+            columns: ["client_system_id"]
+            isOneToOne: false
+            referencedRelation: "client_systems"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      api_ip_rules: {
+        Row: {
+          client_system_id: string | null
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          ip_address: string
+          is_active: boolean
+          reason: string | null
+          rule_type: string
+          updated_at: string
+        }
+        Insert: {
+          client_system_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          ip_address: string
+          is_active?: boolean
+          reason?: string | null
+          rule_type?: string
+          updated_at?: string
+        }
+        Update: {
+          client_system_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          ip_address?: string
+          is_active?: boolean
+          reason?: string | null
+          rule_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_ip_rules_client_system_id_fkey"
+            columns: ["client_system_id"]
+            isOneToOne: false
+            referencedRelation: "client_systems"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       api_requests: {
         Row: {
           client_system_id: string | null
@@ -137,35 +234,101 @@ export type Database = {
           },
         ]
       }
+      api_security_logs: {
+        Row: {
+          block_reason: string
+          client_system_id: string | null
+          created_at: string
+          endpoint: string | null
+          id: string
+          ip_address: string | null
+          request_method: string | null
+          token_id: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          block_reason: string
+          client_system_id?: string | null
+          created_at?: string
+          endpoint?: string | null
+          id?: string
+          ip_address?: string | null
+          request_method?: string | null
+          token_id?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          block_reason?: string
+          client_system_id?: string | null
+          created_at?: string
+          endpoint?: string | null
+          id?: string
+          ip_address?: string | null
+          request_method?: string | null
+          token_id?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_security_logs_client_system_id_fkey"
+            columns: ["client_system_id"]
+            isOneToOne: false
+            referencedRelation: "client_systems"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "api_security_logs_token_id_fkey"
+            columns: ["token_id"]
+            isOneToOne: false
+            referencedRelation: "api_tokens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       api_tokens: {
         Row: {
+          allowed_ips: string[] | null
+          blocked_at: string | null
+          blocked_reason: string | null
           client_system_id: string | null
           created_at: string | null
           expires_at: string | null
           id: string
           is_active: boolean | null
+          is_blocked: boolean
           last_used_at: string | null
           name: string
+          rate_limit_override: number | null
           token: string
         }
         Insert: {
+          allowed_ips?: string[] | null
+          blocked_at?: string | null
+          blocked_reason?: string | null
           client_system_id?: string | null
           created_at?: string | null
           expires_at?: string | null
           id?: string
           is_active?: boolean | null
+          is_blocked?: boolean
           last_used_at?: string | null
           name: string
+          rate_limit_override?: number | null
           token: string
         }
         Update: {
+          allowed_ips?: string[] | null
+          blocked_at?: string | null
+          blocked_reason?: string | null
           client_system_id?: string | null
           created_at?: string | null
           expires_at?: string | null
           id?: string
           is_active?: boolean | null
+          is_blocked?: boolean
           last_used_at?: string | null
           name?: string
+          rate_limit_override?: number | null
           token?: string
         }
         Relationships: [
