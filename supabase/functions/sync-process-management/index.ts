@@ -31,6 +31,15 @@ const STATUS_CODES: Record<number, string> = {
   7: 'Erro na Validação',
 };
 
+const STATUS_STRING_TO_CODE: Record<string, number> = {
+  'VALIDANDO': 2,
+  'CADASTRADO': 4,
+  'ARQUIVADO': 5,
+  'SEGREDO DE JUSTICA': 6,
+  'SEGREDO DE JUSTIÇA': 6,
+  'ERRO': 7,
+};
+
 async function getOfficeCode(supabase: any, serviceId: string): Promise<number> {
   const { data, error } = await supabase
     .from('partner_services')
@@ -282,8 +291,9 @@ serve(async (req) => {
         let synced = 0;
 
         for (const [processNumber, proc] of processMap) {
+          const statusString = (proc.status || '').toUpperCase();
+          const statusCode = proc.codStatus || proc.statusCode || STATUS_STRING_TO_CODE[statusString] || 2;
           const codProcesso = proc.codProcesso || null;
-          const statusCode = proc.codStatus || proc.statusCode || 2;
 
           const upsertData: any = {
             process_number: processNumber,
@@ -313,31 +323,6 @@ serve(async (req) => {
           }
         }
 
-        // Check status of pending processes
-        const { data: pendingProcesses } = await supabase
-          .from('processes')
-          .select('id, cod_processo, process_number')
-          .eq('cod_escritorio', officeCode)
-          .in('status_code', [2, 7])
-          .not('cod_processo', 'is', null);
-
-        if (pendingProcesses && pendingProcesses.length > 0) {
-          console.log(`Checking status for ${pendingProcesses.length} pending processes`);
-          for (const proc of pendingProcesses) {
-            try {
-              const statusData = await client.get('/BuscaStatusProcesso', { codProcesso: proc.cod_processo });
-              if (statusData?.codStatus) {
-                await supabase.from('processes').update({
-                  status_code: statusData.codStatus,
-                  status_description: STATUS_CODES[statusData.codStatus] || statusData.descricaoStatus,
-                }).eq('id', proc.id);
-              }
-            } catch (err) {
-              console.error(`Error checking status for ${proc.process_number}:`, err);
-            }
-          }
-        }
-
         await logger.success(synced);
         result = {
           success: true,
@@ -345,7 +330,6 @@ serve(async (req) => {
           synced,
           total: processesData.length,
           uniqueProcesses: processMap.size,
-          pendingChecked: pendingProcesses?.length || 0,
         };
         break;
       }
