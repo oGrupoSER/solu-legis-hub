@@ -99,6 +99,7 @@ export function ProcessesTable() {
         <TableHeader>
           <TableRow>
              <TableHead>Número do Processo</TableHead>
+             <TableHead>Escritório</TableHead>
              <TableHead>Tribunal</TableHead>
              <TableHead>UF</TableHead>
              <TableHead>Instância</TableHead>
@@ -112,13 +113,13 @@ export function ProcessesTable() {
         <TableBody>
           {loading ? (
              <TableRow>
-               <TableCell colSpan={9} className="text-center py-8">
+               <TableCell colSpan={10} className="text-center py-8">
                  <div className="animate-pulse">Carregando...</div>
               </TableCell>
             </TableRow>
           ) : processes.length === 0 ? (
              <TableRow>
-               <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+               <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                  Nenhum processo encontrado
               </TableCell>
             </TableRow>
@@ -132,6 +133,7 @@ export function ProcessesTable() {
                   onClick={() => navigate(`/processes/${process.id}`)}
                 >
                   <TableCell className="font-mono text-sm">{process.process_number}</TableCell>
+                  <TableCell className="text-sm font-medium">{(process as any).cod_escritorio || "-"}</TableCell>
                   <TableCell>{process.tribunal || "-"}</TableCell>
                   <TableCell>{process.uf || "-"}</TableCell>
                   <TableCell>{process.instance || "-"}</TableCell>
