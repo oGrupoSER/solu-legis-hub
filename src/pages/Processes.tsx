@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, Plus, Gavel, Link2, Download } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RefreshCw, Plus, Gavel, Link2, Download, Search } from "lucide-react";
 import { toast } from "sonner";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { ProcessesTable } from "@/components/processes/ProcessesTable";
@@ -15,6 +17,8 @@ const Processes = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [bulkLinkOpen, setBulkLinkOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterStatus, setFilterStatus] = useState("all");
 
   const handleSync = async () => {
     try {
@@ -142,15 +146,35 @@ const Processes = () => {
 
       <ProcessesStats refreshTrigger={refreshTrigger} />
 
+      {/* Filters */}
       <Card>
-        <CardHeader>
-          <CardTitle>Processos Monitorados</CardTitle>
-          <CardDescription>
-            Lista de todos os processos cadastrados para monitoramento
-          </CardDescription>
-        </CardHeader>
+        <CardContent className="pt-6 flex gap-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por número ou tribunal..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os Status</SelectItem>
+              <SelectItem value="pending">Pendente</SelectItem>
+              <SelectItem value="registered">Cadastrado</SelectItem>
+              <SelectItem value="error">Erro na Validação</SelectItem>
+              <SelectItem value="archived">Arquivado</SelectItem>
+            </SelectContent>
+          </Select>
+        </CardContent>
+      </Card>
+
+      {/* Table */}
+      <Card>
         <CardContent className="p-0">
-          <ProcessesTable key={refreshTrigger} />
+          <ProcessesTable key={refreshTrigger} searchQuery={searchQuery} filterStatus={filterStatus} />
         </CardContent>
       </Card>
 
