@@ -37,7 +37,7 @@ export default function DistributionTerms() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [newTermDialog, setNewTermDialog] = useState(false);
   const [selectedService, setSelectedService] = useState<string>("");
-  const [newTerm, setNewTerm] = useState({ nome: "", instancia: "1", abrangencia: "RJ" });
+  const [newTerm, setNewTerm] = useState({ nome: "", instancia: "1" });
   const [selectedClients, setSelectedClients] = useState<string[]>([]);
   const [clientError, setClientError] = useState(false);
 
@@ -71,7 +71,7 @@ export default function DistributionTerms() {
 
   // Register name mutation
   const registerMutation = useMutation({
-    mutationFn: async (params: { nome: string; instancia: number; abrangencia: string; clientIds: string[] }) => {
+    mutationFn: async (params: { nome: string; instancia: number; clientIds: string[] }) => {
       if (!selectedService) throw new Error("Selecione um serviço");
       if (params.clientIds.length === 0) throw new Error("Selecione ao menos um cliente");
       const { data, error } = await supabase.functions.invoke("manage-distribution-terms", {
@@ -104,7 +104,7 @@ export default function DistributionTerms() {
     onSuccess: () => {
       toast.success("Nome cadastrado com sucesso");
       setNewTermDialog(false);
-      setNewTerm({ nome: "", instancia: "1", abrangencia: "RJ" });
+      setNewTerm({ nome: "", instancia: "1" });
       setSelectedClients([]);
       setClientError(false);
       queryClient.invalidateQueries({ queryKey: ["distribution-terms"] });
@@ -239,17 +239,6 @@ export default function DistributionTerms() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Abrangência</Label>
-                    <Select value={newTerm.abrangencia} onValueChange={(v) => setNewTerm({ ...newTerm, abrangencia: v })}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent className="max-h-60">
-                        {["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"].map(uf => (
-                          <SelectItem key={uf} value={uf}>{uf}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
                 </div>
 
                 <ClientSelector
@@ -264,7 +253,7 @@ export default function DistributionTerms() {
                 <Button onClick={() => {
                   if (!newTerm.nome.trim()) { toast.error("Digite um nome"); return; }
                   if (selectedClients.length === 0) { setClientError(true); toast.error("Selecione ao menos um cliente"); return; }
-                  registerMutation.mutate({ nome: newTerm.nome, instancia: parseInt(newTerm.instancia), abrangencia: newTerm.abrangencia, clientIds: selectedClients });
+                  registerMutation.mutate({ nome: newTerm.nome, instancia: parseInt(newTerm.instancia), clientIds: selectedClients });
                 }} disabled={registerMutation.isPending}>
                   {registerMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Cadastrar
