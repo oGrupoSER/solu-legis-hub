@@ -177,6 +177,7 @@ Deno.serve(async (req) => {
                 .from('search_terms')
                 .update({
                   is_active: true,
+                  solucionare_status: 'synced',
                   updated_at: new Date().toISOString(),
                 })
                 .eq('id', existing.id);
@@ -193,6 +194,7 @@ Deno.serve(async (req) => {
                   partner_id: service.partner_id,
                   partner_service_id: serviceId,
                   is_active: true,
+                  solucionare_status: 'synced',
                 });
 
               if (error) throw error;
@@ -224,6 +226,7 @@ Deno.serve(async (req) => {
                       partner_id: service.partner_id,
                       partner_service_id: serviceId,
                       is_active: true,
+                      solucionare_status: 'synced',
                     });
                   result.namesImported++;
                 }
@@ -245,6 +248,36 @@ Deno.serve(async (req) => {
       console.error('Error stack:', error.stack);
       const message = error instanceof Error ? error.message : 'Unknown error';
       result.errors.push(`Failed to fetch search names: ${message}`);
+    }
+
+    // RETRY: Re-send pending terms that failed to register
+    try {
+      const { data: pendingTerms } = await supabase.from('search_terms')
+        .select('id, term, term_type')
+        .eq('partner_service_id', serviceId)
+        .in('term_type', ['name', 'office'])
+        .eq('solucionare_status', 'pending')
+        .eq('is_active', true);
+
+      if (pendingTerms && pendingTerms.length > 0) {
+        console.log(`Retrying ${pendingTerms.length} pending terms`);
+        for (const pt of pendingTerms) {
+          try {
+            if (pt.term_type === 'name') {
+              await soapClient.call('cadastrar', { codEscritorio: officeCode, nome: pt.term, variacoes: '' });
+            } else if (pt.term_type === 'office') {
+              await soapClient.call('cadastrarEscritorio', { escritorio: pt.term });
+            }
+            await supabase.from('search_terms').update({ solucionare_status: 'synced', updated_at: new Date().toISOString() }).eq('id', pt.id);
+          } catch (e) {
+            console.error(`[retry] Failed for "${pt.term}":`, e);
+            await supabase.from('search_terms').update({ solucionare_status: 'error', updated_at: new Date().toISOString() }).eq('id', pt.id);
+            result.errors.push(`Retry failed for "${pt.term}": ${e instanceof Error ? e.message : 'Unknown'}`);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error during retry logic:', e);
     }
 
     console.log('\n=== Sync Completed ===');

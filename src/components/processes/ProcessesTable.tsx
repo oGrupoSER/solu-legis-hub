@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Eye, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Eye, Search, ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ClientBadges } from "@/components/shared/ClientBadges";
 
@@ -22,6 +22,7 @@ interface Process {
   uf: string | null;
   created_at: string | null;
   last_sync_at: string | null;
+  solucionare_status: string;
   client_processes?: { client_systems: { name: string } }[];
 }
 
@@ -97,27 +98,28 @@ export function ProcessesTable() {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Número do Processo</TableHead>
-            <TableHead>Tribunal</TableHead>
-            <TableHead>UF</TableHead>
-            <TableHead>Instância</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Clientes</TableHead>
-            <TableHead>Última Sincronização</TableHead>
-            <TableHead className="w-[80px]">Ações</TableHead>
+             <TableHead>Número do Processo</TableHead>
+             <TableHead>Tribunal</TableHead>
+             <TableHead>UF</TableHead>
+             <TableHead>Instância</TableHead>
+             <TableHead>Status</TableHead>
+             <TableHead>Solucionare</TableHead>
+             <TableHead>Clientes</TableHead>
+             <TableHead>Última Sincronização</TableHead>
+             <TableHead className="w-[80px]">Ações</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {loading ? (
-            <TableRow>
-              <TableCell colSpan={8} className="text-center py-8">
-                <div className="animate-pulse">Carregando...</div>
+             <TableRow>
+               <TableCell colSpan={9} className="text-center py-8">
+                 <div className="animate-pulse">Carregando...</div>
               </TableCell>
             </TableRow>
           ) : processes.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                Nenhum processo encontrado
+             <TableRow>
+               <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                 Nenhum processo encontrado
               </TableCell>
             </TableRow>
           ) : (
@@ -137,11 +139,26 @@ export function ProcessesTable() {
                     <Badge variant="outline" className={statusColors[process.status_code || 0] || ""}>
                       {process.status_description || process.status || "Pendente"}
                     </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <ClientBadges clients={clients} />
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
+                   </TableCell>
+                   <TableCell>
+                     {process.solucionare_status === 'synced' ? (
+                       <Badge variant="outline" className="bg-green-500/10 text-green-700 border-green-500/30 gap-1">
+                         <CheckCircle2 className="h-3 w-3" /> Sincronizado
+                       </Badge>
+                     ) : process.solucionare_status === 'error' ? (
+                       <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/30 gap-1">
+                         <AlertCircle className="h-3 w-3" /> Erro
+                       </Badge>
+                     ) : (
+                       <Badge variant="outline" className="bg-yellow-500/10 text-yellow-700 border-yellow-500/30 gap-1">
+                         <Clock className="h-3 w-3" /> Pendente
+                       </Badge>
+                     )}
+                   </TableCell>
+                   <TableCell>
+                     <ClientBadges clients={clients} />
+                   </TableCell>
+                   <TableCell className="text-sm text-muted-foreground">
                     {process.last_sync_at
                       ? new Date(process.last_sync_at).toLocaleString("pt-BR")
                       : "-"}

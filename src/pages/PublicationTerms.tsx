@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Search, Download, RefreshCw } from "lucide-react";
+import { Plus, Search, Download, RefreshCw, CheckCircle2, AlertCircle, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { SearchTermDialog } from "@/components/terms/SearchTermDialog";
 import { TermActionsDropdown } from "@/components/terms/TermActionsDropdown";
@@ -23,6 +23,7 @@ interface SearchTerm {
   is_active: boolean;
   created_at: string;
   solucionare_code: number | null;
+  solucionare_status: string;
   partners?: { name: string };
   partner_services?: { service_name: string };
   client_search_terms?: { client_systems: { id: string; name: string } }[];
@@ -249,20 +250,21 @@ const PublicationTerms = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Termo</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Parceiro</TableHead>
-                  <TableHead>Serviço</TableHead>
-                  <TableHead>Clientes</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
+                   <TableHead>Termo</TableHead>
+                   <TableHead>Tipo</TableHead>
+                   <TableHead>Parceiro</TableHead>
+                   <TableHead>Serviço</TableHead>
+                   <TableHead>Clientes</TableHead>
+                   <TableHead>Solucionare</TableHead>
+                   <TableHead>Status</TableHead>
+                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredTerms.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">Nenhum termo encontrado</TableCell>
-                  </TableRow>
+                   <TableRow>
+                     <TableCell colSpan={8} className="text-center text-muted-foreground py-8">Nenhum termo encontrado</TableCell>
+                   </TableRow>
                 ) : (
                   filteredTerms.map((term) => {
                     const clients = getClientNames(term);
@@ -274,14 +276,29 @@ const PublicationTerms = () => {
                         </TableCell>
                         <TableCell className="text-sm">{term.partners?.name || "-"}</TableCell>
                         <TableCell className="text-sm">{term.partner_services?.service_name || "-"}</TableCell>
-                        <TableCell>
-                          <ClientBadges clients={clients} />
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={term.is_active ? "default" : "secondary"}>
-                            {term.is_active ? "Ativo" : "Inativo"}
-                          </Badge>
-                        </TableCell>
+                         <TableCell>
+                           <ClientBadges clients={clients} />
+                         </TableCell>
+                         <TableCell>
+                           {term.solucionare_status === 'synced' ? (
+                             <Badge variant="outline" className="bg-green-500/10 text-green-700 border-green-500/30 gap-1">
+                               <CheckCircle2 className="h-3 w-3" /> Sincronizado
+                             </Badge>
+                           ) : term.solucionare_status === 'error' ? (
+                             <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/30 gap-1">
+                               <AlertCircle className="h-3 w-3" /> Erro
+                             </Badge>
+                           ) : (
+                             <Badge variant="outline" className="bg-yellow-500/10 text-yellow-700 border-yellow-500/30 gap-1">
+                               <Clock className="h-3 w-3" /> Pendente
+                             </Badge>
+                           )}
+                         </TableCell>
+                         <TableCell>
+                           <Badge variant={term.is_active ? "default" : "secondary"}>
+                             {term.is_active ? "Ativo" : "Inativo"}
+                           </Badge>
+                         </TableCell>
                         <TableCell className="text-right">
                           <TermActionsDropdown term={term} onEdit={() => handleEdit(term)} onRefresh={fetchTerms} />
                         </TableCell>

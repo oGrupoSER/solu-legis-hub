@@ -980,6 +980,7 @@ export type Database = {
           partner_service_id: string | null
           process_number: string
           raw_data: Json
+          solucionare_status: string
           status: string | null
           status_code: number | null
           status_description: string | null
@@ -999,6 +1000,7 @@ export type Database = {
           partner_service_id?: string | null
           process_number: string
           raw_data: Json
+          solucionare_status?: string
           status?: string | null
           status_code?: number | null
           status_description?: string | null
@@ -1018,6 +1020,7 @@ export type Database = {
           partner_service_id?: string | null
           process_number?: string
           raw_data?: Json
+          solucionare_status?: string
           status?: string | null
           status_code?: number | null
           status_description?: string | null
@@ -1104,6 +1107,7 @@ export type Database = {
           partner_id: string | null
           partner_service_id: string | null
           solucionare_code: number | null
+          solucionare_status: string
           term: string
           term_type: string
           updated_at: string | null
@@ -1115,6 +1119,7 @@ export type Database = {
           partner_id?: string | null
           partner_service_id?: string | null
           solucionare_code?: number | null
+          solucionare_status?: string
           term: string
           term_type: string
           updated_at?: string | null
@@ -1126,6 +1131,7 @@ export type Database = {
           partner_id?: string | null
           partner_service_id?: string | null
           solucionare_code?: number | null
+          solucionare_status?: string
           term?: string
           term_type?: string
           updated_at?: string | null
