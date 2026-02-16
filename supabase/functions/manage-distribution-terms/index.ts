@@ -356,6 +356,11 @@ serve(async (req) => {
         break;
       }
 
+      case 'listSystems': {
+        result = await apiRequest(service.service_url, '/BuscaStatusSistemas', jwtToken);
+        break;
+      }
+
       default:
         throw new Error(`Unknown action: ${action}`);
     }
