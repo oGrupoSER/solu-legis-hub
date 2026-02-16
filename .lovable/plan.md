@@ -1,111 +1,160 @@
 
-# Reestruturacao do Modulo de Processos - Dois Macro Processos
+# Plano Complementado: Controles de Seguranca Configuraveis via Interface
 
-## Problema Atual
+## Novo Requisito
+Adicionar uma tela de gerenciamento de seguranca onde o administrador pode:
+- Bloquear/desbloquear IPs especificos
+- Bloquear/desbloquear tokens diretamente
+- Configurar rate limits personalizados por cliente
+- Visualizar tentativas de acesso bloqueadas
 
-O sistema trata "Processos CNJ" e "Andamentos" como partes de um unico fluxo, mas na realidade sao **dois macro processos distintos** com endpoints separados na API Solucionare. Alem disso, o `sync-process-updates` usa endpoints **errados** (sem `PorEscritorio`) que retornam dados de todos os escritorios.
-
-## Conceito Correto
-
-### Macro Processo 1: Processos CNJ (Cadastro e Validacao)
-Gerencia o ciclo de vida do cadastro de processos. O processo passa por validacao na Solucionare antes de ficar disponivel para monitoramento.
-
-**Endpoints (da documentacao - Print 1):**
-
-| Endpoint | Metodo | Uso |
-|----------|--------|-----|
-| `CadastraNovoProcesso` | POST | Cadastrar novo processo (ja implementado) |
-| `CadastrarProcessosEmLote` | POST | Cadastrar processos em lote |
-| `ExcluirProcesso` | POST | Excluir processo (ja implementado) |
-| `ExcluirListaProcesso` | POST | Excluir lista de processos |
-| `BuscaStatusProcesso` | GET | Verificar status de validacao (ja implementado) |
-| `BuscaProcessos` (endpoint 17) | GET | Buscar lista de processos cadastrados filtrado por `codEscritorio` |
-
-**Tela atual `/processes`**: Correta conceitualmente, mas o botao "Sincronizar" chama `sync-process-updates` (macro processo 2) o que e errado. Deveria chamar `BuscaProcessos` para atualizar a lista e `BuscaStatusProcesso` para atualizar os status.
+Este complemento se integra ao plano ja aprovado (API completa + volumetria + Postman).
 
 ---
 
-### Macro Processo 2: Andamentos (Dados dos Processos Cadastrados)
-Somente para processos com status **CADASTRADO** (status_code=4). Captura dados completos vindos do monitoramento.
+## 1. Novas Tabelas
 
-**Endpoints (da documentacao - Prints 2 a 6):**
+### api_ip_rules (regras de IP)
 
-| Grupo | GET (Busca) | Filtro | POST (Confirmacao) |
-|-------|-------------|--------|---------------------|
-| **Capas** (Print 2) | `BuscaDadosCapaEStatusVariosProcessos` | por codProcesso | `ConfirmaRecebimentoProcessosComCapaAtualizada` |
-| **Capas** (Print 2) | `BuscaProcessosComCapaAtualizada` | `codEscritorio` | - |
-| **Andamentos** (Print 3) | `BuscaNovosAndamentosPorEscritorio` | `codEscritorio` | `ConfirmaRecebimentoAndamento` |
-| **Andamentos** (Print 3) | `BuscaQuantidadeAndamentosDisponiveis` | `codEscritorio` | - |
-| **Documentos** (Print 4) | `BuscaNovosDocumentosPorEscritorio` | `codEscritorio` | `ConfirmaRecebimentoDocumento` |
-| **Documentos** (Print 4) | `BuscaQtdNovosDocumentosPorEscritorio` | `codEscritorio` | - |
-| **Agrupadores** (Print 5) | `BuscaAgrupadoresPorEscritorio` | `codEscritorio` | `ConfirmaRecebimentoAgrupador` |
-| **Dependencias** (Print 6) | `BuscaDependenciasPorEscritorio` | `codEscritorio` | `ConfirmaRecebimentoDependencia` |
+| Coluna | Tipo | Descricao |
+|--------|------|-----------|
+| id | uuid | PK |
+| ip_address | text | IP ou range CIDR (ex: 192.168.1.0/24) |
+| rule_type | text | 'block' ou 'allow' |
+| reason | text | Motivo do bloqueio |
+| client_system_id | uuid (nullable) | Se vinculado a um cliente especifico, ou NULL para global |
+| is_active | boolean | Se a regra esta ativa |
+| created_by | text | Quem criou a regra |
+| expires_at | timestamptz (nullable) | Bloqueio temporario (NULL = permanente) |
+| created_at / updated_at | timestamptz | Timestamps |
 
-**ERRO CRITICO ATUAL**: O `sync-process-updates` usa endpoints **sem** `PorEscritorio` (ex: `BuscaNovosAndamentos` em vez de `BuscaNovosAndamentosPorEscritorio`), e depois faz filtragem local. Isso e incorreto e explica os 28 processos em vez de 10 -- a filtragem local pode falhar se os dados nao contem `codEscritorio` no payload.
+### api_security_logs (log de bloqueios)
 
----
+| Coluna | Tipo | Descricao |
+|--------|------|-----------|
+| id | uuid | PK |
+| ip_address | text | IP que tentou acessar |
+| token_id | uuid (nullable) | Token usado (se identificado) |
+| client_system_id | uuid (nullable) | Cliente (se identificado) |
+| endpoint | text | Endpoint solicitado |
+| block_reason | text | Motivo do bloqueio (ip_blocked, token_blocked, rate_limit, service_denied) |
+| created_at | timestamptz | Quando ocorreu |
 
-## Plano de Implementacao
+### api_delivery_cursors (do plano original - mantido)
 
-### 1. Corrigir endpoints no `sync-process-updates` (Edge Function)
-
-Trocar todos os endpoints para as versoes `PorEscritorio` que filtram na origem:
-
-- `BuscaNovosAgrupadores` -> `BuscaAgrupadoresPorEscritorio?codEscritorio={code}`
-- `BuscaNovasDependencias` -> `BuscaDependenciasPorEscritorio?codEscritorio={code}`
-- `BuscaNovosAndamentos` -> `BuscaNovosAndamentosPorEscritorio?codEscritorio={code}`
-- `BuscaNovosDocumentos` -> `BuscaNovosDocumentosPorEscritorio?codEscritorio={code}`
-- `BuscaProcessosComCapaAtualizada` -> `BuscaProcessosComCapaAtualizada?codEscritorio={code}` (ja usa)
-
-Remover toda logica de filtragem local (ja que a API filtra na origem). Tornar `office_code` obrigatorio.
-
-### 2. Criar sincronizacao para "Processos CNJ" no `sync-process-management`
-
-Adicionar nova action `sync` que:
-- Chama `BuscaProcessos?codEscritorio={code}` para buscar todos os processos cadastrados
-- Atualiza a tabela `processes` local com os dados retornados (status, codProcesso, etc.)
-- Opcionalmente chama `BuscaStatusProcesso` para cada processo pendente
-
-### 3. Ajustar a pagina `/processes` (Processos CNJ)
-
-- Mudar o botao "Sincronizar" para chamar a nova action `sync` do `sync-process-management` (buscar lista de processos e status)
-- Manter funcionalidades existentes: cadastrar, excluir, verificar status
-- Descricao: "Cadastro e acompanhamento de validacao de processos CNJ"
-
-### 4. Ajustar a pagina `/processes/movements` (Andamentos)
-
-- Adicionar botao "Sincronizar" que chama `sync-process-updates` (este sim captura andamentos, documentos, capas, etc.)
-- Adicionar stats de quantidade disponivel usando `BuscaQuantidadeAndamentosDisponiveis` e `BuscaQtdNovosDocumentosPorEscritorio`
-- Descricao: "Dados completos dos processos com status Cadastrado"
-
-### 5. Limpar dados e re-sincronizar
-
-- Apagar todos os registros atuais de processos e tabelas vinculadas (mesma limpeza feita anteriormente)
-- Executar nova sincronizacao com os endpoints corretos
+Tabela de controle de lotes conforme ja planejado.
 
 ---
 
-## Detalhes Tecnicos
+## 2. Alteracao na Tabela Existente: api_tokens
 
-### Arquivos a modificar:
+Adicionar colunas para controle granular por token:
 
-1. **`supabase/functions/sync-process-updates/index.ts`** -- Corrigir todos os 5 endpoints para versoes `PorEscritorio`, passando `codEscritorio` como query param. Remover filtragem local.
+| Coluna Nova | Tipo | Descricao |
+|-------------|------|-----------|
+| is_blocked | boolean (default false) | Bloqueio manual do token |
+| blocked_reason | text (nullable) | Motivo do bloqueio |
+| blocked_at | timestamptz (nullable) | Quando foi bloqueado |
+| rate_limit_override | integer (nullable) | Limite customizado (NULL = usa padrao 1000/h) |
+| allowed_ips | text[] (nullable) | Lista de IPs permitidos (NULL = todos) |
 
-2. **`supabase/functions/sync-process-management/index.ts`** -- Adicionar action `sync` com chamada a `BuscaProcessos?codEscritorio={code}` para sincronizar lista de processos cadastrados e seus status.
+---
 
-3. **`src/pages/Processes.tsx`** -- Alterar `handleSync` para chamar `sync-process-management` com `action: 'sync'`. Atualizar textos descritivos.
+## 3. Evolucao do auth-middleware.ts
 
-4. **`src/pages/ProcessMovements.tsx`** -- Adicionar botao "Sincronizar" que chama `sync-process-updates`. Adicionar cards de quantidade disponivel.
-
-5. **`src/components/layout/AppSidebar.tsx`** -- Sem alteracao (menu ja esta correto com "Processos CNJ" e "Andamentos").
-
-### Mapeamento de endpoints atual vs correto:
+O middleware sera expandido para verificar na seguinte ordem:
 
 ```text
-ATUAL (errado)                          CORRETO (com filtro por escritorio)
---------------------------------------  -----------------------------------------------
-GET /BuscaNovosAgrupadores              GET /BuscaAgrupadoresPorEscritorio?codEscritorio=41
-GET /BuscaNovasDependencias             GET /BuscaDependenciasPorEscritorio?codEscritorio=41
-GET /BuscaNovosAndamentos               GET /BuscaNovosAndamentosPorEscritorio?codEscritorio=41
-GET /BuscaNovosDocumentos               GET /BuscaNovosDocumentosPorEscritorio?codEscritorio=41
+1. Validar token (existente)
+2. Verificar se token esta bloqueado (is_blocked) -> NOVO
+3. Verificar IP contra api_ip_rules (bloqueios globais e por cliente) -> NOVO
+4. Verificar allowed_ips do token (whitelist) -> NOVO
+5. Verificar rate limit (existente, agora com override por token) -> MELHORADO
+6. Verificar acesso ao servico via client_system_services -> NOVO
+7. Logar tentativas bloqueadas em api_security_logs -> NOVO
 ```
+
+Todas as verificacoes retornam headers informativos:
+- `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
+- `X-Blocked-Reason` (quando bloqueado)
+
+---
+
+## 4. Nova Tela: Seguranca da API (dentro de Configuracoes ou como pagina dedicada)
+
+Sera adicionada uma nova aba "Seguranca da API" na pagina de Configuracoes, com as seguintes secoes:
+
+### 4.1 Gerenciamento de IPs Bloqueados
+- Tabela listando todos os IPs com regras ativas
+- Botao "Bloquear IP" abre dialog com campos: IP, motivo, escopo (global ou cliente especifico), tipo (permanente ou temporario com data de expiracao)
+- Acoes: ativar/desativar regra, editar, excluir
+- Indicador visual de regras expiradas
+
+### 4.2 Gerenciamento de Tokens
+- Visao consolidada de todos os tokens de todos os clientes
+- Botao de bloqueio rapido com motivo obrigatorio
+- Campo para definir rate limit customizado por token
+- Campo para definir IPs permitidos (whitelist) por token
+- Indicadores: ultimo uso, total de requests na ultima hora, status (ativo/bloqueado/expirado)
+
+### 4.3 Log de Bloqueios (Seguranca)
+- Tabela com tentativas de acesso bloqueadas
+- Filtros por: tipo de bloqueio, IP, cliente, periodo
+- Informacoes: IP, token usado, endpoint, motivo, data/hora
+- Botao rapido para bloquear IP diretamente a partir de um log
+
+### 4.4 Configuracoes Globais
+- Rate limit padrao (default 1000 req/hora) - editavel
+- Tamanho padrao do lote (default 500) - editavel
+- Switch para habilitar/desabilitar verificacao de IP globalmente
+- Switch para habilitar/desabilitar logging de seguranca
+
+---
+
+## 5. Integracao com o Plano Original
+
+Tudo que ja foi planejado permanece. Este complemento adiciona:
+
+| Componente do Plano Original | Complemento |
+|-------------------------------|-------------|
+| auth-middleware.ts | + verificacao de IP, bloqueio de token, whitelist de IPs |
+| api-processes/distributions/publications | + headers de rate limit, + log de bloqueios |
+| Playground (ApiTesting.tsx) | + indicadores visuais de seguranca do token selecionado |
+| Postman Collection | Sem alteracao |
+| api_delivery_cursors | Sem alteracao |
+
+---
+
+## 6. Arquivos a Modificar/Criar (Plano Completo Consolidado)
+
+| Arquivo | Acao |
+|---------|------|
+| Migration SQL | Criar `api_delivery_cursors`, `api_ip_rules`, `api_security_logs` + alterar `api_tokens` |
+| `supabase/functions/_shared/auth-middleware.ts` | Expandir com verificacao de IP, bloqueio de token, whitelist, logging de seguranca |
+| `supabase/functions/api-processes/index.ts` | Reescrever com CRUD, isolamento por cliente, lotes, headers de seguranca |
+| `supabase/functions/api-distributions/index.ts` | Reescrever com isolamento por cliente, lotes, headers |
+| `supabase/functions/api-publications/index.ts` | Reescrever com isolamento por cliente, lotes, headers |
+| `src/pages/ApiTesting.tsx` | Redesign completo do playground |
+| `src/lib/postman-collection.ts` | Novo - gerador de colecao Postman |
+| `src/pages/Settings.tsx` | Adicionar aba "Seguranca da API" com gestao de IPs, tokens e logs |
+| `src/components/settings/IpRulesManager.tsx` | Novo - componente de gestao de regras de IP |
+| `src/components/settings/TokenSecurityManager.tsx` | Novo - componente de gestao de seguranca de tokens |
+| `src/components/settings/SecurityLogsTable.tsx` | Novo - tabela de logs de bloqueio |
+| `src/components/settings/GlobalSecuritySettings.tsx` | Novo - configuracoes globais de seguranca |
+
+---
+
+## 7. Resumo Completo de Controles de Seguranca
+
+| Controle | Configuravel em Tela? | Descricao |
+|----------|----------------------|-----------|
+| Bloqueio de IP | Sim | Bloquear IPs especificos (global ou por cliente), temporario ou permanente |
+| Bloqueio de Token | Sim | Desativar token imediatamente com motivo |
+| Whitelist de IPs por Token | Sim | Restringir token a IPs especificos |
+| Rate Limit por Token | Sim | Definir limite customizado por token |
+| Rate Limit Global | Sim | Alterar o limite padrao do sistema |
+| Tamanho do Lote | Sim | Configurar max registros por request |
+| Verificacao de Servico | Existente | Via client_system_services (ja implementado) |
+| Logging de Bloqueios | Sim | Visualizar e filtrar tentativas bloqueadas |
+| Confirmacao de Lotes | Via API | Cliente confirma recebimento antes de novos dados |
+
