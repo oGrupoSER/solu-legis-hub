@@ -119,6 +119,26 @@ serve(async (req) => {
           }
         }
 
+        // Get clients entitled to this service for auto-linking
+        const { data: entitledClients } = await supabase
+          .from('client_system_services')
+          .select('client_system_id')
+          .eq('partner_service_id', serviceId)
+          .eq('is_active', true);
+        const clientIds = (entitledClients || []).map(c => c.client_system_id);
+        console.log(`[listNames] ${clientIds.length} entitled clients for service ${serviceId}`);
+
+        // Helper to link a search_term to all entitled clients
+        const linkTermToClients = async (termId: string) => {
+          for (const clientId of clientIds) {
+            const { data: exists } = await supabase.from('client_search_terms')
+              .select('id').eq('search_term_id', termId).eq('client_system_id', clientId).maybeSingle();
+            if (!exists) {
+              await supabase.from('client_search_terms').insert({ search_term_id: termId, client_system_id: clientId });
+            }
+          }
+        };
+
         // Sync API names to search_terms
         for (const name of apiNames) {
           const termo = name.nome || name.Nome || name.term;
@@ -132,8 +152,10 @@ serve(async (req) => {
 
           if (existing) {
             await supabase.from('search_terms').update({ is_active: isActive, solucionare_code: solCode, updated_at: new Date().toISOString() }).eq('id', existing.id);
+            await linkTermToClients(existing.id);
           } else {
-            await supabase.from('search_terms').insert({ term: termo, term_type: 'distribution', partner_service_id: serviceId, partner_id: service.partner_id, is_active: isActive, solucionare_code: solCode });
+            const { data: inserted } = await supabase.from('search_terms').insert({ term: termo, term_type: 'distribution', partner_service_id: serviceId, partner_id: service.partner_id, is_active: isActive, solucionare_code: solCode }).select('id').single();
+            if (inserted) await linkTermToClients(inserted.id);
           }
         }
 
@@ -155,7 +177,10 @@ serve(async (req) => {
               .eq('partner_service_id', serviceId).maybeSingle();
 
             if (!existing) {
-              await supabase.from('search_terms').insert({ term: termo as string, term_type: 'distribution', partner_service_id: serviceId, partner_id: service.partner_id, is_active: true });
+              const { data: inserted } = await supabase.from('search_terms').insert({ term: termo as string, term_type: 'distribution', partner_service_id: serviceId, partner_id: service.partner_id, is_active: true }).select('id').single();
+              if (inserted) await linkTermToClients(inserted.id);
+            } else {
+              await linkTermToClients(existing.id);
             }
           }
           apiNames = uniqueTerms.map(t => ({ nome: t }));
