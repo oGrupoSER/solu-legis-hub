@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, Plus, Gavel, Link2 } from "lucide-react";
+import { RefreshCw, Plus, Gavel, Link2, Download } from "lucide-react";
 import { toast } from "sonner";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { ProcessesTable } from "@/components/processes/ProcessesTable";
@@ -54,6 +54,33 @@ const Processes = () => {
     toast.success("Processo cadastrado com sucesso");
   };
 
+  const handleExport = async () => {
+    try {
+      const { data } = await supabase
+        .from("processes")
+        .select("process_number, cod_escritorio, tribunal, uf, instance, status_description, solucionare_status, last_sync_at")
+        .order("process_number");
+
+      const csv = [
+        ["Número do Processo", "Escritório", "Tribunal", "UF", "Instância", "Status", "Solucionare", "Última Sincronização"],
+        ...(data || []).map((p: any) => [
+          p.process_number, p.cod_escritorio || "-", p.tribunal || "-", p.uf || "-",
+          p.instance || "-", p.status_description || "-", p.solucionare_status || "-",
+          p.last_sync_at ? new Date(p.last_sync_at).toLocaleString("pt-BR") : "-",
+        ]),
+      ].map((r) => r.join(",")).join("\n");
+
+      const blob = new Blob([csv], { type: "text/csv" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `processos-${new Date().toISOString().split("T")[0]}.csv`;
+      a.click();
+      toast.success("Processos exportados com sucesso");
+    } catch {
+      toast.error("Erro ao exportar");
+    }
+  };
+
   return (
     <div className="container py-8 space-y-6">
       <BreadcrumbNav
@@ -82,6 +109,15 @@ const Processes = () => {
           >
             <Link2 className="h-4 w-4" />
             Vincular Clientes
+          </Button>
+          <Button
+            onClick={handleExport}
+            variant="outline"
+            size="sm"
+            className="gap-2"
+          >
+            <Download className="h-4 w-4" />
+            Exportar
           </Button>
           <Button
             onClick={handleSync}
