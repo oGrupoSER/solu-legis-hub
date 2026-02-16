@@ -14,6 +14,75 @@ export type Database = {
   }
   public: {
     Tables: {
+      api_call_logs: {
+        Row: {
+          call_type: string
+          created_at: string
+          duration_ms: number | null
+          error_message: string | null
+          id: string
+          method: string
+          partner_service_id: string | null
+          request_body: string | null
+          request_headers: Json | null
+          response_headers: Json | null
+          response_status: number | null
+          response_status_text: string | null
+          response_summary: string | null
+          sync_log_id: string | null
+          url: string
+        }
+        Insert: {
+          call_type?: string
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          id?: string
+          method: string
+          partner_service_id?: string | null
+          request_body?: string | null
+          request_headers?: Json | null
+          response_headers?: Json | null
+          response_status?: number | null
+          response_status_text?: string | null
+          response_summary?: string | null
+          sync_log_id?: string | null
+          url: string
+        }
+        Update: {
+          call_type?: string
+          created_at?: string
+          duration_ms?: number | null
+          error_message?: string | null
+          id?: string
+          method?: string
+          partner_service_id?: string | null
+          request_body?: string | null
+          request_headers?: Json | null
+          response_headers?: Json | null
+          response_status?: number | null
+          response_status_text?: string | null
+          response_summary?: string | null
+          sync_log_id?: string | null
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_call_logs_partner_service_id_fkey"
+            columns: ["partner_service_id"]
+            isOneToOne: false
+            referencedRelation: "partner_services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "api_call_logs_sync_log_id_fkey"
+            columns: ["sync_log_id"]
+            isOneToOne: false
+            referencedRelation: "sync_logs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       api_requests: {
         Row: {
           client_system_id: string | null

@@ -90,6 +90,7 @@ Deno.serve(async (req) => {
         token: service.token,
         authInQuery: true, // Publicações API requires auth in query params
       });
+      restClient.setLogger(logger);
 
         let totalSynced = 0;
 

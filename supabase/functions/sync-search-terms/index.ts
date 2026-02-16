@@ -125,6 +125,7 @@ Deno.serve(async (req) => {
     });
     
     console.log('SOAP Client initialized successfully');
+    // Note: no logger available in this function yet (no sync_log created)
 
     const result: SyncResult = {
       success: true,

@@ -141,6 +141,7 @@ Deno.serve(async (req) => {
       token: service.token,
       namespace,
     });
+    // Note: manage functions log API calls without sync_log_id
 
     let result: any = { success: true, action };
 

@@ -103,6 +103,7 @@ serve(async (req) => {
       token: service.token,
       authInQuery: true,
     });
+    client.setLogger(logger);
 
     let result;
 

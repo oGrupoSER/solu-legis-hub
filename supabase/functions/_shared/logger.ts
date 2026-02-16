@@ -1,6 +1,6 @@
 /**
  * Centralized logging utility for Edge Functions
- * Handles sync_logs table insertions
+ * Handles sync_logs and api_call_logs table insertions
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.77.0';
@@ -20,8 +20,25 @@ export interface LogEntry {
   completed_at?: string;
 }
 
+export interface ApiCallLog {
+  sync_log_id?: string;
+  partner_service_id?: string;
+  call_type: 'REST' | 'SOAP';
+  method: string;
+  url: string;
+  request_headers?: Record<string, string>;
+  request_body?: string;
+  response_status?: number;
+  response_status_text?: string;
+  response_headers?: Record<string, string>;
+  response_summary?: string;
+  duration_ms?: number;
+  error_message?: string;
+}
+
 export class Logger {
   private logId: string | null = null;
+  private partnerServiceId: string | null = null;
 
   /**
    * Start a sync log entry
@@ -45,6 +62,7 @@ export class Logger {
     }
 
     this.logId = data.id;
+    this.partnerServiceId = entry.partner_service_id;
     console.log(`Sync log started: ${this.logId} for ${entry.sync_type}`);
     return data.id;
   }
@@ -113,5 +131,64 @@ export class Logger {
     if (error) {
       console.error('Failed to update progress:', error);
     }
+  }
+
+  /**
+   * Log an API call (REST or SOAP)
+   */
+  async logApiCall(entry: ApiCallLog): Promise<void> {
+    try {
+      // Truncate large bodies to 10KB
+      const maxBodyLen = 10000;
+      const truncatedRequestBody = entry.request_body && entry.request_body.length > maxBodyLen
+        ? entry.request_body.substring(0, maxBodyLen) + '... [TRUNCATED]'
+        : entry.request_body;
+
+      const { error } = await supabase
+        .from('api_call_logs')
+        .insert({
+          sync_log_id: entry.sync_log_id || this.logId,
+          partner_service_id: entry.partner_service_id || this.partnerServiceId,
+          call_type: entry.call_type,
+          method: entry.method,
+          url: entry.url,
+          request_headers: entry.request_headers ? this.sanitizeHeaders(entry.request_headers) : null,
+          request_body: truncatedRequestBody || null,
+          response_status: entry.response_status,
+          response_status_text: entry.response_status_text,
+          response_headers: entry.response_headers || null,
+          response_summary: entry.response_summary,
+          duration_ms: entry.duration_ms,
+          error_message: entry.error_message,
+        });
+
+      if (error) {
+        console.error('Failed to log API call:', error);
+      }
+    } catch (err) {
+      console.error('Error logging API call:', err);
+    }
+  }
+
+  /**
+   * Remove sensitive values from headers for logging
+   */
+  private sanitizeHeaders(headers: Record<string, string>): Record<string, string> {
+    const sanitized = { ...headers };
+    // Mask token values but keep structure visible
+    if (sanitized['token']) {
+      sanitized['token'] = sanitized['token'].substring(0, 8) + '***';
+    }
+    return sanitized;
+  }
+
+  /** Get current sync log ID */
+  get currentLogId(): string | null {
+    return this.logId;
+  }
+
+  /** Get current partner service ID */
+  get currentPartnerServiceId(): string | null {
+    return this.partnerServiceId;
   }
 }
