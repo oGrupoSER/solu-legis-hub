@@ -1,25 +1,30 @@
 /**
  * SOAP Client for Solucionare WebServices
- * Handles SOAP envelope construction and XML parsing
+ * Handles SOAP envelope construction, XML parsing, and API call logging
  */
+
+import { Logger } from './logger.ts';
 
 export interface SoapConfig {
   serviceUrl: string;
   nomeRelacional: string;
   token: string;
-  namespace?: string; // Custom namespace for SOAP envelope
+  namespace?: string;
 }
 
 export class SoapClient {
   private config: SoapConfig;
+  private logger: Logger | null = null;
 
   constructor(config: SoapConfig) {
     this.config = config;
   }
 
-  /**
-   * Build SOAP envelope for request
-   */
+  /** Attach a Logger instance for API call logging */
+  setLogger(logger: Logger): void {
+    this.logger = logger;
+  }
+
   private buildEnvelope(method: string, params: Record<string, any>): string {
     const namespace = this.config.namespace || this.getNormalizedUrl();
     
@@ -46,28 +51,17 @@ export class SoapClient {
 </soapenv:Envelope>`;
   }
 
-  /**
-   * Normalize service URL by removing .wsdl or ?wsdl
-   */
   private getNormalizedUrl(): string {
     let url = this.config.serviceUrl;
-    
-    // Remove .wsdl extension
     if (url.endsWith('.wsdl')) {
       url = url.substring(0, url.length - 5);
     }
-    
-    // Remove ?wsdl query parameter
     if (url.includes('?wsdl')) {
       url = url.split('?wsdl')[0];
     }
-    
     return url;
   }
 
-  /**
-   * Escape XML special characters
-   */
   private escapeXml(str: string): string {
     return str
       .replace(/&/g, '&amp;')
@@ -77,16 +71,12 @@ export class SoapClient {
       .replace(/'/g, '&apos;');
   }
 
-  /**
-   * Parse SOAP response - handles complex structures with nested objects
-   */
   private parseResponse(xmlText: string, method: string): any {
     try {
       console.log('=== SOAP Response Parsing ===');
       console.log('Method:', method);
       console.log('Raw XML (first 1000 chars):', xmlText.substring(0, 1000));
       
-      // Remove namespaces and extra attributes for easier parsing
       const cleanXml = xmlText
         .replace(/<[A-Za-z0-9_-]+:/g, '<')
         .replace(/<\/[A-Za-z0-9_-]+:/g, '</')
@@ -99,7 +89,6 @@ export class SoapClient {
 
       console.log('Clean XML (first 1000 chars):', cleanXml.substring(0, 1000));
 
-      // Extract the response body content
       const bodyMatch = cleanXml.match(/<Body>(.*?)<\/Body>/s);
       if (!bodyMatch) {
         throw new Error('No SOAP Body found in response');
@@ -108,14 +97,12 @@ export class SoapClient {
       const bodyContent = bodyMatch[1];
       console.log('Body content (first 500 chars):', bodyContent.substring(0, 500));
 
-      // Check if response contains <retorno> (with or without attributes) array structure
       const retornoSection = bodyContent.match(/<retorno(?:\s[^>]*)?>([\s\S]*?)<\/retorno>/);
       if (retornoSection) {
         console.log('Parsing complex array structure within <retorno>');
         return this.parseComplexArray(retornoSection[1]);
       }
 
-      // Parse simple string arrays
       if (bodyContent.includes('<string>')) {
         const items: string[] = [];
         const stringRegex = /<string>(.*?)<\/string>/gs;
@@ -130,7 +117,6 @@ export class SoapClient {
         return items;
       }
 
-      // If empty, return empty array
       if (!bodyContent.trim() || bodyContent.trim() === '<return/>') {
         console.log('Empty result, returning empty array');
         return [];
@@ -147,9 +133,6 @@ export class SoapClient {
     }
   }
 
-  /**
-   * Parse complex array structures with nested objects
-   */
   private parseComplexArray(xml: string): any[] {
     const items: any[] = [];
     const itemRegex = /<item[^>]*>(.*?)<\/item>/gs;
@@ -159,7 +142,6 @@ export class SoapClient {
       const itemXml = itemMatch[1];
       const item: any = {};
       
-      // Extract all simple fields
       const fieldRegex = /<([a-zA-Z]+)>([^<]*)<\/\1>/g;
       let fieldMatch;
       
@@ -167,7 +149,6 @@ export class SoapClient {
         const fieldName = fieldMatch[1];
         const fieldValue = fieldMatch[2].trim();
         
-        // Try to parse as number if it looks like one
         if (/^\d+$/.test(fieldValue)) {
           item[fieldName] = parseInt(fieldValue, 10);
         } else {
@@ -175,7 +156,6 @@ export class SoapClient {
         }
       }
       
-      // Extract nested arrays (like variacoes)
       const arrayRegex = /<([a-zA-Z]+)>((?:.*?)<item[^>]*>.*?<\/item>(?:.*?))<\/\1>/gs;
       let arrayMatch;
       
@@ -196,9 +176,6 @@ export class SoapClient {
     return items;
   }
 
-  /**
-   * Make SOAP request
-   */
   async call(method: string, params: Record<string, any> = {}): Promise<any> {
     const envelope = this.buildEnvelope(method, params);
     const normalizedUrl = this.getNormalizedUrl();
@@ -209,16 +186,27 @@ export class SoapClient {
     console.log(`Method: ${method}`);
     console.log('Envelope (first 500 chars):', envelope.substring(0, 500));
 
+    const namespace = this.config.namespace || normalizedUrl;
+    const requestHeaders: Record<string, string> = {
+      'Content-Type': 'text/xml; charset=utf-8',
+      'SOAPAction': `${namespace}#${method}`,
+    };
+
+    const startTime = Date.now();
+    let responseStatus: number | undefined;
+    let responseStatusText: string | undefined;
+    let responseSummary: string | undefined;
+    let errorMsg: string | undefined;
+
     try {
-      const namespace = this.config.namespace || normalizedUrl;
       const response = await fetch(normalizedUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'text/xml; charset=utf-8',
-          'SOAPAction': `${namespace}#${method}`,
-        },
+        headers: requestHeaders,
         body: envelope,
       });
+
+      responseStatus = response.status;
+      responseStatusText = response.statusText;
 
       console.log('=== SOAP HTTP Response ===');
       console.log('Status:', response.status, response.statusText);
@@ -226,19 +214,45 @@ export class SoapClient {
 
       if (!response.ok) {
         const errorText = await response.text();
+        errorMsg = `HTTP ${response.status}: ${response.statusText}`;
+        responseSummary = `Error: ${errorText.substring(0, 200)}`;
         console.error('Error response body:', errorText.substring(0, 1000));
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       const responseText = await response.text();
+      responseSummary = `XML | ${responseText.length} bytes`;
       console.log('Response length:', responseText.length);
       
-      return this.parseResponse(responseText, method);
+      const result = this.parseResponse(responseText, method);
+      if (Array.isArray(result)) {
+        responseSummary += ` | ${result.length} itens`;
+      }
+      return result;
     } catch (error) {
+      if (!errorMsg) {
+        errorMsg = error instanceof Error ? error.message : String(error);
+      }
       console.error('=== SOAP Request Failed ===');
       console.error(`Method: ${method}`);
       console.error('Error:', error);
       throw error;
+    } finally {
+      const duration = Date.now() - startTime;
+      if (this.logger) {
+        await this.logger.logApiCall({
+          call_type: 'SOAP',
+          method: `SOAP:${method}`,
+          url: normalizedUrl,
+          request_headers: requestHeaders,
+          request_body: envelope,
+          response_status: responseStatus,
+          response_status_text: responseStatusText,
+          response_summary: responseSummary,
+          duration_ms: duration,
+          error_message: errorMsg,
+        });
+      }
     }
   }
 }

@@ -98,6 +98,7 @@ serve(async (req) => {
           token: service.token,
           authInQuery: true, // API V3 requires auth via query params
         });
+        client.setLogger(logger);
 
         let totalSynced = 0;
 

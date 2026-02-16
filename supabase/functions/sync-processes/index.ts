@@ -73,6 +73,7 @@ serve(async (req) => {
           token: service.token,
           authInQuery: true, // API V3 requires auth via query params
         });
+        client.setLogger(logger);
 
         // Fetch registered processes list
         // BuscaProcessosCadastrados returns list of codProcesso for a given office
