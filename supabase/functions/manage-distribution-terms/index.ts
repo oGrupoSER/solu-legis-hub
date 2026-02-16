@@ -204,7 +204,7 @@ serve(async (req) => {
                 nome: pt.term,
                 codTipoConsulta: 1,
                 listInstancias: [1],
-                listAbrangencias: ['NACIONAL'],
+                listAbrangencias: [1],
               });
               await supabase.from('search_terms').update({ solucionare_status: 'synced', updated_at: new Date().toISOString() }).eq('id', pt.id);
               retriedCount++;
@@ -224,6 +224,15 @@ serve(async (req) => {
         const { nome, instancia, abrangencia } = params;
         if (!nome) throw new Error('nome is required');
 
+        // Map abrangencia string to numeric code expected by API
+        const abrangenciaMap: Record<string, number> = {
+          'NACIONAL': 1,
+          'ESTADUAL': 2,
+          'FEDERAL': 3,
+        };
+        const abrangenciaCode = typeof abrangencia === 'number' ? abrangencia : (abrangenciaMap[abrangencia] || 1);
+        const instanciaCode = typeof instancia === 'number' ? instancia : parseInt(instancia) || 1;
+
         // DEDUPLICATION: Check if term exists
         const { data: existing } = await supabase
           .from('search_terms')
@@ -239,13 +248,13 @@ serve(async (req) => {
         if (existing) {
           termRecord = existing;
         } else {
-          // CORRECTED: Send full body with codEscritorio, codTipoConsulta, listInstancias, listAbrangencias
+          // Send full body with numeric codes
           result = await apiRequest(service.service_url, '/CadastrarNome', jwtToken, 'POST', {
             codEscritorio: officeCode,
             nome,
             codTipoConsulta: 1,
-            listInstancias: [instancia || 1],
-            listAbrangencias: [abrangencia || 'NACIONAL'],
+            listInstancias: [instanciaCode],
+            listAbrangencias: [abrangenciaCode],
           });
           registeredInSolucionare = true;
 
