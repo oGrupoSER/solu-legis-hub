@@ -12,6 +12,21 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Info } from "lucide-react";
 import { ClientSelector } from "@/components/shared/ClientSelector";
 
+// CNJ format: NNNNNNN-DD.AAAA.J.TR.OOOO
+const CNJ_REGEX = /^\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}$/;
+
+function formatCNJ(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 20);
+  let formatted = "";
+  for (let i = 0; i < digits.length; i++) {
+    if (i === 7) formatted += "-";
+    if (i === 9 || i === 13) formatted += ".";
+    if (i === 14 || i === 16) formatted += ".";
+    formatted += digits[i];
+  }
+  return formatted;
+}
+
 interface ProcessDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -118,6 +133,11 @@ export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogPr
       return;
     }
 
+    if (!CNJ_REGEX.test(formData.processNumber.trim())) {
+      toast.error("Formato CNJ inválido. Use: NNNNNNN-DD.AAAA.J.TR.OOOO");
+      return;
+    }
+
     if (selectedClients.length === 0) {
       setClientError(true);
       toast.error("Selecione ao menos um cliente");
@@ -198,7 +218,7 @@ export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogPr
                 id="processNumber"
                 placeholder="0000000-00.0000.0.00.0000"
                 value={formData.processNumber}
-                onChange={(e) => setFormData(prev => ({ ...prev, processNumber: e.target.value }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, processNumber: formatCNJ(e.target.value) }))}
                 required
               />
             </div>
