@@ -7,12 +7,13 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Search, Download, RefreshCw, CheckCircle2, AlertCircle, Clock } from "lucide-react";
+import { Plus, Search, Download, RefreshCw, CheckCircle2, AlertCircle, Clock, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { SearchTermDialog } from "@/components/terms/SearchTermDialog";
 import { TermActionsDropdown } from "@/components/terms/TermActionsDropdown";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { ClientBadges } from "@/components/shared/ClientBadges";
+import { BulkClientLinkDialog } from "@/components/shared/BulkClientLinkDialog";
 
 interface SearchTerm {
   id: string;
@@ -40,6 +41,7 @@ const PublicationTerms = () => {
   const [filterStatus, setFilterStatus] = useState("all");
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStats, setSyncStats] = useState<any>(null);
+  const [bulkLinkOpen, setBulkLinkOpen] = useState(false);
 
   useEffect(() => {
     fetchTerms();
@@ -170,6 +172,9 @@ const PublicationTerms = () => {
           <p className="text-muted-foreground mt-1">Gerencie os termos monitorados nos diários oficiais</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setBulkLinkOpen(true)} className="gap-2">
+            <Link2 className="h-4 w-4" /> Vincular Clientes
+          </Button>
           <Button variant="outline" onClick={handleSync} disabled={isSyncing} className="gap-2">
             <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
             {isSyncing ? "Sincronizando..." : "Sincronizar"}
@@ -319,6 +324,13 @@ const PublicationTerms = () => {
           if (!open) { setEditingTerm(null); fetchTerms(); }
         }}
         term={editingTerm}
+      />
+
+      <BulkClientLinkDialog
+        open={bulkLinkOpen}
+        onOpenChange={setBulkLinkOpen}
+        entityType="publication_terms"
+        onSuccess={fetchTerms}
       />
     </div>
   );
