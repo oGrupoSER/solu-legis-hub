@@ -1,11 +1,12 @@
 /**
  * Sync Process Management Edge Function
- * Manages process registration, exclusion and status check with Solucionare API V3
- * Now with shared consumption (deduplication) logic:
- * - office_code sourced from partners table
- * - client_system_id links processes to requesting client
- * - Deduplication: only registers with Solucionare if process is new to Hub
- * - Removal: only removes from Solucionare when no clients remain linked
+ * MACRO PROCESSO 1: Processos CNJ (Cadastro e Validação)
+ * 
+ * Manages process registration, exclusion, status check, and sync with Solucionare API V3.
+ * Actions: register, delete, status, list, sync
+ * 
+ * The 'sync' action calls BuscaProcessos (endpoint 17) to fetch all registered processes
+ * from Solucionare filtered by codEscritorio, then updates local database.
  */
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
@@ -190,7 +191,6 @@ serve(async (req) => {
         let removedFromSolucionare = false;
 
         if (clientSystemId) {
-          // DEDUPLICATION: Unlink client, only remove from Solucionare if no clients remain
           const noMoreClients = await unlinkAndCheck(supabase, existingProcess.id, clientSystemId);
           
           if (noMoreClients) {
@@ -201,7 +201,6 @@ serve(async (req) => {
             }).eq('id', existingProcess.id);
           }
         } else {
-          // Direct removal (no client context)
           const deleteData = await client.delete('/ExcluirProcesso', { codProcesso: existingProcess.cod_processo });
           removedFromSolucionare = true;
           await supabase.from('processes').update({
@@ -240,10 +239,120 @@ serve(async (req) => {
 
       case 'list': {
         const params: Record<string, any> = {};
-        // Use partner's office code
         params.codEscritorio = officeCode;
         const processesData = await client.get('/BuscaProcessosCadastrados', params);
         result = { success: true, processes: processesData || [], count: Array.isArray(processesData) ? processesData.length : 0 };
+        break;
+      }
+
+      case 'sync': {
+        // MACRO PROCESSO 1: Sync all processes from Solucionare for this office
+        await logger.start({ partner_service_id: service.id, sync_type: 'process_sync' });
+
+        console.log(`Syncing processes for codEscritorio=${officeCode} via BuscaProcessos`);
+
+        // Call BuscaProcessos (endpoint 17) to get all registered processes
+        const processesData = await client.get('/BuscaProcessos', { codEscritorio: officeCode });
+
+        if (!Array.isArray(processesData) || processesData.length === 0) {
+          console.log('No processes returned from BuscaProcessos');
+          await logger.success(0);
+          result = { success: true, message: 'No processes found for this office', synced: 0 };
+          break;
+        }
+
+        console.log(`BuscaProcessos returned ${processesData.length} processes`);
+
+        let synced = 0;
+
+        for (const proc of processesData) {
+          const processNumber = proc.numProcesso || proc.numCNJ || null;
+          const codProcesso = proc.codProcesso || null;
+          const statusCode = proc.codStatus || proc.statusCode || 2;
+
+          if (!processNumber && !codProcesso) {
+            console.log('Skipping process with no identifiers:', proc);
+            continue;
+          }
+
+          const upsertData: any = {
+            partner_service_id: service.id,
+            partner_id: service.partner_id,
+            cod_escritorio: officeCode,
+            status_code: statusCode,
+            status_description: STATUS_CODES[statusCode] || proc.descricaoStatus || 'Desconhecido',
+            solucionare_status: 'synced',
+            raw_data: proc,
+            updated_at: new Date().toISOString(),
+          };
+
+          if (codProcesso) upsertData.cod_processo = codProcesso;
+          if (processNumber) upsertData.process_number = processNumber;
+          if (proc.tribunal) upsertData.tribunal = proc.tribunal;
+          if (proc.uf) upsertData.uf = proc.uf;
+          if (proc.instancia) upsertData.instance = String(proc.instancia);
+
+          // Try upsert by cod_processo first, then by process_number
+          if (codProcesso) {
+            const { error } = await supabase
+              .from('processes')
+              .upsert({ ...upsertData, process_number: processNumber || `PROC-${codProcesso}` }, { onConflict: 'cod_processo' });
+            
+            if (error) {
+              console.error(`Error upserting process ${codProcesso}:`, error);
+              // Try by process_number as fallback
+              if (processNumber) {
+                const { error: err2 } = await supabase
+                  .from('processes')
+                  .upsert(upsertData, { onConflict: 'process_number' });
+                if (err2) console.error(`Fallback upsert also failed for ${processNumber}:`, err2);
+                else synced++;
+              }
+            } else {
+              synced++;
+            }
+          } else if (processNumber) {
+            const { error } = await supabase
+              .from('processes')
+              .upsert(upsertData, { onConflict: 'process_number' });
+            if (error) console.error(`Error upserting process ${processNumber}:`, error);
+            else synced++;
+          }
+        }
+
+        // Also check status of pending processes
+        const { data: pendingProcesses } = await supabase
+          .from('processes')
+          .select('id, cod_processo, process_number')
+          .eq('cod_escritorio', officeCode)
+          .in('status_code', [2, 7]) // Validando or Erro na Validação
+          .not('cod_processo', 'is', null);
+
+        if (pendingProcesses && pendingProcesses.length > 0) {
+          console.log(`Checking status for ${pendingProcesses.length} pending processes`);
+          for (const proc of pendingProcesses) {
+            try {
+              const statusData = await client.get('/BuscaStatusProcesso', { codProcesso: proc.cod_processo });
+              if (statusData?.codStatus) {
+                await supabase.from('processes').update({
+                  status_code: statusData.codStatus,
+                  status_description: STATUS_CODES[statusData.codStatus] || statusData.descricaoStatus,
+                }).eq('id', proc.id);
+              }
+            } catch (err) {
+              console.error(`Error checking status for ${proc.process_number}:`, err);
+            }
+          }
+        }
+
+        await logger.success(synced);
+        result = {
+          success: true,
+          message: `Synced ${synced} processes from Solucionare`,
+          synced,
+          total: processesData.length,
+          pendingChecked: pendingProcesses?.length || 0,
+        };
         break;
       }
 

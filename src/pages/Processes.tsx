@@ -16,15 +16,17 @@ const Processes = () => {
   const handleSync = async () => {
     try {
       setSyncing(true);
-      toast.info("Iniciando sincronização de processos...");
+      toast.info("Sincronizando lista de processos CNJ...");
       
-      const { data, error } = await supabase.functions.invoke("sync-process-updates", {
-        body: { syncType: "full" },
+      const { data, error } = await supabase.functions.invoke("sync-process-management", {
+        body: { action: "sync" },
       });
 
       if (error) throw error;
       
-      toast.success("Sincronização de processos concluída");
+      const synced = data?.synced || 0;
+      const pendingChecked = data?.pendingChecked || 0;
+      toast.success(`Sincronização concluída: ${synced} processos atualizados${pendingChecked > 0 ? `, ${pendingChecked} status verificados` : ''}`);
       setRefreshTrigger(prev => prev + 1);
     } catch (error) {
       console.error("Sync error:", error);
@@ -56,7 +58,7 @@ const Processes = () => {
             Processos
           </h1>
           <p className="text-muted-foreground mt-1">
-            Gerencie todos os processos monitorados pela Solucionare
+            Cadastro e acompanhamento de validação de processos CNJ
           </p>
         </div>
         <div className="flex gap-2">
