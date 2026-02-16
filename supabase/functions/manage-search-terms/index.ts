@@ -349,7 +349,7 @@ async function excluirNome(
     
     if (noMoreClients) {
       console.log('No more clients linked, removing from Solucionare');
-      await soapClient.call('excluirNome', {
+      await soapClient.call('remover', {
         codEscritorio: officeCode,
         codNome: data.cod_nome || termRecord.solucionare_code || 0,
       });
@@ -361,7 +361,7 @@ async function excluirNome(
     }
   } else {
     // No client context: direct removal (legacy behavior)
-    await soapClient.call('excluirNome', {
+    await soapClient.call('remover', {
       codEscritorio: officeCode,
       codNome: data.cod_nome || 0,
     });
