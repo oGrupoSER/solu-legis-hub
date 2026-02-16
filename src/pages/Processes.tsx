@@ -115,15 +115,6 @@ const Processes = () => {
             Vincular Clientes
           </Button>
           <Button
-            onClick={handleExport}
-            variant="outline"
-            size="sm"
-            className="gap-2"
-          >
-            <Download className="h-4 w-4" />
-            Exportar
-          </Button>
-          <Button
             onClick={handleSync}
             variant="outline"
             size="sm"
@@ -132,6 +123,15 @@ const Processes = () => {
           >
             <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
             Sincronizar
+          </Button>
+          <Button
+            onClick={handleExport}
+            variant="outline"
+            size="sm"
+            className="gap-2"
+          >
+            <Download className="h-4 w-4" />
+            Exportar
           </Button>
           <Button
             onClick={() => setDialogOpen(true)}
