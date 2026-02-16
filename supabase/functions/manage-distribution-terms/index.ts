@@ -360,7 +360,6 @@ serve(async (req) => {
       }
 
       case 'listAllNames': {
-        // Try without any filter to see all names across all offices
         try {
           result = await apiRequest(service.service_url, '/BuscaNomesCadastrados', jwtToken);
         } catch (e: any) {
@@ -370,6 +369,78 @@ serve(async (req) => {
             throw e;
           }
         }
+        break;
+      }
+
+      case 'testAbrangencia': {
+        const testResults: any[] = [];
+        // First, get office info
+        let officeInfo = null;
+        try {
+          officeInfo = await apiRequest(service.service_url, `/BuscaEscritoriosCadastrados?codEscritorio=${officeCode}`, jwtToken);
+          console.log('[testAbrangencia] Office info:', JSON.stringify(officeInfo));
+        } catch (e: any) {
+          console.log('[testAbrangencia] Office info error:', e.message);
+        }
+
+        // Try to discover abrangencias endpoint
+        let abrangencias = null;
+        const discoveryEndpoints = [
+          '/BuscaAbrangencias',
+          '/ListarAbrangencias', 
+          '/BuscaTiposAbrangencia',
+          `/BuscaAbrangencias?codEscritorio=${officeCode}`,
+        ];
+        for (const ep of discoveryEndpoints) {
+          try {
+            const r = await apiRequest(service.service_url, ep, jwtToken);
+            abrangencias = { endpoint: ep, data: r };
+            console.log(`[testAbrangencia] Found abrangencias at ${ep}:`, JSON.stringify(r));
+            break;
+          } catch (e: any) {
+            console.log(`[testAbrangencia] ${ep} failed:`, e.message);
+          }
+        }
+
+        // Try to get swagger/help for valid values
+        let swaggerInfo = null;
+        try {
+          const swaggerResp = await fetch(`${service.service_url}/swagger/v1/swagger.json`, {
+            headers: { 'Authorization': `Bearer ${jwtToken}` },
+          });
+          if (swaggerResp.ok) {
+            const swagger = await swaggerResp.json();
+            // Look for CadastrarNome schema
+            const paths = swagger?.paths || {};
+            const cadastrar = paths['/CadastrarNome'] || paths['/api/CadastrarNome'];
+            swaggerInfo = cadastrar;
+          }
+        } catch (_) {}
+
+        // Test string abrangencia values - UF, siglaSistema, siglaTribunal
+        const testValues = ["BA", "MT", "EPROC-TJRS", "TJBA", "API-TJBA"];
+        for (const val of testValues) {
+          try {
+            const testBody = {
+              codEscritorio: officeCode,
+              nome: `T_${Date.now()}`,
+              codTipoConsulta: 3,
+              listInstancias: [1],
+              listAbrangencias: [val],
+            };
+            console.log(`[testAbrangencia] Testing string abrangencia="${val}"`);
+            const r = await apiRequest(service.service_url, '/CadastrarNome', jwtToken, 'POST', testBody);
+            testResults.push({ abrangencia: val, status: 'OK', result: r });
+            if (r?.codNome) {
+              try { await apiRequest(service.service_url, '/ExcluirNome', jwtToken, 'DELETE', { codNome: r.codNome }); } catch (_) {}
+            }
+            break;
+          } catch (e: any) {
+            testResults.push({ abrangencia: val, status: 'FAIL', error: e.message?.substring(0, 120) });
+          }
+        }
+
+        result = { swaggerInfo, testResults };
         break;
       }
 
