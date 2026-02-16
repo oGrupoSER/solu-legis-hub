@@ -37,7 +37,7 @@ export default function DistributionTerms() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [newTermDialog, setNewTermDialog] = useState(false);
   const [selectedService, setSelectedService] = useState<string>("");
-  const [newTerm, setNewTerm] = useState({ nome: "", instancia: "1", abrangencia: "NACIONAL" });
+  const [newTerm, setNewTerm] = useState({ nome: "", instancia: "1", abrangencia: "RJ" });
   const [selectedClients, setSelectedClients] = useState<string[]>([]);
   const [clientError, setClientError] = useState(false);
 
@@ -104,7 +104,7 @@ export default function DistributionTerms() {
     onSuccess: () => {
       toast.success("Nome cadastrado com sucesso");
       setNewTermDialog(false);
-      setNewTerm({ nome: "", instancia: "1", abrangencia: "NACIONAL" });
+      setNewTerm({ nome: "", instancia: "1", abrangencia: "RJ" });
       setSelectedClients([]);
       setClientError(false);
       queryClient.invalidateQueries({ queryKey: ["distribution-terms"] });
@@ -243,10 +243,10 @@ export default function DistributionTerms() {
                     <Label>Abrangência</Label>
                     <Select value={newTerm.abrangencia} onValueChange={(v) => setNewTerm({ ...newTerm, abrangencia: v })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="NACIONAL">Nacional</SelectItem>
-                        <SelectItem value="ESTADUAL">Estadual</SelectItem>
-                        <SelectItem value="FEDERAL">Federal</SelectItem>
+                      <SelectContent className="max-h-60">
+                        {["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"].map(uf => (
+                          <SelectItem key={uf} value={uf}>{uf}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
