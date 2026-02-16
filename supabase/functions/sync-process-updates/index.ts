@@ -72,6 +72,20 @@ serve(async (req) => {
       try {
         validateService(service);
 
+        // Get partner's office_code to filter sync data
+        const { data: partnerData } = await supabase
+          .from('partners')
+          .select('office_code')
+          .eq('id', service.partner_id)
+          .single();
+        
+        const partnerOfficeCode = partnerData?.office_code as number | null;
+        if (partnerOfficeCode) {
+          console.log(`Filtering sync data by partner office_code: ${partnerOfficeCode}`);
+        } else {
+          console.log('WARNING: Partner has no office_code configured, importing all data');
+        }
+
         await logger.start({
           partner_service_id: service.id,
           sync_type: `process_updates_${syncType}`,
@@ -89,14 +103,14 @@ serve(async (req) => {
 
         // 1. Sync Groupers (Agrupadores)
         if (syncType === 'full' || syncType === 'groupers') {
-          const groupersSynced = await syncGroupers(client, supabase, service);
+          const groupersSynced = await syncGroupers(client, supabase, service, partnerOfficeCode);
           totalSynced += groupersSynced;
           console.log(`Synced ${groupersSynced} groupers`);
         }
 
         // 2. Sync Dependencies
         if (syncType === 'full' || syncType === 'dependencies') {
-          const depsSynced = await syncDependencies(client, supabase, service);
+          const depsSynced = await syncDependencies(client, supabase, service, partnerOfficeCode);
           totalSynced += depsSynced;
           console.log(`Synced ${depsSynced} dependencies`);
         }
@@ -108,7 +122,7 @@ serve(async (req) => {
           const maxBatches = 20; // Safety limit
           
           while (batchCount < maxBatches) {
-            const movementsSynced = await syncMovements(client, supabase, service);
+            const movementsSynced = await syncMovements(client, supabase, service, partnerOfficeCode);
             totalMovements += movementsSynced;
             batchCount++;
             
@@ -129,7 +143,7 @@ serve(async (req) => {
           const maxBatches = 20; // Safety limit
           
           while (batchCount < maxBatches) {
-            const docsSynced = await syncDocuments(client, supabase, service);
+            const docsSynced = await syncDocuments(client, supabase, service, partnerOfficeCode);
             totalDocs += docsSynced;
             batchCount++;
             
@@ -151,7 +165,7 @@ serve(async (req) => {
 
         // 5. Sync Covers (Capas) with Parties and Lawyers
         if (syncType === 'full' || syncType === 'covers') {
-          const coversSynced = await syncCovers(client, supabase, service);
+          const coversSynced = await syncCovers(client, supabase, service, partnerOfficeCode);
           totalSynced += coversSynced;
           console.log(`Synced ${coversSynced} covers`);
         }
@@ -198,13 +212,21 @@ serve(async (req) => {
  * GET /BuscaNovosAgrupadores - returns max 500 unconfirmed groupers
  * POST /ConfirmaRecebimentoAgrupador - confirms receipt
  */
-async function syncGroupers(client: RestClient, supabase: any, service: any): Promise<number> {
+async function syncGroupers(client: RestClient, supabase: any, service: any, officeCodeFilter: number | null): Promise<number> {
   try {
-    const data = await client.get('/BuscaNovosAgrupadores');
+    let data = await client.get('/BuscaNovosAgrupadores');
     
     if (!Array.isArray(data) || data.length === 0) {
       console.log('No new groupers found');
       return 0;
+    }
+
+    // Filter by partner office_code
+    if (officeCodeFilter) {
+      const beforeCount = data.length;
+      data = data.filter((g: any) => g.codEscritorio === officeCodeFilter);
+      console.log(`Filtered groupers: ${beforeCount} -> ${data.length} (office_code=${officeCodeFilter})`);
+      if (data.length === 0) return 0;
     }
 
     console.log(`Found ${data.length} new groupers`);
@@ -293,13 +315,21 @@ async function syncGroupers(client: RestClient, supabase: any, service: any): Pr
  * GET /BuscaNovasDependencias - returns max 500 unconfirmed dependencies
  * POST /ConfirmaRecebimentoDependencia - confirms receipt
  */
-async function syncDependencies(client: RestClient, supabase: any, service: any): Promise<number> {
+async function syncDependencies(client: RestClient, supabase: any, service: any, officeCodeFilter: number | null): Promise<number> {
   try {
-    const data = await client.get('/BuscaNovasDependencias');
+    let data = await client.get('/BuscaNovasDependencias');
     
     if (!Array.isArray(data) || data.length === 0) {
       console.log('No new dependencies found');
       return 0;
+    }
+
+    // Filter by partner office_code
+    if (officeCodeFilter) {
+      const beforeCount = data.length;
+      data = data.filter((d: any) => d.codEscritorio === officeCodeFilter);
+      console.log(`Filtered dependencies: ${beforeCount} -> ${data.length} (office_code=${officeCodeFilter})`);
+      if (data.length === 0) return 0;
     }
 
     console.log(`Found ${data.length} new dependencies`);
@@ -383,13 +413,32 @@ async function syncDependencies(client: RestClient, supabase: any, service: any)
  * GET /BuscaNovosAndamentos - returns max 500 unconfirmed movements
  * POST /ConfirmaRecebimentoAndamento - confirms receipt
  */
-async function syncMovements(client: RestClient, supabase: any, service: any): Promise<number> {
+async function syncMovements(client: RestClient, supabase: any, service: any, officeCodeFilter: number | null): Promise<number> {
   try {
-    const data = await client.get('/BuscaNovosAndamentos');
+    let data = await client.get('/BuscaNovosAndamentos');
     
     if (!Array.isArray(data) || data.length === 0) {
       console.log('No new movements found');
       return 0;
+    }
+
+    // Filter by partner office_code (movements have codEscritorio in some cases, or filter via known processes)
+    if (officeCodeFilter) {
+      const beforeCount = data.length;
+      // Movements may have codEscritorio field
+      if (data[0]?.codEscritorio !== undefined) {
+        data = data.filter((m: any) => m.codEscritorio === officeCodeFilter);
+      } else {
+        // Filter by checking if codProcesso belongs to our office
+        const knownProcesses = await supabase
+          .from('processes')
+          .select('cod_processo')
+          .eq('cod_escritorio', officeCodeFilter);
+        const knownSet = new Set((knownProcesses?.data || []).map((p: any) => p.cod_processo));
+        data = data.filter((m: any) => knownSet.has(m.codProcesso));
+      }
+      console.log(`Filtered movements: ${beforeCount} -> ${data.length} (office_code=${officeCodeFilter})`);
+      if (data.length === 0) return 0;
     }
 
     console.log(`Found ${data.length} new movements`);
@@ -446,13 +495,30 @@ async function syncMovements(client: RestClient, supabase: any, service: any): P
  * GET /BuscaNovosDocumentos - returns max 500 unconfirmed documents
  * POST /ConfirmaRecebimentoDocumento - confirms receipt
  */
-async function syncDocuments(client: RestClient, supabase: any, service: any): Promise<number> {
+async function syncDocuments(client: RestClient, supabase: any, service: any, officeCodeFilter: number | null): Promise<number> {
   try {
-    const data = await client.get('/BuscaNovosDocumentos');
+    let data = await client.get('/BuscaNovosDocumentos');
     
     if (!Array.isArray(data) || data.length === 0) {
       console.log('No new documents found');
       return 0;
+    }
+
+    // Filter by partner office_code
+    if (officeCodeFilter) {
+      const beforeCount = data.length;
+      if (data[0]?.codEscritorio !== undefined) {
+        data = data.filter((d: any) => d.codEscritorio === officeCodeFilter);
+      } else {
+        const knownProcesses = await supabase
+          .from('processes')
+          .select('cod_processo')
+          .eq('cod_escritorio', officeCodeFilter);
+        const knownSet = new Set((knownProcesses?.data || []).map((p: any) => p.cod_processo));
+        data = data.filter((d: any) => knownSet.has(d.codProcesso));
+      }
+      console.log(`Filtered documents: ${beforeCount} -> ${data.length} (office_code=${officeCodeFilter})`);
+      if (data.length === 0) return 0;
     }
 
     console.log(`Found ${data.length} new documents`);
@@ -592,14 +658,22 @@ async function linkOrphanDocuments(supabase: any): Promise<number> {
  * POST /BuscaDadosCapaEStatusVariosProcessos - gets cover details for multiple processes
  * POST /ConfirmaRecebimentoProcessosComCapaAtualizada - confirms receipt
  */
-async function syncCovers(client: RestClient, supabase: any, service: any): Promise<number> {
+async function syncCovers(client: RestClient, supabase: any, service: any, officeCodeFilter: number | null): Promise<number> {
   try {
     // First get processes with updated covers
-    const processesWithUpdates = await client.get('/BuscaProcessosComCapaAtualizada');
+    let processesWithUpdates = await client.get('/BuscaProcessosComCapaAtualizada');
     
     if (!Array.isArray(processesWithUpdates) || processesWithUpdates.length === 0) {
       console.log('No processes with updated covers found');
       return 0;
+    }
+
+    // Filter by partner office_code
+    if (officeCodeFilter) {
+      const beforeCount = processesWithUpdates.length;
+      processesWithUpdates = processesWithUpdates.filter((p: any) => p.codEscritorio === officeCodeFilter);
+      console.log(`Filtered covers: ${beforeCount} -> ${processesWithUpdates.length} (office_code=${officeCodeFilter})`);
+      if (processesWithUpdates.length === 0) return 0;
     }
 
     console.log(`Found ${processesWithUpdates.length} processes with updated covers`);
