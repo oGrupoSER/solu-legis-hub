@@ -162,6 +162,23 @@ serve(async (req) => {
         // 4.1 Link orphan documents to processes
         if (syncType === 'full' || syncType === 'documents') {
           const linkedDocs = await linkOrphanDocuments(supabase);
+
+          // 4.2 Trigger document download to Storage
+          try {
+            console.log('Triggering document download to Storage...');
+            const downloadResponse = await fetch(`${supabaseUrl}/functions/v1/download-process-documents`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabaseServiceKey}`,
+              },
+              body: JSON.stringify({ limit: 50 }),
+            });
+            const downloadResult = await downloadResponse.json();
+            console.log(`Document download result: ${downloadResult.downloaded} downloaded, ${downloadResult.failed} failed`);
+          } catch (dlError) {
+            console.error('Error triggering document download:', dlError);
+          }
           console.log(`Linked ${linkedDocs} orphan documents to processes`);
         }
 

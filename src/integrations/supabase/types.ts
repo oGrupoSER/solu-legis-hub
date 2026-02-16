@@ -752,6 +752,7 @@ export type Database = {
           nome_arquivo: string | null
           process_id: string | null
           raw_data: Json
+          storage_path: string | null
           tamanho_bytes: number | null
           tipo_documento: string | null
         }
@@ -768,6 +769,7 @@ export type Database = {
           nome_arquivo?: string | null
           process_id?: string | null
           raw_data?: Json
+          storage_path?: string | null
           tamanho_bytes?: number | null
           tipo_documento?: string | null
         }
@@ -784,6 +786,7 @@ export type Database = {
           nome_arquivo?: string | null
           process_id?: string | null
           raw_data?: Json
+          storage_path?: string | null
           tamanho_bytes?: number | null
           tipo_documento?: string | null
         }
