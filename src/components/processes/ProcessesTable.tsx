@@ -4,11 +4,10 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Search, ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock, MoreHorizontal, Pencil, Trash2, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock, MoreHorizontal, Pencil, Trash2, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ClientBadges } from "@/components/shared/ClientBadges";
 import { EditProcessDialog } from "@/components/processes/EditProcessDialog";
@@ -38,18 +37,30 @@ const statusColors: Record<number, string> = {
   7: "bg-destructive/20 text-destructive border-destructive/30",
 };
 
-export function ProcessesTable() {
+interface ProcessesTableProps {
+  searchQuery?: string;
+  filterStatus?: string;
+}
+
+const STATUS_FILTER_MAP: Record<string, number> = {
+  pending: 1, registered: 4, archived: 5, error: 7,
+};
+
+export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: ProcessesTableProps) {
   const [processes, setProcesses] = useState<Process[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [editProcess, setEditProcess] = useState<Process | null>(null);
   const pageSize = 20;
 
   useEffect(() => {
+    setPage(0);
+  }, [searchQuery, filterStatus]);
+
+  useEffect(() => {
     fetchProcesses();
-  }, [page, search]);
+  }, [page, searchQuery, filterStatus]);
 
   const fetchProcesses = async () => {
     try {
@@ -61,8 +72,12 @@ export function ProcessesTable() {
         .order("created_at", { ascending: false })
         .range(page * pageSize, (page + 1) * pageSize - 1);
 
-      if (search) {
-        query = query.or(`process_number.ilike.%${search}%,tribunal.ilike.%${search}%`);
+      if (searchQuery) {
+        query = query.or(`process_number.ilike.%${searchQuery}%,tribunal.ilike.%${searchQuery}%`);
+      }
+
+      if (filterStatus !== "all" && STATUS_FILTER_MAP[filterStatus]) {
+        query = query.eq("status_code", STATUS_FILTER_MAP[filterStatus]);
       }
 
       const { data, error, count } = await query;
@@ -114,19 +129,7 @@ export function ProcessesTable() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="p-4 border-b">
-        <div className="relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por número ou tribunal..."
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-            className="pl-9"
-          />
-        </div>
-      </div>
-
+    <div>
       <Table>
         <TableHeader>
           <TableRow>
