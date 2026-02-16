@@ -1,15 +1,18 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Eye, Search, ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock } from "lucide-react";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Search, ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock, MoreHorizontal, Pencil, Trash2, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ClientBadges } from "@/components/shared/ClientBadges";
+import { EditProcessDialog } from "@/components/processes/EditProcessDialog";
+import { toast } from "sonner";
 
 interface Process {
   id: string;
@@ -23,6 +26,7 @@ interface Process {
   created_at: string | null;
   last_sync_at: string | null;
   solucionare_status: string;
+  partner_service_id: string | null;
   client_processes?: { client_systems: { name: string } }[];
 }
 
@@ -35,12 +39,12 @@ const statusColors: Record<number, string> = {
 };
 
 export function ProcessesTable() {
-  const navigate = useNavigate();
   const [processes, setProcesses] = useState<Process[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
+  const [editProcess, setEditProcess] = useState<Process | null>(null);
   const pageSize = 20;
 
   useEffect(() => {
@@ -81,6 +85,34 @@ export function ProcessesTable() {
       .filter(Boolean) || [];
   };
 
+  const handleDelete = async (process: Process) => {
+    if (!confirm(`Excluir o processo ${process.process_number} do monitoramento?`)) return;
+    try {
+      const { error } = await supabase.functions.invoke("sync-process-management", {
+        body: { action: "delete", processNumber: process.process_number },
+      });
+      if (error) throw error;
+      toast.success("Processo excluído");
+      fetchProcesses();
+    } catch (error) {
+      toast.error("Erro ao excluir processo");
+    }
+  };
+
+  const handleCheckStatus = async (process: Process) => {
+    try {
+      toast.info("Verificando status...");
+      const { data, error } = await supabase.functions.invoke("sync-process-management", {
+        body: { action: "status", processNumber: process.process_number },
+      });
+      if (error) throw error;
+      toast.success(`Status: ${data?.statusDescription || "Verificado"}`);
+      fetchProcesses();
+    } catch (error) {
+      toast.error("Erro ao verificar status");
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="p-4 border-b">
@@ -107,7 +139,7 @@ export function ProcessesTable() {
              <TableHead>Solucionare</TableHead>
              <TableHead>Clientes</TableHead>
              <TableHead>Última Sincronização</TableHead>
-             <TableHead className="w-[80px]">Ações</TableHead>
+             <TableHead className="w-[60px]">Ações</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -127,11 +159,7 @@ export function ProcessesTable() {
             processes.map((process) => {
               const clients = getClientNames(process);
               return (
-                <TableRow
-                  key={process.id}
-                  className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => navigate(`/processes/${process.id}`)}
-                >
+                <TableRow key={process.id}>
                   <TableCell className="font-mono text-sm">{process.process_number}</TableCell>
                   <TableCell className="text-sm font-medium">{(process as any).cod_escritorio || "-"}</TableCell>
                   <TableCell>{process.tribunal || "-"}</TableCell>
@@ -166,9 +194,27 @@ export function ProcessesTable() {
                       : "-"}
                   </TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); navigate(`/processes/${process.id}`); }}>
-                      <Eye className="h-4 w-4" />
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => setEditProcess(process)}>
+                          <Pencil className="h-4 w-4 mr-2" /> Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleCheckStatus(process)}>
+                          <RefreshCw className="h-4 w-4 mr-2" /> Verificar Status
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleDelete(process)}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" /> Excluir
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               );
@@ -192,6 +238,13 @@ export function ProcessesTable() {
           </div>
         </div>
       )}
+
+      <EditProcessDialog
+        open={!!editProcess}
+        onOpenChange={(open) => { if (!open) setEditProcess(null); }}
+        onSuccess={() => { setEditProcess(null); fetchProcesses(); }}
+        process={editProcess}
+      />
     </div>
   );
 }
