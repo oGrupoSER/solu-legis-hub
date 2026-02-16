@@ -201,9 +201,11 @@ export function ProcessesTable() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setEditProcess(process)}>
-                          <Pencil className="h-4 w-4 mr-2" /> Editar
-                        </DropdownMenuItem>
+                        {process.status_code === 7 && (
+                          <DropdownMenuItem onClick={() => setEditProcess(process)}>
+                            <Pencil className="h-4 w-4 mr-2" /> Editar
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuItem onClick={() => handleCheckStatus(process)}>
                           <RefreshCw className="h-4 w-4 mr-2" /> Verificar Status
                         </DropdownMenuItem>
