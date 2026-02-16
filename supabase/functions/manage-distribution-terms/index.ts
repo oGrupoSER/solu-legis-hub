@@ -204,7 +204,7 @@ serve(async (req) => {
                 nome: pt.term,
                 codTipoConsulta: 1,
                 listInstancias: [1],
-                listAbrangencias: [1],
+                listAbrangencias: ['NACIONAL'],
               });
               await supabase.from('search_terms').update({ solucionare_status: 'synced', updated_at: new Date().toISOString() }).eq('id', pt.id);
               retriedCount++;
@@ -224,14 +224,9 @@ serve(async (req) => {
         const { nome, instancia, abrangencia } = params;
         if (!nome) throw new Error('nome is required');
 
-        // Map abrangencia string to numeric code expected by API
-        const abrangenciaMap: Record<string, number> = {
-          'NACIONAL': 1,
-          'ESTADUAL': 2,
-          'FEDERAL': 3,
-        };
-        const abrangenciaCode = typeof abrangencia === 'number' ? abrangencia : (abrangenciaMap[abrangencia] || 1);
         const instanciaCode = typeof instancia === 'number' ? instancia : parseInt(instancia) || 1;
+        // listAbrangencias is Collection of string per API docs
+        const abrangenciaStr = typeof abrangencia === 'string' ? abrangencia : String(abrangencia || 'NACIONAL');
 
         // DEDUPLICATION: Check if term exists
         const { data: existing } = await supabase
@@ -248,14 +243,16 @@ serve(async (req) => {
         if (existing) {
           termRecord = existing;
         } else {
-          // Send full body with numeric codes
-          result = await apiRequest(service.service_url, '/CadastrarNome', jwtToken, 'POST', {
+          // Send full body with string abrangencias per API docs
+          const requestBody = {
             codEscritorio: officeCode,
             nome,
             codTipoConsulta: 1,
             listInstancias: [instanciaCode],
-            listAbrangencias: [abrangenciaCode],
-          });
+            listAbrangencias: [abrangenciaStr],
+          };
+          console.log(`[registerName] Request body:`, JSON.stringify(requestBody));
+          result = await apiRequest(service.service_url, '/CadastrarNome', jwtToken, 'POST', requestBody);
           registeredInSolucionare = true;
 
           const solCode = result?.codNome || null;
@@ -354,7 +351,7 @@ serve(async (req) => {
       }
 
       case 'listScopes': {
-        result = await apiRequest(service.service_url, '/BuscaAbrangencias', jwtToken);
+        result = await apiRequest(service.service_url, `/BuscaEscritoriosCadastrados?codEscritorio=${officeCode}`, jwtToken);
         break;
       }
 
