@@ -148,6 +148,7 @@ serve(async (req) => {
               uf: uf || null,
               instance: instance?.toString() || null,
               raw_data: registerData || {},
+              solucionare_status: 'synced',
             }, { onConflict: 'process_number' })
             .select()
             .single();

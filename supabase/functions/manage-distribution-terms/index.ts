@@ -151,10 +151,10 @@ serve(async (req) => {
             .eq('partner_service_id', serviceId).maybeSingle();
 
           if (existing) {
-            await supabase.from('search_terms').update({ is_active: isActive, solucionare_code: solCode, updated_at: new Date().toISOString() }).eq('id', existing.id);
+            await supabase.from('search_terms').update({ is_active: isActive, solucionare_code: solCode, solucionare_status: 'synced', updated_at: new Date().toISOString() }).eq('id', existing.id);
             await linkTermToClients(existing.id);
           } else {
-            const { data: inserted } = await supabase.from('search_terms').insert({ term: termo, term_type: 'distribution', partner_service_id: serviceId, partner_id: service.partner_id, is_active: isActive, solucionare_code: solCode }).select('id').single();
+            const { data: inserted } = await supabase.from('search_terms').insert({ term: termo, term_type: 'distribution', partner_service_id: serviceId, partner_id: service.partner_id, is_active: isActive, solucionare_code: solCode, solucionare_status: 'synced' }).select('id').single();
             if (inserted) await linkTermToClients(inserted.id);
           }
         }
@@ -184,6 +184,36 @@ serve(async (req) => {
             }
           }
           apiNames = uniqueTerms.map(t => ({ nome: t }));
+        }
+
+        // RETRY: Re-send pending terms that failed to register with Solucionare
+        const { data: pendingTerms } = await supabase.from('search_terms')
+          .select('id, term')
+          .eq('partner_service_id', serviceId)
+          .eq('term_type', 'distribution')
+          .eq('solucionare_status', 'pending')
+          .eq('is_active', true);
+
+        let retriedCount = 0;
+        if (pendingTerms && pendingTerms.length > 0) {
+          console.log(`[listNames] Retrying ${pendingTerms.length} pending terms`);
+          for (const pt of pendingTerms) {
+            try {
+              await apiRequest(service.service_url, '/CadastrarNome', jwtToken, 'POST', {
+                codEscritorio: officeCode,
+                nome: pt.term,
+                codTipoConsulta: 1,
+                listInstancias: [1],
+                listAbrangencias: ['NACIONAL'],
+              });
+              await supabase.from('search_terms').update({ solucionare_status: 'synced', updated_at: new Date().toISOString() }).eq('id', pt.id);
+              retriedCount++;
+            } catch (e) {
+              console.error(`[retry] Failed to register term "${pt.term}":`, e);
+              await supabase.from('search_terms').update({ solucionare_status: 'error', updated_at: new Date().toISOString() }).eq('id', pt.id);
+            }
+          }
+          console.log(`[listNames] Retried ${retriedCount}/${pendingTerms.length} pending terms`);
         }
 
         result = apiNames;
@@ -223,7 +253,7 @@ serve(async (req) => {
           const { data: inserted } = await supabase.from('search_terms').insert({
             term: nome, term_type: 'distribution',
             partner_service_id: serviceId, partner_id: service.partner_id,
-            is_active: true, solucionare_code: solCode,
+            is_active: true, solucionare_code: solCode, solucionare_status: 'synced',
           }).select().single();
           termRecord = inserted;
         }

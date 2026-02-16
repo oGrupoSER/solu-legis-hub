@@ -242,6 +242,7 @@ async function cadastrarNome(
         partner_service_id: service.id,
         is_active: true,
         solucionare_code: solCode,
+        solucionare_status: 'synced',
       })
       .select()
       .single();
@@ -412,6 +413,7 @@ async function cadastrarEscritorio(
         partner_id: service.partner_id,
         partner_service_id: service.id,
         is_active: true,
+        solucionare_status: 'synced',
       })
       .select()
       .single();
@@ -480,14 +482,14 @@ async function syncAll(soapClient: SoapClient, service: any, officeCode: number)
 
           if (existing) {
             await supabase.from('search_terms')
-              .update({ is_active: true, solucionare_code: solCode, updated_at: new Date().toISOString() })
+              .update({ is_active: true, solucionare_code: solCode, solucionare_status: 'synced', updated_at: new Date().toISOString() })
               .eq('id', existing.id);
             stats.namesUpdated++;
           } else {
             await supabase.from('search_terms').insert({
               term: searchName, term_type: 'name',
               partner_id: service.partner_id, partner_service_id: service.id,
-              is_active: true, solucionare_code: solCode,
+              is_active: true, solucionare_code: solCode, solucionare_status: 'synced',
             });
             stats.namesImported++;
           }

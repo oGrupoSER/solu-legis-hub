@@ -13,7 +13,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Plus, Search, Loader2, Download, RefreshCw } from "lucide-react";
+import { Plus, Search, Loader2, Download, RefreshCw, CheckCircle2, AlertCircle, Clock } from "lucide-react";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { ClientBadges } from "@/components/shared/ClientBadges";
 import { ClientSelector } from "@/components/shared/ClientSelector";
@@ -25,6 +25,7 @@ interface DistributionTerm {
   is_active: boolean;
   created_at: string;
   solucionare_code: number | null;
+  solucionare_status: string;
   partners?: { name: string };
   partner_services?: { service_name: string };
   client_search_terms?: { client_systems: { id: string; name: string } }[];
@@ -315,26 +316,27 @@ export default function DistributionTerms() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Parceiro</TableHead>
-                  <TableHead>Serviço</TableHead>
-                  <TableHead>Clientes</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Cadastrado em</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
+                   <TableHead>Nome</TableHead>
+                   <TableHead>Parceiro</TableHead>
+                   <TableHead>Serviço</TableHead>
+                   <TableHead>Clientes</TableHead>
+                   <TableHead>Solucionare</TableHead>
+                   <TableHead>Status</TableHead>
+                   <TableHead>Cadastrado em</TableHead>
+                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
-                      <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
-                    </TableCell>
-                  </TableRow>
+                   <TableRow>
+                     <TableCell colSpan={8} className="text-center py-8">
+                       <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
+                     </TableCell>
+                   </TableRow>
                 ) : filteredTerms.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">Nenhum nome encontrado</TableCell>
-                  </TableRow>
+                   <TableRow>
+                     <TableCell colSpan={8} className="text-center text-muted-foreground py-8">Nenhum nome encontrado</TableCell>
+                   </TableRow>
                 ) : (
                   filteredTerms.map((term) => {
                     const clients = getClientNames(term);
@@ -343,14 +345,29 @@ export default function DistributionTerms() {
                         <TableCell className="font-medium">{term.term}</TableCell>
                         <TableCell className="text-sm">{term.partners?.name || "-"}</TableCell>
                         <TableCell className="text-sm">{term.partner_services?.service_name || "-"}</TableCell>
-                        <TableCell>
-                          <ClientBadges clients={clients} />
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={term.is_active ? "default" : "secondary"}>
-                            {term.is_active ? "Ativo" : "Inativo"}
-                          </Badge>
-                        </TableCell>
+                         <TableCell>
+                           <ClientBadges clients={clients} />
+                         </TableCell>
+                         <TableCell>
+                           {term.solucionare_status === 'synced' ? (
+                             <Badge variant="outline" className="bg-green-500/10 text-green-700 border-green-500/30 gap-1">
+                               <CheckCircle2 className="h-3 w-3" /> Sincronizado
+                             </Badge>
+                           ) : term.solucionare_status === 'error' ? (
+                             <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/30 gap-1">
+                               <AlertCircle className="h-3 w-3" /> Erro
+                             </Badge>
+                           ) : (
+                             <Badge variant="outline" className="bg-yellow-500/10 text-yellow-700 border-yellow-500/30 gap-1">
+                               <Clock className="h-3 w-3" /> Pendente
+                             </Badge>
+                           )}
+                         </TableCell>
+                         <TableCell>
+                           <Badge variant={term.is_active ? "default" : "secondary"}>
+                             {term.is_active ? "Ativo" : "Inativo"}
+                           </Badge>
+                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {term.created_at ? format(new Date(term.created_at), "dd/MM/yyyy", { locale: ptBR }) : "-"}
                         </TableCell>
