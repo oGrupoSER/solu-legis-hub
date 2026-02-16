@@ -1,17 +1,19 @@
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, Plus, Gavel } from "lucide-react";
+import { RefreshCw, Plus, Gavel, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { ProcessesTable } from "@/components/processes/ProcessesTable";
 import { ProcessDialog } from "@/components/processes/ProcessDialog";
 import { ProcessesStats } from "@/components/processes/ProcessesStats";
+import { BulkClientLinkDialog } from "@/components/shared/BulkClientLinkDialog";
 import { supabase } from "@/integrations/supabase/client";
 
 const Processes = () => {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [bulkLinkOpen, setBulkLinkOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
   const handleSync = async () => {
@@ -73,6 +75,15 @@ const Processes = () => {
         </div>
         <div className="flex gap-2">
           <Button
+            onClick={() => setBulkLinkOpen(true)}
+            variant="outline"
+            size="sm"
+            className="gap-2"
+          >
+            <Link2 className="h-4 w-4" />
+            Vincular Clientes
+          </Button>
+          <Button
             onClick={handleSync}
             variant="outline"
             size="sm"
@@ -111,6 +122,13 @@ const Processes = () => {
         open={dialogOpen} 
         onOpenChange={setDialogOpen}
         onSuccess={handleProcessCreated}
+      />
+
+      <BulkClientLinkDialog
+        open={bulkLinkOpen}
+        onOpenChange={setBulkLinkOpen}
+        entityType="processes"
+        onSuccess={() => setRefreshTrigger(prev => prev + 1)}
       />
     </div>
   );

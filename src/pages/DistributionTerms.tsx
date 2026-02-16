@@ -13,10 +13,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Plus, Search, Loader2, Download, RefreshCw, CheckCircle2, AlertCircle, Clock } from "lucide-react";
+import { Plus, Search, Loader2, Download, RefreshCw, CheckCircle2, AlertCircle, Clock, Link2 } from "lucide-react";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { ClientBadges } from "@/components/shared/ClientBadges";
 import { ClientSelector } from "@/components/shared/ClientSelector";
+import { BulkClientLinkDialog } from "@/components/shared/BulkClientLinkDialog";
 
 interface DistributionTerm {
   id: string;
@@ -40,6 +41,7 @@ export default function DistributionTerms() {
   const [newTerm, setNewTerm] = useState({ nome: "", instancia: "1" });
   const [selectedClients, setSelectedClients] = useState<string[]>([]);
   const [clientError, setClientError] = useState(false);
+  const [bulkLinkOpen, setBulkLinkOpen] = useState(false);
 
   // Fetch distribution terms
   const { data: terms = [], isLoading } = useQuery({
@@ -195,6 +197,9 @@ export default function DistributionTerms() {
           <p className="text-muted-foreground mt-1">Gerencie os nomes monitorados para novas distribuições</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setBulkLinkOpen(true)} className="gap-2">
+            <Link2 className="h-4 w-4" /> Vincular Clientes
+          </Button>
           <Button variant="outline" onClick={() => syncMutation.mutate()} disabled={syncMutation.isPending} className="gap-2">
             <RefreshCw className={`h-4 w-4 ${syncMutation.isPending ? "animate-spin" : ""}`} />
             {syncMutation.isPending ? "Sincronizando..." : "Sincronizar"}
@@ -381,6 +386,13 @@ export default function DistributionTerms() {
           </div>
         </CardContent>
       </Card>
+
+      <BulkClientLinkDialog
+        open={bulkLinkOpen}
+        onOpenChange={setBulkLinkOpen}
+        entityType="distribution_terms"
+        onSuccess={() => queryClient.invalidateQueries({ queryKey: ["distribution-terms"] })}
+      />
     </div>
   );
 }
