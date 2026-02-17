@@ -1,94 +1,154 @@
 
-# Plano: Integrar Abrangencias no Cadastro de Termos de Distribuicao
 
-## Problema Atual
-O cadastro de nomes para monitoramento de distribuicoes falha porque o campo `listAbrangencias` esta sendo enviado vazio (`[]`), e a API retorna "E obrigatorio enviar uma abrangencia". Nao existe documentacao clara sobre os valores validos.
+# Plano: Implementar Variacoes, Termos de Bloqueio e Abrangencias para Publicacoes
 
-## Descoberta
-A API de Processos (mesmo fornecedor Solucionare, mesmas credenciais ORBO) possui o endpoint `BuscaAbrangencia` que retorna a lista completa de sistemas/tribunais com seus codigos. Cada item contem:
-- `codSistema` (numero): codigo unico do tribunal/sistema (ex: 1, 2, 130, 133...)
-- `siglaSistema` (texto): sigla curta (ex: TRF1_PJE1, TJSP_ESAJ, TRT2_PJE...)
-- `nomeSistema` (texto): nome completo (ex: "Tribunal de Justica de Sao Paulo - Esaj 1a instancia")
+## Problema Identificado
 
-Sao aproximadamente 200+ sistemas cobrindo todos os tribunais do Brasil.
+Analisando a documentacao (Secao 2), o objeto `NomePesquisa` da API SOAP possui 3 recursos importantes para maior assertividade que **NAO estao implementados**:
 
-## Solucao
+1. **Variacoes** (`variacoes: Variacao[]`) - Variantes ortograficas do nome buscado. Existe um metodo `gerarVariacoes` que gera automaticamente. A implementacao atual envia variacoes como string pipe-separated no `cadastrar`, mas NAO suporta geracao automatica nem o objeto completo.
 
-### 1. Nova action `listAbrangencias` na Edge Function `manage-distribution-terms`
-Buscar as abrangencias do endpoint da API de Processos (mesmo fornecedor, mesmo nomeRelacional/token). Isso funciona porque o BuscaAbrangencia usa autenticacao via query params (NomeRelacional + Token), que sao os mesmos para todos os servicos do parceiro.
+2. **Termos de Bloqueio** (`termosBloqueio: TermoBloqueio[]`) - Termos que, quando encontrados junto ao nome de pesquisa, **impedem** a captura da publicacao. Cada termo tem:
+   - `termo` (string): o texto bloqueador
+   - `estaContidoNoNomePesquisa` (bool): se o bloqueio so se aplica quando encontrado junto/contido no texto do nome de pesquisa
+   - **NAO implementado em nenhum lugar do sistema**
 
-A URL sera construida a partir do servico de processos do mesmo parceiro, ou diretamente da URL base conhecida.
+3. **Abrangencias** (`abrangencia: String[]`) - Siglas dos diarios de abrangencia do nome. A API SOAP tem `getAbrangencias` que retorna as opcoes disponiveis. **NAO implementado.**
 
-### 2. Atualizar o formulario de cadastro (`DistributionTerms.tsx`)
-- Adicionar um seletor de abrangencias com busca/filtro
-- Organizar os tribunais por grupo (TRFs, TJs, TRTs, Superiores) para facilitar a selecao
-- Permitir selecao multipla (o campo `listAbrangencias` aceita array)
-- Pre-carregar as abrangencias ao abrir o dialog de cadastro
+4. **OAB** - Campo `oab` no `NomePesquisa`. **NAO implementado.**
 
-### 3. Atualizar a action `registerName` na Edge Function
-- Receber o parametro `abrangencias` (array de codSistema)
-- Enviar `listAbrangencias` com os codigos selecionados ao inves de array vazio
-- Tambem atualizar o retry de termos pendentes para usar abrangencias salvas
+## O Que Sera Feito
 
-### 4. Testar o cadastro com abrangencias reais
-Apos implementar, testar o cadastro de um nome com codSistema validos para confirmar que a API aceita.
+### 1. Evolucao do SOAP Client
+
+O `SoapClient.buildEnvelope` atual so suporta parametros simples (string/int). Precisa suportar objetos complexos aninhados como `NomePesquisa` com arrays de `TermoBloqueio` e `Variacao`.
+
+Sera adicionado um metodo `buildComplexParam` que gera XML para objetos aninhados com arrays.
+
+### 2. Evolucao da Edge Function `manage-search-terms`
+
+**Novas actions:**
+- `gerar_variacoes`: Chama `gerarVariacoes(nomeRelacional, token, type, termo)` e retorna sugestoes automaticas
+- `buscar_abrangencias`: Chama `getAbrangencias(nomeRelacional, token)` e retorna siglas de diarios disponiveis
+- `visualizar_nome`: Chama `getNomePesquisa(nomeRelacional, token, codNome)` para obter o objeto completo com variacoes, bloqueios e abrangencias atuais
+
+**Action `cadastrar_nome` atualizada:**
+- Receber `termos_bloqueio: { termo: string, contido: boolean }[]` do frontend
+- Receber `abrangencias: string[]` (siglas de diarios)
+- Receber `oab: string` (opcional)
+- Construir o objeto `NomePesquisa` completo no XML SOAP com todos os sub-arrays
+
+**Action `editar_nome` atualizada:**
+- Usar o fluxo correto da doc: primeiro `getNomePesquisa` para obter o objeto atual, depois manipular e devolver via `setNomePesquisa`
+- Incluir variacoes, bloqueios e abrangencias na edicao
+
+### 3. Evolucao da Edge Function `manage-publication-terms`
+
+Esta funcao esta com implementacao SOAP incorreta (chama `cadastrar` sem parametros, depois `setNomePesquisa` separado). Sera corrigida para:
+- Usar o mesmo padrao do `manage-search-terms` (cadastrar com objeto completo)
+- Suportar variacoes, bloqueios e abrangencias
+
+### 4. Evolucao do Frontend - Dialog de Cadastro/Edicao
+
+O `SearchTermDialog.tsx` (usado em PublicationTerms) sera expandido com:
+
+**Secao "Variacoes":**
+- Campo de entrada + botao adicionar (ja existe no ManageTermDialog, sera portado)
+- Botao "Gerar Automaticamente" que chama a action `gerar_variacoes` da API
+- Suporte a tipo 1 (variacao de nome) e tipo 2 (variacao de OAB, formato "CODIGO|UF")
+- Lista de variacoes com botao remover
+
+**Secao "Termos de Bloqueio" (NOVA):**
+- Campo de entrada para o termo bloqueador
+- Checkbox "Somente quando contido no nome de pesquisa" (mapeia para `estaContidoNoNomePesquisa`)
+- Botao adicionar
+- Lista de termos de bloqueio com botao remover
+- Tooltip explicativo: "Termos de bloqueio impedem a captura de publicacoes quando encontrados junto ao nome pesquisado"
+
+**Secao "Abrangencias" (NOVA):**
+- Multi-select com as siglas de diarios disponiveis (carregadas via `buscar_abrangencias`)
+- Campo de busca para filtrar
+- Botoes "Selecionar Todos" / "Limpar"
+
+**Campo "OAB" (NOVO):**
+- Input opcional que aparece quando term_type === 'name'
+
+### 5. Armazenamento Local
+
+Os dados adicionais (variacoes, bloqueios, abrangencias, OAB) serao armazenados no campo `raw_data` (JSONB) existente na tabela `search_terms` (atualmente nao existe esse campo, sera necessario adicionar via migration), ou alternativamente em um novo campo JSONB `metadata`.
+
+**Estrutura do campo metadata/raw_data:**
+```text
+{
+  "variacoes": ["J. Silva", "Joao S."],
+  "termos_bloqueio": [
+    { "termo": "TESTEMUNHA", "contido": true },
+    { "termo": "PERITO", "contido": false }
+  ],
+  "abrangencias": ["DJE-SP", "DJE-MG", "DOU"],
+  "oab": "123456|MG",
+  "cod_nome": 12345
+}
+```
 
 ---
 
 ## Detalhes Tecnicos
 
-### Edge Function: `manage-distribution-terms/index.ts`
+### SOAP Client - Suporte a XML Complexo
 
-**Nova action `listAbrangencias`:**
-- Busca o servico de processos do mesmo parceiro (`partner_id`)
-- Chama `{processes_service_url}/BuscaAbrangencia?NomeRelacional={nome}&Token={token}`
-- Retorna a lista organizada por grupos (Federais, Estaduais, Trabalhistas, Superiores)
-
-**Action `registerName` atualizada:**
-- Recebe `abrangencias: number[]` do frontend
-- Envia `listAbrangencias: abrangencias` na chamada a API
-- Salva as abrangencias selecionadas no campo `raw_data` do search_term para referencia futura
-
-**Action `listNames` (retry) atualizada:**
-- Ao re-tentar termos pendentes, recupera abrangencias salvas em `raw_data`
-
-### Frontend: `src/pages/DistributionTerms.tsx`
-
-**Dialog de cadastro expandido:**
-- Novo campo "Abrangencias (Tribunais)" com componente de multi-selecao
-- Agrupamento visual: Federais (TRF1-TRF5), Estaduais (TJs), Trabalhistas (TRTs), Superiores (STJ, STF, TST, TSE)
-- Campo de busca para filtrar pelo nome ou sigla do tribunal
-- Botoes rapidos: "Selecionar Todos", "Limpar"
-- Indicador visual da quantidade selecionada
-
-### Estrutura visual do seletor de abrangencias
+O metodo `buildEnvelope` sera estendido para aceitar parametros do tipo objeto/array e gera-los como XML aninhado. Exemplo do XML que precisa ser gerado para cadastrar um nome completo:
 
 ```text
-+------------------------------------------------------+
-| Abrangencias (Tribunais)              [2 selecionados] |
-|------------------------------------------------------|
-| [Buscar tribunal...]                                  |
-| [Selecionar Todos] [Limpar]                          |
-|------------------------------------------------------|
-| > Tribunais Superiores                                |
-|   [ ] STJ - Superior Tribunal de Justica             |
-|   [ ] STF - Supremo Tribunal Federal                 |
-|   [x] TST - Tribunal Superior do Trabalho            |
-| > Tribunais Regionais Federais                        |
-|   [ ] TRF1_PJE1 - TRF 1a Regiao PJE 1a inst.       |
-|   [x] TRF3_PJE1 - TRF 3a Regiao PJE 1a inst.       |
-| > Tribunais de Justica Estaduais                      |
-|   [ ] TJSP_ESAJ - TJ Sao Paulo Esaj 1a inst.        |
-|   ...                                                |
-| > Tribunais Regionais do Trabalho                     |
-|   [ ] TRT2_PJE - TRT 2a Regiao PJE                  |
-|   ...                                                |
-+------------------------------------------------------+
+<nom:cadastrar>
+  <nomeRelacional>ORBO</nomeRelacional>
+  <token>xxx</token>
+  <nomePesquisa>
+    <codEscritorio>41</codEscritorio>
+    <nome>Joao da Silva</nome>
+    <oab>123456|MG</oab>
+    <variacoes>
+      <item><nome>J. Silva</nome></item>
+      <item><nome>Joao S.</nome></item>
+    </variacoes>
+    <termosBloqueio>
+      <item>
+        <termo>TESTEMUNHA</termo>
+        <estaContidoNoNomePesquisa>true</estaContidoNoNomePesquisa>
+      </item>
+    </termosBloqueio>
+    <abrangencia>
+      <string>DJE-SP</string>
+      <string>DJE-MG</string>
+    </abrangencia>
+  </nomePesquisa>
+</nom:cadastrar>
 ```
 
-### Arquivos a modificar
+### Fluxo de Edicao (conforme doc secao 2.2.2)
+
+A documentacao diz explicitamente: "A forma correta de consumir esse metodo e realizar uma consulta do nome com getNomePesquisa() e manipular o objeto do retorno. Depois de realizar as alteracoes necessarias, devolver o objeto para setNomePesquisa()."
+
+O fluxo sera:
+1. Frontend carrega o termo para edicao
+2. Edge function chama `getNomePesquisa(codNome)` para obter estado atual
+3. Frontend exibe variacoes, bloqueios e abrangencias atuais
+4. Usuario faz alteracoes
+5. Frontend envia objeto completo
+6. Edge function chama `setNomePesquisa` com objeto completo
+
+### Migration SQL
+
+Adicionar coluna `metadata` (JSONB) na tabela `search_terms` para armazenar variacoes, bloqueios e abrangencias localmente.
+
+### Arquivos a Modificar/Criar
 
 | Arquivo | Acao |
 |---------|------|
-| `supabase/functions/manage-distribution-terms/index.ts` | Adicionar action `listAbrangencias`, atualizar `registerName` para enviar abrangencias, atualizar retry |
-| `src/pages/DistributionTerms.tsx` | Expandir dialog de cadastro com seletor de abrangencias agrupado |
+| Migration SQL | Adicionar coluna `metadata` JSONB na tabela `search_terms` |
+| `supabase/functions/_shared/soap-client.ts` | Adicionar suporte a XML complexo (objetos aninhados, arrays) |
+| `supabase/functions/manage-search-terms/index.ts` | Novas actions: `gerar_variacoes`, `buscar_abrangencias`, `visualizar_nome`. Atualizar `cadastrar_nome` e `editar_nome` com objeto completo |
+| `supabase/functions/manage-publication-terms/index.ts` | Corrigir chamadas SOAP para usar objeto NomePesquisa completo com variacoes, bloqueios e abrangencias |
+| `src/components/terms/SearchTermDialog.tsx` | Expandir com secoes de variacoes (com geracao automatica), termos de bloqueio e abrangencias |
+| `src/pages/PublicationTerms.tsx` | Ajustes menores para suportar os novos dados na tabela |
+
