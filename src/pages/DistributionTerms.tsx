@@ -503,7 +503,15 @@ function DistributionTermDialog({
       }
 
       const { data, error } = await supabase.functions.invoke("manage-distribution-terms", { body });
-      if (error) throw error;
+      if (error) {
+        // Try to extract the JSON error message from the edge function response
+        const errStr = error.message || String(error);
+        const jsonMatch = errStr.match(/\{.*"error"\s*:\s*"([^"]+)".*\}/);
+        if (jsonMatch?.[1]) {
+          throw new Error(jsonMatch[1]);
+        }
+        throw error;
+      }
       if (!data?.success) throw new Error(data?.error || "Erro desconhecido");
 
       // Link clients
@@ -532,8 +540,8 @@ function DistributionTermDialog({
       const msg = error.message || '';
       if (msg.includes('já se encontra cadastrado') || msg.includes('já cadastrado')) {
         toast.error('Este nome já está cadastrado no parceiro. Reative-o ou exclua definitivamente antes de cadastrar novamente.');
-      } else if (msg.includes('truncated')) {
-        toast.error('Dados excedem o limite da API. Tente selecionar menos abrangências.');
+      } else if (msg.includes('truncated') || msg.includes('excede o limite') || msg.includes('abrangências')) {
+        toast.error('A quantidade de abrangências selecionadas excede o limite da API do parceiro (máx. ~100). Reduza a seleção de diários e tente novamente.');
       } else {
         toast.error(`Erro: ${msg}`);
       }
