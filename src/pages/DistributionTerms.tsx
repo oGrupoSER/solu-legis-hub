@@ -472,12 +472,15 @@ function DistributionTermDialog({
       if (selectedAbrangencias.length === 0) throw new Error("Selecione ao menos uma abrangência");
       if (selectedClients.length === 0) throw new Error("Selecione ao menos um cliente");
 
+      // Convert "Todas" (4) to [1, 2, 3] since API only accepts 1, 2, or 3
+      const resolvedInstancias = form.listInstancias.includes(4) ? [1, 2, 3] : form.listInstancias;
+
       const body: any = {
         action: isEditing ? "editName" : "registerName",
         serviceId: selectedService,
         nome: form.nome,
         codTipoConsulta: parseInt(form.codTipoConsulta),
-        listInstancias: form.listInstancias,
+        listInstancias: resolvedInstancias,
         abrangencias: selectedAbrangencias,
         clientIds: selectedClients,
       };
