@@ -1,154 +1,69 @@
 
+# Plano: Testar Abrangencias de Publicacoes nas Distribuicoes
 
-# Plano: Implementar Variacoes, Termos de Bloqueio e Abrangencias para Publicacoes
+## Hipotese
 
-## Problema Identificado
+A API REST V3 de Distribuicoes (`CadastrarNome`) pode esperar as mesmas siglas de diarios usadas nas Publicacoes (CISP, DJE-SP, DOU, etc.) ao inves dos codigos de sistema/tribunal (`BuscaStatusSistemas`).
 
-Analisando a documentacao (Secao 2), o objeto `NomePesquisa` da API SOAP possui 3 recursos importantes para maior assertividade que **NAO estao implementados**:
-
-1. **Variacoes** (`variacoes: Variacao[]`) - Variantes ortograficas do nome buscado. Existe um metodo `gerarVariacoes` que gera automaticamente. A implementacao atual envia variacoes como string pipe-separated no `cadastrar`, mas NAO suporta geracao automatica nem o objeto completo.
-
-2. **Termos de Bloqueio** (`termosBloqueio: TermoBloqueio[]`) - Termos que, quando encontrados junto ao nome de pesquisa, **impedem** a captura da publicacao. Cada termo tem:
-   - `termo` (string): o texto bloqueador
-   - `estaContidoNoNomePesquisa` (bool): se o bloqueio so se aplica quando encontrado junto/contido no texto do nome de pesquisa
-   - **NAO implementado em nenhum lugar do sistema**
-
-3. **Abrangencias** (`abrangencia: String[]`) - Siglas dos diarios de abrangencia do nome. A API SOAP tem `getAbrangencias` que retorna as opcoes disponiveis. **NAO implementado.**
-
-4. **OAB** - Campo `oab` no `NomePesquisa`. **NAO implementado.**
+Evidencias:
+- `codSistema` (numeros) do `BuscaStatusSistemas` -> falhou com "abrangencia invalida"
+- `siglaSistema` (strings como TRF1_PJE1) -> tambem falhou
+- O campo se chama `listAbrangencias`, mesmo nome usado no SOAP (`abrangencia: String[]` com siglas de diarios)
 
 ## O Que Sera Feito
 
-### 1. Evolucao do SOAP Client
+### 1. Alterar `manage-distribution-terms` para buscar abrangencias do SOAP
 
-O `SoapClient.buildEnvelope` atual so suporta parametros simples (string/int). Precisa suportar objetos complexos aninhados como `NomePesquisa` com arrays de `TermoBloqueio` e `Variacao`.
+Na action `listAbrangencias`, alem de (ou ao inves de) chamar `BuscaStatusSistemas`, buscar as abrangencias do modulo SOAP `escritorios.php` usando `getAbrangencias` - que e a mesma fonte usada nas publicacoes.
 
-Sera adicionado um metodo `buildComplexParam` que gera XML para objetos aninhados com arrays.
+Para isso:
+- Buscar o servico de publicacoes (`terms` ou `publications`) do mesmo parceiro
+- Usar o `SoapClient` para chamar `getAbrangencias(nomeRelacional, token)` no endpoint `escritorios.php`
+- Retornar a lista de siglas de diarios (CISP, DJE-SP, etc.)
+- Manter a lista de `BuscaStatusSistemas` como fallback
 
-### 2. Evolucao da Edge Function `manage-search-terms`
+### 2. Alterar a action `registerName` para enviar siglas de diarios
 
-**Novas actions:**
-- `gerar_variacoes`: Chama `gerarVariacoes(nomeRelacional, token, type, termo)` e retorna sugestoes automaticas
-- `buscar_abrangencias`: Chama `getAbrangencias(nomeRelacional, token)` e retorna siglas de diarios disponiveis
-- `visualizar_nome`: Chama `getNomePesquisa(nomeRelacional, token, codNome)` para obter o objeto completo com variacoes, bloqueios e abrangencias atuais
+- Mudar `listAbrangencias` para enviar as siglas de diarios selecionadas (strings como "DJE-SP") ao inves de codigos numericos
+- Testar o cadastro com essas siglas
 
-**Action `cadastrar_nome` atualizada:**
-- Receber `termos_bloqueio: { termo: string, contido: boolean }[]` do frontend
-- Receber `abrangencias: string[]` (siglas de diarios)
-- Receber `oab: string` (opcional)
-- Construir o objeto `NomePesquisa` completo no XML SOAP com todos os sub-arrays
+### 3. Atualizar o componente `AbrangenciasSelector` nas Distribuicoes
 
-**Action `editar_nome` atualizada:**
-- Usar o fluxo correto da doc: primeiro `getNomePesquisa` para obter o objeto atual, depois manipular e devolver via `setNomePesquisa`
-- Incluir variacoes, bloqueios e abrangencias na edicao
+- Substituir o seletor atual (baseado em `BuscaStatusSistemas` com codSistema) por um seletor simples de siglas de diarios (mesmo formato das publicacoes)
+- Os dados virao como lista plana de strings (sem agrupamento por tribunal)
 
-### 3. Evolucao da Edge Function `manage-publication-terms`
+### 4. Testar automaticamente
 
-Esta funcao esta com implementacao SOAP incorreta (chama `cadastrar` sem parametros, depois `setNomePesquisa` separado). Sera corrigida para:
-- Usar o mesmo padrao do `manage-search-terms` (cadastrar com objeto completo)
-- Suportar variacoes, bloqueios e abrangencias
-
-### 4. Evolucao do Frontend - Dialog de Cadastro/Edicao
-
-O `SearchTermDialog.tsx` (usado em PublicationTerms) sera expandido com:
-
-**Secao "Variacoes":**
-- Campo de entrada + botao adicionar (ja existe no ManageTermDialog, sera portado)
-- Botao "Gerar Automaticamente" que chama a action `gerar_variacoes` da API
-- Suporte a tipo 1 (variacao de nome) e tipo 2 (variacao de OAB, formato "CODIGO|UF")
-- Lista de variacoes com botao remover
-
-**Secao "Termos de Bloqueio" (NOVA):**
-- Campo de entrada para o termo bloqueador
-- Checkbox "Somente quando contido no nome de pesquisa" (mapeia para `estaContidoNoNomePesquisa`)
-- Botao adicionar
-- Lista de termos de bloqueio com botao remover
-- Tooltip explicativo: "Termos de bloqueio impedem a captura de publicacoes quando encontrados junto ao nome pesquisado"
-
-**Secao "Abrangencias" (NOVA):**
-- Multi-select com as siglas de diarios disponiveis (carregadas via `buscar_abrangencias`)
-- Campo de busca para filtrar
-- Botoes "Selecionar Todos" / "Limpar"
-
-**Campo "OAB" (NOVO):**
-- Input opcional que aparece quando term_type === 'name'
-
-### 5. Armazenamento Local
-
-Os dados adicionais (variacoes, bloqueios, abrangencias, OAB) serao armazenados no campo `raw_data` (JSONB) existente na tabela `search_terms` (atualmente nao existe esse campo, sera necessario adicionar via migration), ou alternativamente em um novo campo JSONB `metadata`.
-
-**Estrutura do campo metadata/raw_data:**
-```text
-{
-  "variacoes": ["J. Silva", "Joao S."],
-  "termos_bloqueio": [
-    { "termo": "TESTEMUNHA", "contido": true },
-    { "termo": "PERITO", "contido": false }
-  ],
-  "abrangencias": ["DJE-SP", "DJE-MG", "DOU"],
-  "oab": "123456|MG",
-  "cod_nome": 12345
-}
-```
+Apos deploy, chamar a edge function com uma sigla de diario real para validar se a API aceita.
 
 ---
 
 ## Detalhes Tecnicos
 
-### SOAP Client - Suporte a XML Complexo
+### Edge Function: `manage-distribution-terms/index.ts`
 
-O metodo `buildEnvelope` sera estendido para aceitar parametros do tipo objeto/array e gera-los como XML aninhado. Exemplo do XML que precisa ser gerado para cadastrar um nome completo:
+**Action `listAbrangencias` - nova abordagem:**
+- Buscar `partner_services` do mesmo `partner_id` com `service_type = 'terms'` ou `'publications'`
+- Importar e usar o `SoapClient` para chamar `getAbrangencias` no endpoint `escritorios.php`
+- Retornar array de strings (siglas de diarios)
+- Fallback: se nao encontrar servico SOAP, manter o `BuscaStatusSistemas` atual
 
-```text
-<nom:cadastrar>
-  <nomeRelacional>ORBO</nomeRelacional>
-  <token>xxx</token>
-  <nomePesquisa>
-    <codEscritorio>41</codEscritorio>
-    <nome>Joao da Silva</nome>
-    <oab>123456|MG</oab>
-    <variacoes>
-      <item><nome>J. Silva</nome></item>
-      <item><nome>Joao S.</nome></item>
-    </variacoes>
-    <termosBloqueio>
-      <item>
-        <termo>TESTEMUNHA</termo>
-        <estaContidoNoNomePesquisa>true</estaContidoNoNomePesquisa>
-      </item>
-    </termosBloqueio>
-    <abrangencia>
-      <string>DJE-SP</string>
-      <string>DJE-MG</string>
-    </abrangencia>
-  </nomePesquisa>
-</nom:cadastrar>
-```
+**Action `registerName` - ajuste:**
+- Campo `listAbrangencias` passa a receber `string[]` (siglas) ao inves de `number[]` (codSistema)
+- Sem necessidade de fallback codSistema/siglaSistema
 
-### Fluxo de Edicao (conforme doc secao 2.2.2)
+### Frontend: `src/pages/DistributionTerms.tsx`
 
-A documentacao diz explicitamente: "A forma correta de consumir esse metodo e realizar uma consulta do nome com getNomePesquisa() e manipular o objeto do retorno. Depois de realizar as alteracoes necessarias, devolver o objeto para setNomePesquisa()."
+**`AbrangenciasSelector` simplificado:**
+- Trocar de seletor agrupado por tribunal para lista simples de checkboxes com siglas de diarios
+- Campo de busca para filtrar
+- Botoes "Selecionar Todos" / "Limpar"
+- O tipo `selectedAbrangencias` muda de `number[]` para `string[]`
 
-O fluxo sera:
-1. Frontend carrega o termo para edicao
-2. Edge function chama `getNomePesquisa(codNome)` para obter estado atual
-3. Frontend exibe variacoes, bloqueios e abrangencias atuais
-4. Usuario faz alteracoes
-5. Frontend envia objeto completo
-6. Edge function chama `setNomePesquisa` com objeto completo
-
-### Migration SQL
-
-Adicionar coluna `metadata` (JSONB) na tabela `search_terms` para armazenar variacoes, bloqueios e abrangencias localmente.
-
-### Arquivos a Modificar/Criar
+### Arquivos a modificar
 
 | Arquivo | Acao |
 |---------|------|
-| Migration SQL | Adicionar coluna `metadata` JSONB na tabela `search_terms` |
-| `supabase/functions/_shared/soap-client.ts` | Adicionar suporte a XML complexo (objetos aninhados, arrays) |
-| `supabase/functions/manage-search-terms/index.ts` | Novas actions: `gerar_variacoes`, `buscar_abrangencias`, `visualizar_nome`. Atualizar `cadastrar_nome` e `editar_nome` com objeto completo |
-| `supabase/functions/manage-publication-terms/index.ts` | Corrigir chamadas SOAP para usar objeto NomePesquisa completo com variacoes, bloqueios e abrangencias |
-| `src/components/terms/SearchTermDialog.tsx` | Expandir com secoes de variacoes (com geracao automatica), termos de bloqueio e abrangencias |
-| `src/pages/PublicationTerms.tsx` | Ajustes menores para suportar os novos dados na tabela |
+| `supabase/functions/manage-distribution-terms/index.ts` | Alterar `listAbrangencias` para buscar do SOAP e `registerName` para enviar siglas |
+| `src/pages/DistributionTerms.tsx` | Simplificar `AbrangenciasSelector` para usar siglas de diarios |
 
