@@ -1,61 +1,67 @@
 
-# Plano: Wizard de Cadastro/Edicao de Processos CNJ com Todos os Parametros da API
+
+# Plano: Adicionar Endpoints de Gerenciamento ao Playground de API e Postman
 
 ## Contexto
 
-A documentacao da API V3 Andamentos (secao 2.1.1 - CadastraNovoProcesso) define os seguintes parametros:
-
-| Parametro | Tipo | Status Atual |
-|-----------|------|-------------|
-| numProcesso | varchar(50) - Obrigatorio | Implementado |
-| codEscritorio | int - Obrigatorio | Implementado (automatico) |
-| UF | varchar(2) - Opcional | Implementado |
-| Instancia | int - Obrigatorio | Implementado |
-| codTribunal | int - Opcional | **Faltando** |
-| Comarca | varchar(500) - Opcional | **Faltando** |
-| Autor | varchar(1000) - Opcional | **Faltando** |
-| Reu | varchar(1000) - Opcional | **Faltando** |
-
-Alem disso, o dialogo atual e um formulario simples sem abas, diferente do padrao wizard ja estabelecido nos modulos de Publicacoes e Distribuicoes.
+O Playground de API e a colecao Postman atualmente cobrem apenas endpoints de **consulta** (GET) e **confirmacao de lote** (POST simples). Os endpoints de **gerenciamento** (cadastrar, editar, excluir termos/processos) implementados nas edge functions nao estao disponiveis para teste nem documentados para clientes.
 
 ## O Que Sera Feito
 
-### 1. Refatorar ProcessDialog para Wizard de 3 Etapas
+### 1. Suporte a Body JSON no Playground
 
-Seguindo o padrao do `SearchTermDialog` (Publicacoes) e `DistributionTerms`:
+O playground atual so envia query params. Os endpoints de gerenciamento usam POST/PUT/DELETE com body JSON. Sera adicionado:
+- Campo `bodyParams` na interface `EndpointDef` para definir campos do body
+- Marcacao de campos como **obrigatorios** ou opcionais
+- Editor de body JSON no painel de parametros
+- Atualizacao do `handleTest` para enviar body quando presente
 
-**Etapa 1 - Dados Basicos:**
-- Numero do Processo (CNJ) com formatacao automatica e verificacao de duplicidade
-- Servico (quando houver mais de um)
-- Clientes vinculados (ClientSelector)
-- Codigo do Escritorio (exibicao automatica, somente leitura)
+### 2. Novos Endpoints por Aba
 
-**Etapa 2 - Localizacao e Instancia:**
-- UF (select com todas as UFs + opcao "TS" para Tribunais Superiores)
-- Codigo do Tribunal (campo numerico opcional) - **NOVO**
-- Comarca (campo texto opcional) - **NOVO**
-- Instancia (select: 1a, 2a, 3a/Superiores, Todas)
+**Aba Processos (sync-process-management):**
+| Endpoint | Metodo | Campos Obrigatorios | Campos Opcionais |
+|----------|--------|---------------------|------------------|
+| Cadastrar Processo | POST | processNumber, serviceId, instance | uf, codTribunal, comarca, autor, reu, clientSystemId |
+| Excluir Processo | POST | processNumber, serviceId | clientSystemId |
+| Status do Processo | POST | processNumber, serviceId | - |
+| Listar Processos Cadastrados | POST | serviceId | - |
+| Reenviar Pendentes | POST | serviceId | - |
 
-**Etapa 3 - Partes do Processo:**
-- Autor (campo texto opcional) - **NOVO**
-- Reu (campo texto opcional) - **NOVO**
-- Nota explicativa: "Informar autor e reu pode acelerar a validacao do processo junto ao tribunal"
+**Aba Distribuicoes (manage-distribution-terms):**
+| Endpoint | Metodo | Campos Obrigatorios | Campos Opcionais |
+|----------|--------|---------------------|------------------|
+| Cadastrar Nome | POST | serviceId, nome | codTipoConsulta, listInstancias, abrangencias, qtdDiasCapturaRetroativa, listDocumentos, listOab, client_system_id |
+| Editar Nome | POST | serviceId, termId | nome, codNome, codTipoConsulta, listInstancias, abrangencias, qtdDiasCapturaRetroativa, listDocumentos, listOab |
+| Ativar Nome | POST | serviceId, codNome | - |
+| Desativar Nome | POST | serviceId, codNome | - |
+| Excluir Nome | POST | serviceId, codNome | client_system_id |
+| Listar Nomes | POST | serviceId | - |
 
-### 2. Refatorar EditProcessDialog para Mesmo Layout
+**Aba Publicacoes (manage-publication-terms / manage-search-terms):**
+| Endpoint | Metodo | Campos Obrigatorios | Campos Opcionais |
+|----------|--------|---------------------|------------------|
+| Cadastrar Nome | POST | service_id, term, term_type | variacoes, termos_bloqueio, abrangencias, oab, client_system_id |
+| Editar Nome | POST | service_id, term_id, term, term_type | variacoes, termos_bloqueio, abrangencias, oab |
+| Excluir Nome | POST | service_id, term_id, term_type | client_system_id |
+| Listar Termos | POST | service_id, term_type | - |
 
-- Mesmo wizard de 3 etapas
-- Carregar dados existentes do processo (incluindo novos campos de metadata)
-- Manter logica de re-validacao quando o numero CNJ muda
+### 3. Organizacao Visual
 
-### 3. Atualizar Edge Function (sync-process-management)
+Cada aba tera dois grupos de endpoints separados visualmente:
+- **Consulta** (endpoints existentes - api-processes, api-distributions, api-publications)
+- **Gerenciamento** (novos endpoints - sync-process-management, manage-distribution-terms, manage-publication-terms/manage-search-terms)
 
-- Action `register`: Enviar os novos campos opcionais (`codTribunal`, `Comarca`, `Autor`, `Reu`) para a API
-- Action `send-pending`: Incluir os mesmos campos ao reenviar processos pendentes
-- Salvar os novos campos no `metadata` ou em `raw_data` para persistencia
+Um separador visual com label distinguira os dois grupos.
 
-### 4. Armazenamento dos Novos Campos
+### 4. Atualizacao da Colecao Postman
 
-Os campos `codTribunal`, `Comarca`, `Autor` e `Reu` nao possuem colunas dedicadas na tabela `processes`. Serao armazenados no campo `raw_data` (JSONB) que ja existe, sem necessidade de migracoes de banco de dados.
+Adicionar subpastas de gerenciamento dentro de cada pasta existente na colecao Postman, com body de exemplo e descricao de cada campo.
+
+### 5. Autenticacao
+
+Os endpoints de gerenciamento usam JWT (Supabase Auth) diferente dos endpoints de consulta (token customizado). O playground detectara o tipo de endpoint e:
+- Para endpoints `api-*`: usara o token selecionado como Bearer
+- Para endpoints de gerenciamento: usara o JWT do usuario logado (sessao Supabase) automaticamente, com indicacao visual no UI
 
 ---
 
@@ -65,32 +71,49 @@ Os campos `codTribunal`, `Comarca`, `Autor` e `Reu` nao possuem colunas dedicada
 
 | Arquivo | Acao |
 |---------|------|
-| `src/components/processes/ProcessDialog.tsx` | Refatorar para wizard 3 etapas com stepper visual, adicionar campos codTribunal, Comarca, Autor, Reu |
-| `src/components/processes/EditProcessDialog.tsx` | Mesmo wizard, carregar dados existentes do raw_data |
-| `supabase/functions/sync-process-management/index.ts` | Enviar novos campos na action register e send-pending |
+| `src/pages/ApiTesting.tsx` | Adicionar interface bodyParams, novos endpoints de gerenciamento, suporte a body JSON, separacao visual consulta/gerenciamento, logica de auth JWT |
+| `src/lib/postman-collection.ts` | Adicionar pastas de gerenciamento com body de exemplo |
 
-### Padrao Visual do Wizard
-
-Reutilizar o mesmo padrao de stepper das Publicacoes:
-- Indicador de etapas com numeros e labels no topo
-- Botoes "Voltar" / "Proximo" / "Cadastrar" no rodape
-- Validacao por etapa antes de avancar
-- Dialog com largura maior (sm:max-w-[600px]) para acomodar o conteudo
-
-### Logica de Envio para API
+### Interface Atualizada
 
 ```text
-POST /CadastraNovoProcesso
-{
-  numProcesso: "...",
-  codEscritorio: 123,
-  UF: "SP",
-  instancia: 1,
-  codTribunal: 8,        // novo - opcional
-  Comarca: "São Paulo",  // novo - opcional
-  Autor: "João Silva",   // novo - opcional
-  Reu: "Empresa XYZ"     // novo - opcional
+interface EndpointDef {
+  id: string;
+  label: string;
+  method: string;
+  description: string;
+  path: string;
+  category: 'query' | 'management';  // NOVO
+  authType: 'token' | 'jwt';         // NOVO
+  params: Array<{
+    key: string;
+    label: string;
+    placeholder: string;
+    type?: string;
+    required?: boolean;               // NOVO
+  }>;
+  bodyParams?: Array<{               // NOVO - campos do body JSON
+    key: string;
+    label: string;
+    placeholder: string;
+    type?: string;
+    required?: boolean;
+  }>;
 }
 ```
 
-Campos vazios ou nulos nao serao enviados no body da requisicao.
+### Logica de Envio
+
+Para endpoints com `bodyParams`, o `handleTest` construira um body JSON com os valores preenchidos. Campos vazios opcionais nao serao incluidos no body. Campos obrigatorios serao validados antes do envio.
+
+### Exemplos de Codigo Atualizados
+
+Os snippets curl/javascript/python incluirao o body JSON quando aplicavel:
+
+```text
+curl -X POST ".../sync-process-management" \
+  -H "Authorization: Bearer JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"action":"register","serviceId":"...","processNumber":"..."}'
+```
+
