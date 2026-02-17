@@ -62,14 +62,20 @@ async function getService(supabase: any, serviceId: string): Promise<ServiceConf
 }
 
 async function getOfficeCode(supabase: any, serviceId: string): Promise<number> {
-  const { data, error } = await supabase
+  // First check service-specific config for office_code override
+  const { data: serviceData, error: serviceError } = await supabase
     .from('partner_services')
-    .select('partners(office_code)')
+    .select('config, partners(office_code)')
     .eq('id', serviceId)
     .single();
-  if (error) throw error;
-  const officeCode = (data?.partners as any)?.office_code as number | null;
-  if (!officeCode) throw new Error('Parceiro não possui código de escritório configurado.');
+  if (serviceError) throw serviceError;
+  
+  // Service-specific office_code takes priority (different APIs may use different codes)
+  const serviceConfig = serviceData?.config as Record<string, any> | null;
+  if (serviceConfig?.office_code) return serviceConfig.office_code;
+  
+  const officeCode = (serviceData?.partners as any)?.office_code as number | null;
+  if (!officeCode) throw new Error('Parceiro não possui código de escritório configurado. Configure no serviço (config.office_code) ou no parceiro.');
   return officeCode;
 }
 
@@ -243,15 +249,44 @@ serve(async (req) => {
           termRecord = existing;
         } else {
           // API requires listAbrangencias but existing records all use empty array
+          const abrangencias = params.abrangencias || [];
           const requestBody = {
             codEscritorio: officeCode,
             nome,
             codTipoConsulta: 3,
             listInstancias: [instanciaCode],
-            listAbrangencias: [] as string[],
+            listAbrangencias: abrangencias,
           };
           console.log(`[registerName] Request body:`, JSON.stringify(requestBody));
-          result = await apiRequest(service.service_url, '/CadastrarNome', jwtToken, 'POST', requestBody);
+          
+          // Try registration; if abrangencias are invalid, try as strings
+          let registerResult;
+          try {
+            registerResult = await apiRequest(service.service_url, '/CadastrarNome', jwtToken, 'POST', requestBody);
+          } catch (regErr: any) {
+            if (regErr.message?.includes('abrangência inválida') && abrangencias.length > 0) {
+              // Retry: maybe API wants siglaSistema strings
+              console.log('[registerName] Numeric abrangencias failed, trying siglaSistema strings...');
+              // Fetch systems to map codSistema -> siglaSistema
+              let systemsMap: Record<number, string> = {};
+              try {
+                const systems = await apiRequest(service.service_url, '/BuscaStatusSistemas', jwtToken);
+                if (Array.isArray(systems)) {
+                  for (const s of systems) {
+                    systemsMap[s.codSistema] = s.siglaSistema;
+                  }
+                }
+              } catch (_) {}
+              
+              const siglaList = abrangencias.map((cod: number) => systemsMap[cod] || String(cod));
+              console.log('[registerName] Retrying with siglas:', JSON.stringify(siglaList));
+              requestBody.listAbrangencias = siglaList;
+              registerResult = await apiRequest(service.service_url, '/CadastrarNome', jwtToken, 'POST', requestBody);
+            } else {
+              throw regErr;
+            }
+          }
+          result = registerResult;
           registeredInSolucionare = true;
 
           const solCode = result?.codNome || null;
@@ -372,75 +407,48 @@ serve(async (req) => {
         break;
       }
 
-      case 'testAbrangencia': {
-        const testResults: any[] = [];
-        // First, get office info
-        let officeInfo = null;
-        try {
-          officeInfo = await apiRequest(service.service_url, `/BuscaEscritoriosCadastrados?codEscritorio=${officeCode}`, jwtToken);
-          console.log('[testAbrangencia] Office info:', JSON.stringify(officeInfo));
-        } catch (e: any) {
-          console.log('[testAbrangencia] Office info error:', e.message);
-        }
+      case 'listAbrangencias': {
+        // Use the distributions API's own BuscaStatusSistemas endpoint
+        // which returns the valid codSistema values for this service
+        const systems = await apiRequest(service.service_url, '/BuscaStatusSistemas', jwtToken);
+        const systemsList = Array.isArray(systems) ? systems : [];
+        console.log(`[listAbrangencias] Found ${systemsList.length} distribution systems`);
 
-        // Try to discover abrangencias endpoint
-        let abrangencias = null;
-        const discoveryEndpoints = [
-          '/BuscaAbrangencias',
-          '/ListarAbrangencias', 
-          '/BuscaTiposAbrangencia',
-          `/BuscaAbrangencias?codEscritorio=${officeCode}`,
-        ];
-        for (const ep of discoveryEndpoints) {
-          try {
-            const r = await apiRequest(service.service_url, ep, jwtToken);
-            abrangencias = { endpoint: ep, data: r };
-            console.log(`[testAbrangencia] Found abrangencias at ${ep}:`, JSON.stringify(r));
-            break;
-          } catch (e: any) {
-            console.log(`[testAbrangencia] ${ep} failed:`, e.message);
+        // Normalize items to have consistent naming
+        const normalizedItems = systemsList.map((item: any) => ({
+          codSistema: item.codSistema,
+          siglaSistema: item.siglaSistema || '',
+          nomeSistema: item.nomeTribunal || item.siglaSistema || `Sistema ${item.codSistema}`,
+          instancia: item.instancia,
+          status: item.descricao,
+        }));
+
+        // Organize by group
+        const grouped: Record<string, any[]> = {
+          superiores: [],
+          federais: [],
+          estaduais: [],
+          trabalhistas: [],
+          outros: [],
+        };
+
+        for (const item of normalizedItems) {
+          const sigla = (item.siglaSistema || '').toUpperCase();
+          const nome = (item.nomeSistema || '').toUpperCase();
+          if (sigla.includes('STJ') || sigla.includes('STF') || sigla.includes('TST') || sigla.includes('TSE') || sigla.includes('STM') || nome.includes('SUPERIOR') || nome.includes('SUPREMO')) {
+            grouped.superiores.push(item);
+          } else if (sigla.includes('TRF') || sigla.includes('JF') || sigla.includes('JFRS') || sigla.includes('JFSC') || sigla.includes('JFPR') || sigla.includes('CJF') || nome.includes('FEDERAL')) {
+            grouped.federais.push(item);
+          } else if (sigla.includes('TRT') || nome.includes('TRABALHO')) {
+            grouped.trabalhistas.push(item);
+          } else if (sigla.includes('TJ') || nome.includes('JUSTIÇA') || nome.includes('JUSTICA')) {
+            grouped.estaduais.push(item);
+          } else {
+            grouped.outros.push(item);
           }
         }
 
-        // Try to get swagger/help for valid values
-        let swaggerInfo = null;
-        try {
-          const swaggerResp = await fetch(`${service.service_url}/swagger/v1/swagger.json`, {
-            headers: { 'Authorization': `Bearer ${jwtToken}` },
-          });
-          if (swaggerResp.ok) {
-            const swagger = await swaggerResp.json();
-            // Look for CadastrarNome schema
-            const paths = swagger?.paths || {};
-            const cadastrar = paths['/CadastrarNome'] || paths['/api/CadastrarNome'];
-            swaggerInfo = cadastrar;
-          }
-        } catch (_) {}
-
-        // Test string abrangencia values - UF, siglaSistema, siglaTribunal
-        const testValues = ["BA", "MT", "EPROC-TJRS", "TJBA", "API-TJBA"];
-        for (const val of testValues) {
-          try {
-            const testBody = {
-              codEscritorio: officeCode,
-              nome: `T_${Date.now()}`,
-              codTipoConsulta: 3,
-              listInstancias: [1],
-              listAbrangencias: [val],
-            };
-            console.log(`[testAbrangencia] Testing string abrangencia="${val}"`);
-            const r = await apiRequest(service.service_url, '/CadastrarNome', jwtToken, 'POST', testBody);
-            testResults.push({ abrangencia: val, status: 'OK', result: r });
-            if (r?.codNome) {
-              try { await apiRequest(service.service_url, '/ExcluirNome', jwtToken, 'DELETE', { codNome: r.codNome }); } catch (_) {}
-            }
-            break;
-          } catch (e: any) {
-            testResults.push({ abrangencia: val, status: 'FAIL', error: e.message?.substring(0, 120) });
-          }
-        }
-
-        result = { swaggerInfo, testResults };
+        result = { all: normalizedItems, grouped };
         break;
       }
 
