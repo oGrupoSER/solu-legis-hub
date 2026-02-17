@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,11 +9,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Plus, Search, Loader2, Download, RefreshCw, CheckCircle2, AlertCircle, Clock, Link2 } from "lucide-react";
+import { Plus, Search, Loader2, Download, RefreshCw, CheckCircle2, AlertCircle, Clock, Link2, ChevronDown, ChevronRight } from "lucide-react";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { ClientBadges } from "@/components/shared/ClientBadges";
 import { ClientSelector } from "@/components/shared/ClientSelector";
@@ -32,6 +34,190 @@ interface DistributionTerm {
   client_search_terms?: { client_systems: { id: string; name: string } }[];
 }
 
+interface Abrangencia {
+  codSistema: number;
+  siglaSistema: string;
+  nomeSistema: string;
+}
+
+interface AbrangenciasGrouped {
+  superiores: Abrangencia[];
+  federais: Abrangencia[];
+  estaduais: Abrangencia[];
+  trabalhistas: Abrangencia[];
+  outros: Abrangencia[];
+}
+
+const GROUP_LABELS: Record<string, string> = {
+  superiores: "Tribunais Superiores",
+  federais: "Tribunais Regionais Federais",
+  estaduais: "Tribunais de Justiça Estaduais",
+  trabalhistas: "Tribunais Regionais do Trabalho",
+  outros: "Outros",
+};
+
+function AbrangenciasSelector({
+  serviceId,
+  selectedCodes,
+  onChange,
+}: {
+  serviceId: string;
+  selectedCodes: number[];
+  onChange: (codes: number[]) => void;
+}) {
+  const [searchFilter, setSearchFilter] = useState("");
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
+    superiores: true,
+    federais: true,
+    estaduais: true,
+    trabalhistas: true,
+    outros: true,
+  });
+
+  const { data: abrangenciasData, isLoading } = useQuery({
+    queryKey: ["abrangencias", serviceId],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("manage-distribution-terms", {
+        body: { action: "listAbrangencias", serviceId },
+      });
+      if (error) throw error;
+      return data?.data as { all: Abrangencia[]; grouped: AbrangenciasGrouped };
+    },
+    enabled: !!serviceId,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const grouped = abrangenciasData?.grouped;
+  const allItems = abrangenciasData?.all || [];
+
+  const filteredGrouped = useMemo(() => {
+    if (!grouped) return null;
+    const q = searchFilter.toLowerCase();
+    if (!q) return grouped;
+    const filter = (items: Abrangencia[]) =>
+      items.filter(
+        (a) =>
+          a.siglaSistema.toLowerCase().includes(q) ||
+          a.nomeSistema.toLowerCase().includes(q) ||
+          String(a.codSistema).includes(q)
+      );
+    return {
+      superiores: filter(grouped.superiores),
+      federais: filter(grouped.federais),
+      estaduais: filter(grouped.estaduais),
+      trabalhistas: filter(grouped.trabalhistas),
+      outros: filter(grouped.outros),
+    };
+  }, [grouped, searchFilter]);
+
+  const toggleCode = (code: number) => {
+    onChange(
+      selectedCodes.includes(code)
+        ? selectedCodes.filter((c) => c !== code)
+        : [...selectedCodes, code]
+    );
+  };
+
+  const selectAll = () => onChange(allItems.map((a) => a.codSistema));
+  const clearAll = () => onChange([]);
+
+  const toggleGroup = (group: string) => {
+    setOpenGroups((prev) => ({ ...prev, [group]: !prev[group] }));
+  };
+
+  const selectGroup = (items: Abrangencia[]) => {
+    const codes = items.map((a) => a.codSistema);
+    const allSelected = codes.every((c) => selectedCodes.includes(c));
+    if (allSelected) {
+      onChange(selectedCodes.filter((c) => !codes.includes(c)));
+    } else {
+      onChange([...new Set([...selectedCodes, ...codes])]);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 p-4 text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" /> Carregando abrangências...
+      </div>
+    );
+  }
+
+  if (!filteredGrouped) return null;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <Label>Abrangências (Tribunais)</Label>
+        <Badge variant="secondary">{selectedCodes.length} selecionado(s)</Badge>
+      </div>
+
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Buscar tribunal..."
+          value={searchFilter}
+          onChange={(e) => setSearchFilter(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+
+      <div className="flex gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={selectAll}>
+          Selecionar Todos
+        </Button>
+        <Button type="button" variant="outline" size="sm" onClick={clearAll}>
+          Limpar
+        </Button>
+      </div>
+
+      <ScrollArea className="h-[280px] border rounded-md p-2">
+        {(Object.keys(GROUP_LABELS) as Array<keyof AbrangenciasGrouped>).map((groupKey) => {
+          const items = filteredGrouped[groupKey];
+          if (!items || items.length === 0) return null;
+          const isOpen = openGroups[groupKey];
+          const allGroupSelected = items.every((a) => selectedCodes.includes(a.codSistema));
+          const someGroupSelected = items.some((a) => selectedCodes.includes(a.codSistema));
+
+          return (
+            <Collapsible key={groupKey} open={isOpen} onOpenChange={() => toggleGroup(groupKey)}>
+              <div className="flex items-center gap-2 py-1">
+                <Checkbox
+                  checked={allGroupSelected}
+                  // @ts-ignore
+                  indeterminate={someGroupSelected && !allGroupSelected}
+                  onCheckedChange={() => selectGroup(items)}
+                />
+                <CollapsibleTrigger className="flex items-center gap-1 flex-1 text-sm font-semibold hover:text-primary transition-colors">
+                  {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  {GROUP_LABELS[groupKey]} ({items.length})
+                </CollapsibleTrigger>
+              </div>
+              <CollapsibleContent className="pl-6 space-y-1">
+                {items.map((item) => (
+                  <label
+                    key={item.codSistema}
+                    className="flex items-center gap-2 py-0.5 text-sm cursor-pointer hover:bg-accent/50 rounded px-1"
+                  >
+                    <Checkbox
+                      checked={selectedCodes.includes(item.codSistema)}
+                      onCheckedChange={() => toggleCode(item.codSistema)}
+                    />
+                    <span className="font-mono text-xs text-muted-foreground w-16 shrink-0">
+                      {item.siglaSistema}
+                    </span>
+                    <span className="truncate">{item.nomeSistema}</span>
+                  </label>
+                ))}
+              </CollapsibleContent>
+            </Collapsible>
+          );
+        })}
+      </ScrollArea>
+    </div>
+  );
+}
+
 export default function DistributionTerms() {
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
@@ -40,6 +226,7 @@ export default function DistributionTerms() {
   const [selectedService, setSelectedService] = useState<string>("");
   const [newTerm, setNewTerm] = useState({ nome: "", instancia: "1" });
   const [selectedClients, setSelectedClients] = useState<string[]>([]);
+  const [selectedAbrangencias, setSelectedAbrangencias] = useState<number[]>([]);
   const [clientError, setClientError] = useState(false);
   const [bulkLinkOpen, setBulkLinkOpen] = useState(false);
 
@@ -73,16 +260,15 @@ export default function DistributionTerms() {
 
   // Register name mutation
   const registerMutation = useMutation({
-    mutationFn: async (params: { nome: string; instancia: number; clientIds: string[] }) => {
+    mutationFn: async (params: { nome: string; instancia: number; clientIds: string[]; abrangencias: number[] }) => {
       if (!selectedService) throw new Error("Selecione um serviço");
       if (params.clientIds.length === 0) throw new Error("Selecione ao menos um cliente");
+      if (params.abrangencias.length === 0) throw new Error("Selecione ao menos uma abrangência");
       const { data, error } = await supabase.functions.invoke("manage-distribution-terms", {
         body: { action: "registerName", serviceId: selectedService, ...params },
       });
       if (error) throw error;
 
-      // After registration, link to clients via search_terms
-      // Find the search_term that was just created/exists for this name
       const { data: termData } = await supabase
         .from("search_terms")
         .select("id")
@@ -92,7 +278,6 @@ export default function DistributionTerms() {
         .maybeSingle();
 
       if (termData) {
-        // Delete existing links and re-insert
         await supabase.from("client_search_terms").delete().eq("search_term_id", termData.id);
         const links = params.clientIds.map((clientId) => ({
           search_term_id: termData.id,
@@ -108,16 +293,17 @@ export default function DistributionTerms() {
       setNewTermDialog(false);
       setNewTerm({ nome: "", instancia: "1" });
       setSelectedClients([]);
+      setSelectedAbrangencias([]);
       setClientError(false);
       queryClient.invalidateQueries({ queryKey: ["distribution-terms"] });
     },
     onError: (error) => toast.error(`Erro ao cadastrar: ${error.message}`),
   });
 
-  // Sync mutation - fetches names from partner and updates local DB
+  // Sync mutation
   const syncMutation = useMutation({
     mutationFn: async () => {
-      if (!services || services.length === 0) throw new Error("Nenhum serviço de distribuições ativo. Cadastre um serviço do tipo 'distributions' em Cadastros > Parceiros > Serviços.");
+      if (!services || services.length === 0) throw new Error("Nenhum serviço de distribuições ativo.");
       const { data, error } = await supabase.functions.invoke("manage-distribution-terms", {
         body: { action: "listNames", serviceId: services[0].id },
       });
@@ -207,14 +393,21 @@ export default function DistributionTerms() {
           <Button variant="outline" onClick={handleExport} className="gap-2">
             <Download className="h-4 w-4" /> Exportar
           </Button>
-          <Dialog open={newTermDialog} onOpenChange={setNewTermDialog}>
+          <Dialog open={newTermDialog} onOpenChange={(open) => {
+            setNewTermDialog(open);
+            if (!open) {
+              setSelectedAbrangencias([]);
+              setSelectedClients([]);
+              setClientError(false);
+            }
+          }}>
             <DialogTrigger asChild>
               <Button className="gap-2"><Plus className="h-4 w-4" /> Cadastrar Nome</Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Cadastrar Nome para Monitoramento</DialogTitle>
-                <DialogDescription>Adicione um nome para monitorar novas distribuições</DialogDescription>
+                <DialogDescription>Adicione um nome para monitorar novas distribuições. Selecione os tribunais de abrangência.</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
@@ -246,6 +439,14 @@ export default function DistributionTerms() {
                   </div>
                 </div>
 
+                {selectedService && (
+                  <AbrangenciasSelector
+                    serviceId={selectedService}
+                    selectedCodes={selectedAbrangencias}
+                    onChange={setSelectedAbrangencias}
+                  />
+                )}
+
                 <ClientSelector
                   serviceId={selectedService || undefined}
                   selectedIds={selectedClients}
@@ -257,8 +458,14 @@ export default function DistributionTerms() {
                 <Button variant="outline" onClick={() => setNewTermDialog(false)}>Cancelar</Button>
                 <Button onClick={() => {
                   if (!newTerm.nome.trim()) { toast.error("Digite um nome"); return; }
+                  if (selectedAbrangencias.length === 0) { toast.error("Selecione ao menos uma abrangência"); return; }
                   if (selectedClients.length === 0) { setClientError(true); toast.error("Selecione ao menos um cliente"); return; }
-                  registerMutation.mutate({ nome: newTerm.nome, instancia: parseInt(newTerm.instancia), clientIds: selectedClients });
+                  registerMutation.mutate({
+                    nome: newTerm.nome,
+                    instancia: parseInt(newTerm.instancia),
+                    clientIds: selectedClients,
+                    abrangencias: selectedAbrangencias,
+                  });
                 }} disabled={registerMutation.isPending}>
                   {registerMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Cadastrar
