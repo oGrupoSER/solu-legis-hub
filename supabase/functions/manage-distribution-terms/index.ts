@@ -262,8 +262,8 @@ serve(async (req) => {
             codEscritorio: officeCode,
             nome,
             codTipoConsulta: codTipoConsulta || 1,
-            listInstancias: listInstancias || [1],
-            listAbrangencias: abrangencias || [],
+            listInstancias: (listInstancias || [1]).includes(4) ? [1, 2, 3] : (listInstancias || [1]),
+            listAbrangencias: [...new Set(abrangencias || [])],
           };
           if (qtdDiasCapturaRetroativa) requestBody.qtdDiasCapturaRetroativa = qtdDiasCapturaRetroativa;
           if (listDocumentos && listDocumentos.length > 0) requestBody.listDocumentos = listDocumentos;
