@@ -519,8 +519,12 @@ function DistributionTermDialog({
 
       return data;
     },
-    onSuccess: () => {
-      toast.success(isEditing ? "Nome atualizado com sucesso" : "Nome cadastrado com sucesso");
+    onSuccess: (data) => {
+      if (data?.data?.warning) {
+        toast.warning(data.data.warning);
+      } else {
+        toast.success(isEditing ? "Nome atualizado com sucesso" : "Nome cadastrado com sucesso");
+      }
       handleOpenChange(false);
       queryClient.invalidateQueries({ queryKey: ["distribution-terms"] });
     },
