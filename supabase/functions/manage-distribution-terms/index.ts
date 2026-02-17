@@ -49,7 +49,10 @@ async function apiRequest(baseUrl: string, endpoint: string, jwtToken: string, m
   const response = await fetch(url, options);
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`API request failed: ${response.status} - ${errorText}`);
+    const err: any = new Error(`API request failed: ${response.status} - ${errorText}`);
+    err.apiStatus = response.status;
+    err.apiBody = errorText;
+    throw err;
   }
   const contentType = response.headers.get('content-type');
   return contentType?.includes('application/json') ? await response.json() : await response.text();
@@ -258,28 +261,42 @@ serve(async (req) => {
           await supabase.from('search_terms').update({ metadata, updated_at: new Date().toISOString() }).eq('id', existing.id);
           termRecord = existing;
         } else {
+          const uniqueAbrangencias = [...new Set(abrangencias || [])];
           const requestBody: any = {
             codEscritorio: officeCode,
             nome,
             codTipoConsulta: codTipoConsulta || 1,
             listInstancias: (listInstancias || [1]).includes(4) ? [1, 2, 3] : (listInstancias || [1]),
-            listAbrangencias: [...new Set(abrangencias || [])],
+            listAbrangencias: uniqueAbrangencias,
           };
           if (qtdDiasCapturaRetroativa) requestBody.qtdDiasCapturaRetroativa = qtdDiasCapturaRetroativa;
           if (listDocumentos && listDocumentos.length > 0) requestBody.listDocumentos = listDocumentos;
           if (listOab && listOab.length > 0) requestBody.listOab = listOab;
 
-          console.log(`[registerName] Request body:`, JSON.stringify(requestBody));
+          console.log(`[registerName] Request body (${uniqueAbrangencias.length} abrangencias):`, JSON.stringify(requestBody).substring(0, 500));
           
-          const registerResult = await apiRequest(service.service_url, '/CadastrarNome', jwtToken, 'POST', requestBody);
-          result = registerResult;
-          registeredInSolucionare = true;
+          try {
+            const registerResult = await apiRequest(service.service_url, '/CadastrarNome', jwtToken, 'POST', requestBody);
+            result = registerResult;
+            registeredInSolucionare = true;
+          } catch (apiError: any) {
+            const errMsg = apiError.apiBody || apiError.message || '';
+            if (errMsg.includes('já se encontra cadastrado') || errMsg.includes('já cadastrado')) {
+              console.log(`[registerName] Name "${nome}" already exists at Solucionare, saving locally only`);
+              registeredInSolucionare = false;
+            } else if (errMsg.includes('truncated')) {
+              throw new Error('A lista de abrangências excede o limite da API do parceiro. Selecione menos abrangências (recomendado: até 100).');
+            } else {
+              throw apiError;
+            }
+          }
 
           const solCode = result?.codNome || null;
           const { data: inserted } = await supabase.from('search_terms').insert({
             term: nome, term_type: 'distribution',
             partner_service_id: serviceId, partner_id: service.partner_id,
-            is_active: true, solucionare_code: solCode, solucionare_status: 'synced',
+            is_active: true, solucionare_code: solCode,
+            solucionare_status: registeredInSolucionare ? 'synced' : 'pending',
             metadata,
           }).select().single();
           termRecord = inserted;
@@ -289,7 +306,7 @@ serve(async (req) => {
           await linkTermToClient(supabase, termRecord.id, client_system_id);
         }
 
-        result = { registeredInSolucionare, local: termRecord, linkedToClient: !!client_system_id };
+        result = { registeredInSolucionare, local: termRecord, linkedToClient: !!client_system_id, warning: !registeredInSolucionare ? 'Nome já existia no parceiro. Salvo localmente.' : undefined };
         break;
       }
 
@@ -508,9 +525,11 @@ serve(async (req) => {
   } catch (error) {
     console.error('Manage distribution terms error:', error);
     const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+    // Use 400 for user-facing validation errors, 500 for unexpected failures
+    const isValidationError = errorMsg.includes('limite da API') || errorMsg.includes('is required') || errorMsg.includes('Unknown action');
     return new Response(
       JSON.stringify({ success: false, error: errorMsg }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: isValidationError ? 400 : 500 }
     );
   }
 });
