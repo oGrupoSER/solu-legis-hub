@@ -6,6 +6,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.77.0';
+import { SoapClient } from '../_shared/soap-client.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -248,8 +249,8 @@ serve(async (req) => {
         if (existing) {
           termRecord = existing;
         } else {
-          // API requires listAbrangencias but existing records all use empty array
-          const abrangencias = params.abrangencias || [];
+          // listAbrangencias now receives string[] (diary siglas like "DJE-SP", "CISP")
+          const abrangencias: string[] = params.abrangencias || [];
           const requestBody = {
             codEscritorio: officeCode,
             nome,
@@ -259,33 +260,8 @@ serve(async (req) => {
           };
           console.log(`[registerName] Request body:`, JSON.stringify(requestBody));
           
-          // Try registration; if abrangencias are invalid, try as strings
           let registerResult;
-          try {
-            registerResult = await apiRequest(service.service_url, '/CadastrarNome', jwtToken, 'POST', requestBody);
-          } catch (regErr: any) {
-            if (regErr.message?.includes('abrangência inválida') && abrangencias.length > 0) {
-              // Retry: maybe API wants siglaSistema strings
-              console.log('[registerName] Numeric abrangencias failed, trying siglaSistema strings...');
-              // Fetch systems to map codSistema -> siglaSistema
-              let systemsMap: Record<number, string> = {};
-              try {
-                const systems = await apiRequest(service.service_url, '/BuscaStatusSistemas', jwtToken);
-                if (Array.isArray(systems)) {
-                  for (const s of systems) {
-                    systemsMap[s.codSistema] = s.siglaSistema;
-                  }
-                }
-              } catch (_) {}
-              
-              const siglaList = abrangencias.map((cod: number) => systemsMap[cod] || String(cod));
-              console.log('[registerName] Retrying with siglas:', JSON.stringify(siglaList));
-              requestBody.listAbrangencias = siglaList;
-              registerResult = await apiRequest(service.service_url, '/CadastrarNome', jwtToken, 'POST', requestBody);
-            } else {
-              throw regErr;
-            }
-          }
+          registerResult = await apiRequest(service.service_url, '/CadastrarNome', jwtToken, 'POST', requestBody);
           result = registerResult;
           registeredInSolucionare = true;
 
@@ -408,47 +384,67 @@ serve(async (req) => {
       }
 
       case 'listAbrangencias': {
-        // Use the distributions API's own BuscaStatusSistemas endpoint
-        // which returns the valid codSistema values for this service
-        const systems = await apiRequest(service.service_url, '/BuscaStatusSistemas', jwtToken);
-        const systemsList = Array.isArray(systems) ? systems : [];
-        console.log(`[listAbrangencias] Found ${systemsList.length} distribution systems`);
-
-        // Normalize items to have consistent naming
-        const normalizedItems = systemsList.map((item: any) => ({
-          codSistema: item.codSistema,
-          siglaSistema: item.siglaSistema || '',
-          nomeSistema: item.nomeTribunal || item.siglaSistema || `Sistema ${item.codSistema}`,
-          instancia: item.instancia,
-          status: item.descricao,
-        }));
-
-        // Organize by group
-        const grouped: Record<string, any[]> = {
-          superiores: [],
-          federais: [],
-          estaduais: [],
-          trabalhistas: [],
-          outros: [],
-        };
-
-        for (const item of normalizedItems) {
-          const sigla = (item.siglaSistema || '').toUpperCase();
-          const nome = (item.nomeSistema || '').toUpperCase();
-          if (sigla.includes('STJ') || sigla.includes('STF') || sigla.includes('TST') || sigla.includes('TSE') || sigla.includes('STM') || nome.includes('SUPERIOR') || nome.includes('SUPREMO')) {
-            grouped.superiores.push(item);
-          } else if (sigla.includes('TRF') || sigla.includes('JF') || sigla.includes('JFRS') || sigla.includes('JFSC') || sigla.includes('JFPR') || sigla.includes('CJF') || nome.includes('FEDERAL')) {
-            grouped.federais.push(item);
-          } else if (sigla.includes('TRT') || nome.includes('TRABALHO')) {
-            grouped.trabalhistas.push(item);
-          } else if (sigla.includes('TJ') || nome.includes('JUSTIÇA') || nome.includes('JUSTICA')) {
-            grouped.estaduais.push(item);
-          } else {
-            grouped.outros.push(item);
+        // Try SOAP getAbrangencias first (same source as publications)
+        let siglas: string[] = [];
+        let source = 'soap';
+        
+        try {
+          // Find a SOAP service (terms or publications) from the same partner
+          const { data: soapServices } = await supabase
+            .from('partner_services')
+            .select('*')
+            .eq('partner_id', service.partner_id)
+            .in('service_type', ['terms', 'publications'])
+            .eq('is_active', true)
+            .limit(1);
+          
+          if (soapServices && soapServices.length > 0) {
+            const soapService = soapServices[0];
+            // Build escritorios.php URL from the SOAP service URL
+            let soapUrl = soapService.service_url;
+            // If it points to nomesPesquisa.php or similar, change to escritorios.php
+            if (soapUrl.includes('.php')) {
+              soapUrl = soapUrl.replace(/[^/]+\.php.*$/, 'escritorios.php');
+            } else if (!soapUrl.endsWith('/')) {
+              soapUrl += '/escritorios.php';
+            } else {
+              soapUrl += 'escritorios.php';
+            }
+            
+            console.log(`[listAbrangencias] Trying SOAP getAbrangencias at: ${soapUrl}`);
+            const soapClient = new SoapClient({
+              serviceUrl: soapUrl,
+              nomeRelacional: soapService.nome_relacional,
+              token: soapService.token,
+            });
+            
+            const soapResult = await soapClient.call('getAbrangencias', {});
+            if (Array.isArray(soapResult) && soapResult.length > 0) {
+              siglas = soapResult.filter((s: any) => typeof s === 'string' && s.length > 0);
+              console.log(`[listAbrangencias] Got ${siglas.length} diary siglas from SOAP`);
+            }
+          }
+        } catch (soapErr) {
+          console.error('[listAbrangencias] SOAP getAbrangencias failed, falling back to REST:', soapErr);
+        }
+        
+        // Fallback: if SOAP didn't work, try REST BuscaStatusSistemas
+        if (siglas.length === 0) {
+          source = 'rest_fallback';
+          try {
+            const systems = await apiRequest(service.service_url, '/BuscaStatusSistemas', jwtToken);
+            const systemsList = Array.isArray(systems) ? systems : [];
+            siglas = systemsList.map((s: any) => s.siglaSistema || String(s.codSistema)).filter(Boolean);
+            console.log(`[listAbrangencias] Fallback: got ${siglas.length} siglas from REST`);
+          } catch (restErr) {
+            console.error('[listAbrangencias] REST BuscaStatusSistemas also failed:', restErr);
           }
         }
-
-        result = { all: normalizedItems, grouped };
+        
+        // Sort alphabetically
+        siglas.sort((a, b) => a.localeCompare(b));
+        
+        result = { siglas, source };
         break;
       }
 
