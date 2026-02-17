@@ -79,6 +79,31 @@ serve(async (req) => {
         return jsonResponse({ error: 'No pending batch to confirm' }, 400, rateLimitHeaders);
       }
 
+      const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+        || req.headers.get('x-real-ip')
+        || 'unknown';
+
+      const batchSize = cursor.batch_size || 500;
+      const { data: deliveredDists } = await supabase
+        .from('distributions')
+        .select('id')
+        .order('distribution_date', { ascending: false })
+        .limit(batchSize);
+
+      if (deliveredDists && deliveredDists.length > 0) {
+        const confirmations = deliveredDists.map(d => ({
+          record_id: d.id,
+          record_type: 'distributions',
+          client_system_id: authResult.clientSystemId!,
+          confirmed_at: new Date().toISOString(),
+          ip_address: ip,
+        }));
+
+        await supabase
+          .from('record_confirmations')
+          .upsert(confirmations, { onConflict: 'record_id,record_type,client_system_id' });
+      }
+
       await supabase
         .from('api_delivery_cursors')
         .update({ pending_confirmation: false, confirmed_at: new Date().toISOString() })
