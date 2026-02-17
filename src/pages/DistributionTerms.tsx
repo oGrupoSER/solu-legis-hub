@@ -11,11 +11,11 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Plus, Search, Loader2, Download, RefreshCw, CheckCircle2, AlertCircle, Clock, Link2, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Search, Loader2, Download, RefreshCw, CheckCircle2, AlertCircle, Clock, Link2 } from "lucide-react";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { ClientBadges } from "@/components/shared/ClientBadges";
 import { ClientSelector } from "@/components/shared/ClientSelector";
@@ -34,106 +34,48 @@ interface DistributionTerm {
   client_search_terms?: { client_systems: { id: string; name: string } }[];
 }
 
-interface Abrangencia {
-  codSistema: number;
-  siglaSistema: string;
-  nomeSistema: string;
-}
-
-interface AbrangenciasGrouped {
-  superiores: Abrangencia[];
-  federais: Abrangencia[];
-  estaduais: Abrangencia[];
-  trabalhistas: Abrangencia[];
-  outros: Abrangencia[];
-}
-
-const GROUP_LABELS: Record<string, string> = {
-  superiores: "Tribunais Superiores",
-  federais: "Tribunais Regionais Federais",
-  estaduais: "Tribunais de Justiça Estaduais",
-  trabalhistas: "Tribunais Regionais do Trabalho",
-  outros: "Outros",
-};
-
 function AbrangenciasSelector({
   serviceId,
-  selectedCodes,
+  selectedSiglas,
   onChange,
 }: {
   serviceId: string;
-  selectedCodes: number[];
-  onChange: (codes: number[]) => void;
+  selectedSiglas: string[];
+  onChange: (siglas: string[]) => void;
 }) {
   const [searchFilter, setSearchFilter] = useState("");
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
-    superiores: true,
-    federais: true,
-    estaduais: true,
-    trabalhistas: true,
-    outros: true,
-  });
 
   const { data: abrangenciasData, isLoading } = useQuery({
-    queryKey: ["abrangencias", serviceId],
+    queryKey: ["abrangencias-siglas", serviceId],
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke("manage-distribution-terms", {
         body: { action: "listAbrangencias", serviceId },
       });
       if (error) throw error;
-      return data?.data as { all: Abrangencia[]; grouped: AbrangenciasGrouped };
+      return data?.data as { siglas: string[]; source: string };
     },
     enabled: !!serviceId,
     staleTime: 5 * 60 * 1000,
   });
 
-  const grouped = abrangenciasData?.grouped;
-  const allItems = abrangenciasData?.all || [];
+  const allSiglas = abrangenciasData?.siglas || [];
 
-  const filteredGrouped = useMemo(() => {
-    if (!grouped) return null;
+  const filtered = useMemo(() => {
+    if (!searchFilter) return allSiglas;
     const q = searchFilter.toLowerCase();
-    if (!q) return grouped;
-    const filter = (items: Abrangencia[]) =>
-      items.filter(
-        (a) =>
-          a.siglaSistema.toLowerCase().includes(q) ||
-          a.nomeSistema.toLowerCase().includes(q) ||
-          String(a.codSistema).includes(q)
-      );
-    return {
-      superiores: filter(grouped.superiores),
-      federais: filter(grouped.federais),
-      estaduais: filter(grouped.estaduais),
-      trabalhistas: filter(grouped.trabalhistas),
-      outros: filter(grouped.outros),
-    };
-  }, [grouped, searchFilter]);
+    return allSiglas.filter((s) => s.toLowerCase().includes(q));
+  }, [allSiglas, searchFilter]);
 
-  const toggleCode = (code: number) => {
+  const toggleSigla = (sigla: string) => {
     onChange(
-      selectedCodes.includes(code)
-        ? selectedCodes.filter((c) => c !== code)
-        : [...selectedCodes, code]
+      selectedSiglas.includes(sigla)
+        ? selectedSiglas.filter((s) => s !== sigla)
+        : [...selectedSiglas, sigla]
     );
   };
 
-  const selectAll = () => onChange(allItems.map((a) => a.codSistema));
+  const selectAll = () => onChange([...allSiglas]);
   const clearAll = () => onChange([]);
-
-  const toggleGroup = (group: string) => {
-    setOpenGroups((prev) => ({ ...prev, [group]: !prev[group] }));
-  };
-
-  const selectGroup = (items: Abrangencia[]) => {
-    const codes = items.map((a) => a.codSistema);
-    const allSelected = codes.every((c) => selectedCodes.includes(c));
-    if (allSelected) {
-      onChange(selectedCodes.filter((c) => !codes.includes(c)));
-    } else {
-      onChange([...new Set([...selectedCodes, ...codes])]);
-    }
-  };
 
   if (isLoading) {
     return (
@@ -143,19 +85,25 @@ function AbrangenciasSelector({
     );
   }
 
-  if (!filteredGrouped) return null;
+  if (allSiglas.length === 0) {
+    return (
+      <div className="text-sm text-muted-foreground p-4">
+        Nenhuma abrangência disponível para este serviço.
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <Label>Abrangências (Tribunais)</Label>
-        <Badge variant="secondary">{selectedCodes.length} selecionado(s)</Badge>
+        <Label>Abrangências (Diários)</Label>
+        <Badge variant="secondary">{selectedSiglas.length} de {allSiglas.length}</Badge>
       </div>
 
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Buscar tribunal..."
+          placeholder="Buscar diário..."
           value={searchFilter}
           onChange={(e) => setSearchFilter(e.target.value)}
           className="pl-10"
@@ -172,47 +120,20 @@ function AbrangenciasSelector({
       </div>
 
       <ScrollArea className="h-[280px] border rounded-md p-2">
-        {(Object.keys(GROUP_LABELS) as Array<keyof AbrangenciasGrouped>).map((groupKey) => {
-          const items = filteredGrouped[groupKey];
-          if (!items || items.length === 0) return null;
-          const isOpen = openGroups[groupKey];
-          const allGroupSelected = items.every((a) => selectedCodes.includes(a.codSistema));
-          const someGroupSelected = items.some((a) => selectedCodes.includes(a.codSistema));
-
-          return (
-            <Collapsible key={groupKey} open={isOpen} onOpenChange={() => toggleGroup(groupKey)}>
-              <div className="flex items-center gap-2 py-1">
-                <Checkbox
-                  checked={allGroupSelected}
-                  // @ts-ignore
-                  indeterminate={someGroupSelected && !allGroupSelected}
-                  onCheckedChange={() => selectGroup(items)}
-                />
-                <CollapsibleTrigger className="flex items-center gap-1 flex-1 text-sm font-semibold hover:text-primary transition-colors">
-                  {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                  {GROUP_LABELS[groupKey]} ({items.length})
-                </CollapsibleTrigger>
-              </div>
-              <CollapsibleContent className="pl-6 space-y-1">
-                {items.map((item) => (
-                  <label
-                    key={item.codSistema}
-                    className="flex items-center gap-2 py-0.5 text-sm cursor-pointer hover:bg-accent/50 rounded px-1"
-                  >
-                    <Checkbox
-                      checked={selectedCodes.includes(item.codSistema)}
-                      onCheckedChange={() => toggleCode(item.codSistema)}
-                    />
-                    <span className="font-mono text-xs text-muted-foreground w-16 shrink-0">
-                      {item.siglaSistema}
-                    </span>
-                    <span className="truncate">{item.nomeSistema}</span>
-                  </label>
-                ))}
-              </CollapsibleContent>
-            </Collapsible>
-          );
-        })}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1">
+          {filtered.map((sigla) => (
+            <label
+              key={sigla}
+              className="flex items-center gap-2 py-1 px-2 text-sm cursor-pointer hover:bg-accent/50 rounded"
+            >
+              <Checkbox
+                checked={selectedSiglas.includes(sigla)}
+                onCheckedChange={() => toggleSigla(sigla)}
+              />
+              <span className="font-mono text-xs">{sigla}</span>
+            </label>
+          ))}
+        </div>
       </ScrollArea>
     </div>
   );
@@ -226,7 +147,7 @@ export default function DistributionTerms() {
   const [selectedService, setSelectedService] = useState<string>("");
   const [newTerm, setNewTerm] = useState({ nome: "", instancia: "1" });
   const [selectedClients, setSelectedClients] = useState<string[]>([]);
-  const [selectedAbrangencias, setSelectedAbrangencias] = useState<number[]>([]);
+  const [selectedAbrangencias, setSelectedAbrangencias] = useState<string[]>([]);
   const [clientError, setClientError] = useState(false);
   const [bulkLinkOpen, setBulkLinkOpen] = useState(false);
 
@@ -260,7 +181,7 @@ export default function DistributionTerms() {
 
   // Register name mutation
   const registerMutation = useMutation({
-    mutationFn: async (params: { nome: string; instancia: number; clientIds: string[]; abrangencias: number[] }) => {
+    mutationFn: async (params: { nome: string; instancia: number; clientIds: string[]; abrangencias: string[] }) => {
       if (!selectedService) throw new Error("Selecione um serviço");
       if (params.clientIds.length === 0) throw new Error("Selecione ao menos um cliente");
       if (params.abrangencias.length === 0) throw new Error("Selecione ao menos uma abrangência");
@@ -442,7 +363,7 @@ export default function DistributionTerms() {
                 {selectedService && (
                   <AbrangenciasSelector
                     serviceId={selectedService}
-                    selectedCodes={selectedAbrangencias}
+                    selectedSiglas={selectedAbrangencias}
                     onChange={setSelectedAbrangencias}
                   />
                 )}
