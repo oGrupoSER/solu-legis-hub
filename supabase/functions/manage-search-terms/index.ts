@@ -1,11 +1,8 @@
 /**
  * Edge Function: manage-search-terms
  * Complete SOAP administration for offices and search names
- * Now with shared consumption (deduplication) logic:
- * - office_code sourced from partners table
- * - client_system_id links items to requesting client
- * - Deduplication: only registers with Solucionare if item is new to Hub
- * - Removal: only removes from Solucionare when no clients remain linked
+ * Supports: variations, blocking terms, scopes (abrangencias), OAB
+ * Deduplication logic via client_search_terms junction table
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.77.0';
@@ -46,10 +43,11 @@ function resolveSolucionareEndpoint(serviceUrl: string): { endpoint: string; nam
 
 interface ManageRequest {
   service_id: string;
-  client_system_id?: string; // Optional: links the term to a client
+  client_system_id?: string;
   action: 'cadastrar_nome' | 'editar_nome' | 'ativar_nome' | 'desativar_nome' | 'excluir_nome' |
           'cadastrar_escritorio' | 'ativar_escritorio' | 'desativar_escritorio' |
-          'listar_nomes' | 'listar_escritorios' | 'sync_all';
+          'listar_nomes' | 'listar_escritorios' | 'sync_all' |
+          'gerar_variacoes' | 'buscar_abrangencias' | 'visualizar_nome';
   data?: {
     nome?: string;
     cod_nome?: number;
@@ -57,12 +55,12 @@ interface ManageRequest {
     cod_escritorio?: number;
     instancias?: number[];
     variacoes?: string[];
+    termos_bloqueio?: { termo: string; contido: boolean }[];
+    abrangencias?: string[];
+    oab?: string;
   };
 }
 
-/**
- * Get office_code from partners table (via partner_services -> partners)
- */
 async function getOfficeCode(serviceId: string): Promise<number> {
   const { data, error } = await supabase
     .from('partner_services')
@@ -79,9 +77,6 @@ async function getOfficeCode(serviceId: string): Promise<number> {
   return officeCode;
 }
 
-/**
- * Link a search term to a client system (deduplication junction)
- */
 async function linkTermToClient(termId: string, clientSystemId: string): Promise<void> {
   const { error } = await supabase
     .from('client_search_terms')
@@ -92,24 +87,19 @@ async function linkTermToClient(termId: string, clientSystemId: string): Promise
   if (error) console.error('Error linking term to client:', error);
 }
 
-/**
- * Unlink a search term from a client and check if others still use it
- */
 async function unlinkTermFromClient(termId: string, clientSystemId: string): Promise<boolean> {
-  // Remove the link
   await supabase
     .from('client_search_terms')
     .delete()
     .eq('client_system_id', clientSystemId)
     .eq('search_term_id', termId);
 
-  // Check remaining links
   const { count } = await supabase
     .from('client_search_terms')
     .select('*', { count: 'exact', head: true })
     .eq('search_term_id', termId);
 
-  return (count || 0) === 0; // true = no more clients, safe to remove from Solucionare
+  return (count || 0) === 0;
 }
 
 Deno.serve(async (req) => {
@@ -131,7 +121,6 @@ Deno.serve(async (req) => {
     validateService(service);
     if (!service.is_active) throw new Error('Service is not active');
 
-    // Get office_code from partners table
     const officeCode = await getOfficeCode(service_id);
 
     const { endpoint, namespace } = resolveSolucionareEndpoint(service.service_url);
@@ -141,7 +130,6 @@ Deno.serve(async (req) => {
       token: service.token,
       namespace,
     });
-    // Note: manage functions log API calls without sync_log_id
 
     let result: any = { success: true, action };
 
@@ -180,6 +168,15 @@ Deno.serve(async (req) => {
         result.data = await syncAll(soapClient, service, officeCode);
         await updateLastSync(service_id);
         break;
+      case 'gerar_variacoes':
+        result.data = await gerarVariacoes(soapClient, data!);
+        break;
+      case 'buscar_abrangencias':
+        result.data = await buscarAbrangencias(soapClient);
+        break;
+      case 'visualizar_nome':
+        result.data = await visualizarNome(soapClient, data!);
+        break;
       default:
         throw new Error(`Invalid action: ${action}`);
     }
@@ -198,7 +195,146 @@ Deno.serve(async (req) => {
   }
 });
 
+// ========== NEW ACTIONS ==========
+
+/**
+ * Generate automatic variations for a name using gerarVariacoes SOAP method
+ * type: 1 = name variations, 2 = OAB variations (format "CODE|UF")
+ */
+async function gerarVariacoes(soapClient: SoapClient, data: any): Promise<any> {
+  if (!data.nome) throw new Error('nome is required for generating variations');
+  const type = data.tipo_variacao || 1; // 1 = name, 2 = OAB
+  
+  console.log(`Generating variations for: ${data.nome}, type: ${type}`);
+  const result = await soapClient.call('gerarVariacoes', {
+    tipo: type,
+    texto: data.nome,
+  });
+  
+  console.log('gerarVariacoes result:', JSON.stringify(result).substring(0, 500));
+  
+  // Result should be an array of variation strings or objects
+  let variacoes: string[] = [];
+  if (Array.isArray(result)) {
+    variacoes = result.map((item: any) => {
+      if (typeof item === 'string') return item;
+      return item.nome || item.variacao || String(item);
+    });
+  } else if (typeof result === 'string' && result.trim()) {
+    variacoes = result.split('|').filter(Boolean);
+  }
+  
+  return { variacoes };
+}
+
+/**
+ * Fetch available scopes (abrangencias) via getAbrangencias SOAP method
+ * Returns list of diary siglas (e.g., DJE-SP, DJE-MG, DOU)
+ */
+async function buscarAbrangencias(soapClient: SoapClient): Promise<any> {
+  console.log('Fetching abrangencias...');
+  const result = await soapClient.call('getAbrangencias', {});
+  
+  console.log('getAbrangencias result:', JSON.stringify(result).substring(0, 1000));
+  
+  // Result can be array of strings or array of objects
+  let abrangencias: string[] = [];
+  if (Array.isArray(result)) {
+    abrangencias = result.map((item: any) => {
+      if (typeof item === 'string') return item;
+      return item.sigla || item.siglaDiario || item.nome || String(item);
+    });
+  }
+  
+  return { abrangencias };
+}
+
+/**
+ * Get complete NomePesquisa object from Solucionare via getNomePesquisa
+ * Returns variations, blocking terms, scopes, OAB as currently configured
+ */
+async function visualizarNome(soapClient: SoapClient, data: any): Promise<any> {
+  if (!data.cod_nome) throw new Error('cod_nome is required');
+  
+  console.log(`Fetching NomePesquisa for codNome: ${data.cod_nome}`);
+  const result = await soapClient.call('getNomePesquisa', {
+    codNome: data.cod_nome,
+  });
+  
+  console.log('getNomePesquisa result:', JSON.stringify(result).substring(0, 1000));
+  
+  // Parse the complex object into a structured response
+  const nomePesquisa: any = {
+    codNome: result?.codNome || data.cod_nome,
+    nome: result?.nome || '',
+    oab: result?.oab || '',
+    codEscritorio: result?.codEscritorio || 0,
+    variacoes: [],
+    termosBloqueio: [],
+    abrangencia: [],
+  };
+  
+  // Parse variacoes
+  if (Array.isArray(result?.variacoes)) {
+    nomePesquisa.variacoes = result.variacoes.map((v: any) => 
+      typeof v === 'string' ? v : (v.nome || v.variacao || String(v))
+    );
+  }
+  
+  // Parse termosBloqueio
+  if (Array.isArray(result?.termosBloqueio)) {
+    nomePesquisa.termosBloqueio = result.termosBloqueio.map((tb: any) => ({
+      termo: tb.termo || '',
+      estaContidoNoNomePesquisa: tb.estaContidoNoNomePesquisa === true || tb.estaContidoNoNomePesquisa === 'true',
+    }));
+  }
+  
+  // Parse abrangencia
+  if (Array.isArray(result?.abrangencia)) {
+    nomePesquisa.abrangencia = result.abrangencia.map((a: any) =>
+      typeof a === 'string' ? a : (a.sigla || String(a))
+    );
+  }
+  
+  return { nomePesquisa };
+}
+
 // ========== NAME OPERATIONS (with deduplication) ==========
+
+/**
+ * Build the complete NomePesquisa XML object for SOAP registration
+ */
+function buildNomePesquisaObject(officeCode: number, data: any): Record<string, any> {
+  const nomePesquisa: Record<string, any> = {
+    codEscritorio: officeCode,
+    nome: data.nome,
+  };
+  
+  // OAB (optional)
+  if (data.oab) {
+    nomePesquisa.oab = data.oab;
+  }
+  
+  // Variations array
+  if (data.variacoes && Array.isArray(data.variacoes) && data.variacoes.length > 0) {
+    nomePesquisa.variacoes = data.variacoes.map((v: string) => ({ nome: v }));
+  }
+  
+  // Blocking terms array
+  if (data.termos_bloqueio && Array.isArray(data.termos_bloqueio) && data.termos_bloqueio.length > 0) {
+    nomePesquisa.termosBloqueio = data.termos_bloqueio.map((tb: any) => ({
+      termo: tb.termo,
+      estaContidoNoNomePesquisa: tb.contido === true,
+    }));
+  }
+  
+  // Scopes (abrangencias) array - these are string siglas
+  if (data.abrangencias && Array.isArray(data.abrangencias) && data.abrangencias.length > 0) {
+    nomePesquisa.abrangencia = data.abrangencias; // Array of strings, buildComplexParam wraps in <string>
+  }
+  
+  return nomePesquisa;
+}
 
 async function cadastrarNome(
   soapClient: SoapClient, service: any, officeCode: number, data: any, clientSystemId?: string
@@ -222,17 +358,24 @@ async function cadastrarNome(
     console.log('Term already exists locally, skipping Solucionare registration');
     termRecord = existing;
   } else {
-    // Register with Solucionare (new to the Hub)
-    const soapResult = await soapClient.call('cadastrar', {
-      codEscritorio: officeCode,
-      nome: data.nome,
-      variacoes: data.variacoes?.join('|') || '',
-    });
+    // Build complete NomePesquisa object and register via SOAP
+    const nomePesquisa = buildNomePesquisaObject(officeCode, data);
+    console.log('NomePesquisa object:', JSON.stringify(nomePesquisa).substring(0, 500));
+    
+    const soapResult = await soapClient.call('cadastrar', { nomePesquisa });
     console.log('SOAP cadastrar result:', soapResult);
     registeredInSolucionare = true;
 
-    // Extract solucionare_code if returned
-    const solCode = soapResult?.codNome || soapResult?.cod_nome || null;
+    const solCode = typeof soapResult === 'number' ? soapResult :
+                    soapResult?.codNome || soapResult?.cod_nome || null;
+
+    // Build metadata for local storage
+    const metadata: any = {};
+    if (data.variacoes?.length) metadata.variacoes = data.variacoes;
+    if (data.termos_bloqueio?.length) metadata.termos_bloqueio = data.termos_bloqueio;
+    if (data.abrangencias?.length) metadata.abrangencias = data.abrangencias;
+    if (data.oab) metadata.oab = data.oab;
+    if (solCode) metadata.cod_nome = solCode;
 
     const { data: inserted, error } = await supabase
       .from('search_terms')
@@ -244,28 +387,15 @@ async function cadastrarNome(
         is_active: true,
         solucionare_code: solCode,
         solucionare_status: 'synced',
+        metadata,
       })
       .select()
       .single();
 
     if (error) throw error;
     termRecord = inserted;
-
-    // Insert variations
-    if (data.variacoes && Array.isArray(data.variacoes)) {
-      for (const variacao of data.variacoes) {
-        await supabase.from('search_terms').insert({
-          term: variacao,
-          term_type: 'name',
-          partner_id: service.partner_id,
-          partner_service_id: service.id,
-          is_active: true,
-        });
-      }
-    }
   }
 
-  // Link to client if provided
   if (clientSystemId && termRecord?.id) {
     await linkTermToClient(termRecord.id, clientSystemId);
   }
@@ -273,24 +403,79 @@ async function cadastrarNome(
   return { local: termRecord, registeredInSolucionare, linkedToClient: !!clientSystemId };
 }
 
+/**
+ * Edit a name using the correct flow: getNomePesquisa -> modify -> setNomePesquisa
+ */
 async function editarNome(
   soapClient: SoapClient, service: any, officeCode: number, data: any
 ): Promise<any> {
   if (!data.cod_nome) throw new Error('cod_nome is required');
 
-  const soapResult = await soapClient.call('editarInstanciaAbrangenciaNome', {
-    codEscritorio: officeCode,
-    codNome: data.cod_nome,
-    instancias: data.instancias?.join(',') || '',
-  });
-
-  if (data.nome) {
-    await supabase
-      .from('search_terms')
-      .update({ term: data.nome, updated_at: new Date().toISOString() })
-      .eq('solucionare_code', data.cod_nome)
-      .eq('partner_service_id', service.id);
+  // Step 1: Get current state from Solucionare
+  console.log('Fetching current NomePesquisa for editing...');
+  let currentObj: any;
+  try {
+    currentObj = await soapClient.call('getNomePesquisa', { codNome: data.cod_nome });
+    console.log('Current NomePesquisa:', JSON.stringify(currentObj).substring(0, 500));
+  } catch (e) {
+    console.warn('Failed to get current NomePesquisa, building from scratch:', e);
+    currentObj = { codNome: data.cod_nome, codEscritorio: officeCode };
   }
+
+  // Step 2: Build updated object
+  const updatedObj: Record<string, any> = {
+    codNome: data.cod_nome,
+    codEscritorio: currentObj?.codEscritorio || officeCode,
+    nome: data.nome || currentObj?.nome || '',
+  };
+  
+  if (data.oab !== undefined) updatedObj.oab = data.oab;
+  else if (currentObj?.oab) updatedObj.oab = currentObj.oab;
+  
+  // Variations
+  if (data.variacoes !== undefined) {
+    updatedObj.variacoes = (data.variacoes || []).map((v: string) => ({ nome: v }));
+  } else if (currentObj?.variacoes) {
+    updatedObj.variacoes = currentObj.variacoes;
+  }
+  
+  // Blocking terms
+  if (data.termos_bloqueio !== undefined) {
+    updatedObj.termosBloqueio = (data.termos_bloqueio || []).map((tb: any) => ({
+      termo: tb.termo,
+      estaContidoNoNomePesquisa: tb.contido === true,
+    }));
+  } else if (currentObj?.termosBloqueio) {
+    updatedObj.termosBloqueio = currentObj.termosBloqueio;
+  }
+  
+  // Scopes
+  if (data.abrangencias !== undefined) {
+    updatedObj.abrangencia = data.abrangencias;
+  } else if (currentObj?.abrangencia) {
+    updatedObj.abrangencia = currentObj.abrangencia;
+  }
+
+  // Step 3: Send updated object via setNomePesquisa
+  console.log('Setting updated NomePesquisa:', JSON.stringify(updatedObj).substring(0, 500));
+  const soapResult = await soapClient.call('setNomePesquisa', { nomePesquisa: updatedObj });
+
+  // Step 4: Update local DB
+  const metadata: any = {};
+  if (data.variacoes?.length) metadata.variacoes = data.variacoes;
+  if (data.termos_bloqueio?.length) metadata.termos_bloqueio = data.termos_bloqueio;
+  if (data.abrangencias?.length) metadata.abrangencias = data.abrangencias;
+  if (data.oab) metadata.oab = data.oab;
+  metadata.cod_nome = data.cod_nome;
+
+  const updateData: any = { updated_at: new Date().toISOString(), metadata };
+  if (data.nome) updateData.term = data.nome;
+
+  await supabase
+    .from('search_terms')
+    .update(updateData)
+    .eq('solucionare_code', data.cod_nome)
+    .eq('partner_service_id', service.id);
 
   return { soapResult };
 }
@@ -336,7 +521,6 @@ async function excluirNome(
 ): Promise<any> {
   if (!data.cod_nome && !data.nome) throw new Error('cod_nome or nome is required');
 
-  // Find the term record
   let termQuery = supabase.from('search_terms').select('id, solucionare_code').eq('partner_service_id', service.id).eq('term_type', 'name');
   if (data.cod_nome) termQuery = termQuery.eq('solucionare_code', data.cod_nome);
   else if (data.nome) termQuery = termQuery.eq('term', data.nome);
@@ -346,7 +530,6 @@ async function excluirNome(
   let removedFromSolucionare = false;
 
   if (termRecord && clientSystemId) {
-    // DEDUPLICATION: Unlink client first, only remove from Solucionare if no clients remain
     const noMoreClients = await unlinkTermFromClient(termRecord.id, clientSystemId);
     
     if (noMoreClients) {
@@ -356,13 +539,11 @@ async function excluirNome(
         codNome: data.cod_nome || termRecord.solucionare_code || 0,
       });
       removedFromSolucionare = true;
-
       await supabase.from('search_terms').update({ is_active: false, updated_at: new Date().toISOString() }).eq('id', termRecord.id);
     } else {
       console.log('Other clients still linked, keeping in Solucionare');
     }
   } else {
-    // No client context: direct removal (legacy behavior)
     await soapClient.call('remover', {
       codEscritorio: officeCode,
       codNome: data.cod_nome || 0,
@@ -388,7 +569,6 @@ async function cadastrarEscritorio(
 ): Promise<any> {
   if (!data.escritorio) throw new Error('escritorio name is required');
 
-  // DEDUPLICATION: Check if office already exists
   const { data: existing } = await supabase
     .from('search_terms')
     .select('id')
