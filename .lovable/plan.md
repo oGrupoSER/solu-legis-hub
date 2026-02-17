@@ -1,69 +1,96 @@
 
-# Plano: Testar Abrangencias de Publicacoes nas Distribuicoes
+# Plano: Wizard de Cadastro/Edicao de Processos CNJ com Todos os Parametros da API
 
-## Hipotese
+## Contexto
 
-A API REST V3 de Distribuicoes (`CadastrarNome`) pode esperar as mesmas siglas de diarios usadas nas Publicacoes (CISP, DJE-SP, DOU, etc.) ao inves dos codigos de sistema/tribunal (`BuscaStatusSistemas`).
+A documentacao da API V3 Andamentos (secao 2.1.1 - CadastraNovoProcesso) define os seguintes parametros:
 
-Evidencias:
-- `codSistema` (numeros) do `BuscaStatusSistemas` -> falhou com "abrangencia invalida"
-- `siglaSistema` (strings como TRF1_PJE1) -> tambem falhou
-- O campo se chama `listAbrangencias`, mesmo nome usado no SOAP (`abrangencia: String[]` com siglas de diarios)
+| Parametro | Tipo | Status Atual |
+|-----------|------|-------------|
+| numProcesso | varchar(50) - Obrigatorio | Implementado |
+| codEscritorio | int - Obrigatorio | Implementado (automatico) |
+| UF | varchar(2) - Opcional | Implementado |
+| Instancia | int - Obrigatorio | Implementado |
+| codTribunal | int - Opcional | **Faltando** |
+| Comarca | varchar(500) - Opcional | **Faltando** |
+| Autor | varchar(1000) - Opcional | **Faltando** |
+| Reu | varchar(1000) - Opcional | **Faltando** |
+
+Alem disso, o dialogo atual e um formulario simples sem abas, diferente do padrao wizard ja estabelecido nos modulos de Publicacoes e Distribuicoes.
 
 ## O Que Sera Feito
 
-### 1. Alterar `manage-distribution-terms` para buscar abrangencias do SOAP
+### 1. Refatorar ProcessDialog para Wizard de 3 Etapas
 
-Na action `listAbrangencias`, alem de (ou ao inves de) chamar `BuscaStatusSistemas`, buscar as abrangencias do modulo SOAP `escritorios.php` usando `getAbrangencias` - que e a mesma fonte usada nas publicacoes.
+Seguindo o padrao do `SearchTermDialog` (Publicacoes) e `DistributionTerms`:
 
-Para isso:
-- Buscar o servico de publicacoes (`terms` ou `publications`) do mesmo parceiro
-- Usar o `SoapClient` para chamar `getAbrangencias(nomeRelacional, token)` no endpoint `escritorios.php`
-- Retornar a lista de siglas de diarios (CISP, DJE-SP, etc.)
-- Manter a lista de `BuscaStatusSistemas` como fallback
+**Etapa 1 - Dados Basicos:**
+- Numero do Processo (CNJ) com formatacao automatica e verificacao de duplicidade
+- Servico (quando houver mais de um)
+- Clientes vinculados (ClientSelector)
+- Codigo do Escritorio (exibicao automatica, somente leitura)
 
-### 2. Alterar a action `registerName` para enviar siglas de diarios
+**Etapa 2 - Localizacao e Instancia:**
+- UF (select com todas as UFs + opcao "TS" para Tribunais Superiores)
+- Codigo do Tribunal (campo numerico opcional) - **NOVO**
+- Comarca (campo texto opcional) - **NOVO**
+- Instancia (select: 1a, 2a, 3a/Superiores, Todas)
 
-- Mudar `listAbrangencias` para enviar as siglas de diarios selecionadas (strings como "DJE-SP") ao inves de codigos numericos
-- Testar o cadastro com essas siglas
+**Etapa 3 - Partes do Processo:**
+- Autor (campo texto opcional) - **NOVO**
+- Reu (campo texto opcional) - **NOVO**
+- Nota explicativa: "Informar autor e reu pode acelerar a validacao do processo junto ao tribunal"
 
-### 3. Atualizar o componente `AbrangenciasSelector` nas Distribuicoes
+### 2. Refatorar EditProcessDialog para Mesmo Layout
 
-- Substituir o seletor atual (baseado em `BuscaStatusSistemas` com codSistema) por um seletor simples de siglas de diarios (mesmo formato das publicacoes)
-- Os dados virao como lista plana de strings (sem agrupamento por tribunal)
+- Mesmo wizard de 3 etapas
+- Carregar dados existentes do processo (incluindo novos campos de metadata)
+- Manter logica de re-validacao quando o numero CNJ muda
 
-### 4. Testar automaticamente
+### 3. Atualizar Edge Function (sync-process-management)
 
-Apos deploy, chamar a edge function com uma sigla de diario real para validar se a API aceita.
+- Action `register`: Enviar os novos campos opcionais (`codTribunal`, `Comarca`, `Autor`, `Reu`) para a API
+- Action `send-pending`: Incluir os mesmos campos ao reenviar processos pendentes
+- Salvar os novos campos no `metadata` ou em `raw_data` para persistencia
+
+### 4. Armazenamento dos Novos Campos
+
+Os campos `codTribunal`, `Comarca`, `Autor` e `Reu` nao possuem colunas dedicadas na tabela `processes`. Serao armazenados no campo `raw_data` (JSONB) que ja existe, sem necessidade de migracoes de banco de dados.
 
 ---
 
 ## Detalhes Tecnicos
 
-### Edge Function: `manage-distribution-terms/index.ts`
-
-**Action `listAbrangencias` - nova abordagem:**
-- Buscar `partner_services` do mesmo `partner_id` com `service_type = 'terms'` ou `'publications'`
-- Importar e usar o `SoapClient` para chamar `getAbrangencias` no endpoint `escritorios.php`
-- Retornar array de strings (siglas de diarios)
-- Fallback: se nao encontrar servico SOAP, manter o `BuscaStatusSistemas` atual
-
-**Action `registerName` - ajuste:**
-- Campo `listAbrangencias` passa a receber `string[]` (siglas) ao inves de `number[]` (codSistema)
-- Sem necessidade de fallback codSistema/siglaSistema
-
-### Frontend: `src/pages/DistributionTerms.tsx`
-
-**`AbrangenciasSelector` simplificado:**
-- Trocar de seletor agrupado por tribunal para lista simples de checkboxes com siglas de diarios
-- Campo de busca para filtrar
-- Botoes "Selecionar Todos" / "Limpar"
-- O tipo `selectedAbrangencias` muda de `number[]` para `string[]`
-
-### Arquivos a modificar
+### Arquivos a Modificar
 
 | Arquivo | Acao |
 |---------|------|
-| `supabase/functions/manage-distribution-terms/index.ts` | Alterar `listAbrangencias` para buscar do SOAP e `registerName` para enviar siglas |
-| `src/pages/DistributionTerms.tsx` | Simplificar `AbrangenciasSelector` para usar siglas de diarios |
+| `src/components/processes/ProcessDialog.tsx` | Refatorar para wizard 3 etapas com stepper visual, adicionar campos codTribunal, Comarca, Autor, Reu |
+| `src/components/processes/EditProcessDialog.tsx` | Mesmo wizard, carregar dados existentes do raw_data |
+| `supabase/functions/sync-process-management/index.ts` | Enviar novos campos na action register e send-pending |
 
+### Padrao Visual do Wizard
+
+Reutilizar o mesmo padrao de stepper das Publicacoes:
+- Indicador de etapas com numeros e labels no topo
+- Botoes "Voltar" / "Proximo" / "Cadastrar" no rodape
+- Validacao por etapa antes de avancar
+- Dialog com largura maior (sm:max-w-[600px]) para acomodar o conteudo
+
+### Logica de Envio para API
+
+```text
+POST /CadastraNovoProcesso
+{
+  numProcesso: "...",
+  codEscritorio: 123,
+  UF: "SP",
+  instancia: 1,
+  codTribunal: 8,        // novo - opcional
+  Comarca: "São Paulo",  // novo - opcional
+  Autor: "João Silva",   // novo - opcional
+  Reu: "Empresa XYZ"     // novo - opcional
+}
+```
+
+Campos vazios ou nulos nao serao enviados no body da requisicao.
