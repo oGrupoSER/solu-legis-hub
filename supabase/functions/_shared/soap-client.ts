@@ -1,6 +1,7 @@
 /**
  * SOAP Client for Solucionare WebServices
  * Handles SOAP envelope construction, XML parsing, and API call logging
+ * Supports complex nested XML structures for NomePesquisa objects
  */
 
 import { Logger } from './logger.ts';
@@ -25,11 +26,55 @@ export class SoapClient {
     this.logger = logger;
   }
 
+  /**
+   * Build XML for a complex parameter value (objects, arrays, primitives).
+   * Handles nested structures like NomePesquisa with variacoes, termosBloqueio, abrangencia.
+   */
+  private buildComplexParam(key: string, value: any): string {
+    if (value === null || value === undefined) return '';
+    
+    if (Array.isArray(value)) {
+      // Array: wrap each element
+      // For arrays of objects, wrap in <item>
+      // For arrays of primitives (strings), wrap in <string>
+      const items = value.map(item => {
+        if (typeof item === 'object' && item !== null) {
+          const innerXml = Object.entries(item)
+            .map(([k, v]) => this.buildComplexParam(k, v))
+            .join('');
+          return `<item>${innerXml}</item>`;
+        } else {
+          return `<string>${this.escapeXml(String(item))}</string>`;
+        }
+      }).join('');
+      return `<${key}>${items}</${key}>`;
+    }
+    
+    if (typeof value === 'object') {
+      // Object: recursively build child elements
+      const innerXml = Object.entries(value)
+        .map(([k, v]) => this.buildComplexParam(k, v))
+        .join('');
+      return `<${key}>${innerXml}</${key}>`;
+    }
+    
+    // Primitive value
+    if (typeof value === 'boolean') {
+      return `<${key}>${value}</${key}>`;
+    }
+    return `<${key}>${this.escapeXml(String(value))}</${key}>`;
+  }
+
   private buildEnvelope(method: string, params: Record<string, any>): string {
     const namespace = this.config.namespace || this.getNormalizedUrl();
     
     const paramsXml = Object.entries(params)
       .map(([key, value]) => {
+        // Complex types (objects/arrays) use buildComplexParam
+        if (typeof value === 'object' && value !== null) {
+          return this.buildComplexParam(key, value);
+        }
+        // Simple types use typed attributes
         const typeAttr = typeof value === 'number' ? 'xsi:type="xsd:int"' : 'xsi:type="xsd:string"';
         return `<${key} ${typeAttr}>${this.escapeXml(String(value))}</${key}>`;
       })
@@ -103,6 +148,19 @@ export class SoapClient {
         return this.parseComplexArray(retornoSection[1]);
       }
 
+      // Check for <return> with complex content (getNomePesquisa returns object)
+      const returnSection = bodyContent.match(/<return(?:\s[^>]*)?>([\s\S]*?)<\/return>/);
+      if (returnSection) {
+        const returnContent = returnSection[1];
+        // If it contains sub-elements, parse as complex object
+        if (returnContent.includes('<') && !returnContent.match(/^[^<]*$/)) {
+          console.log('Parsing complex return object');
+          return this.parseComplexObject(returnContent);
+        }
+        // Simple string return
+        return returnContent.trim();
+      }
+
       if (bodyContent.includes('<string>')) {
         const items: string[] = [];
         const stringRegex = /<string>(.*?)<\/string>/gs;
@@ -133,6 +191,51 @@ export class SoapClient {
     }
   }
 
+  /**
+   * Parse a complex XML object (not an array) into a JS object.
+   * Handles nested arrays (variacoes, termosBloqueio, abrangencia).
+   */
+  private parseComplexObject(xml: string): any {
+    const obj: any = {};
+    
+    // Extract simple fields first
+    const fieldRegex = /<([a-zA-Z]+)>([^<]*)<\/\1>/g;
+    let fieldMatch;
+    while ((fieldMatch = fieldRegex.exec(xml)) !== null) {
+      const fieldName = fieldMatch[1];
+      const fieldValue = fieldMatch[2].trim();
+      if (/^\d+$/.test(fieldValue)) {
+        obj[fieldName] = parseInt(fieldValue, 10);
+      } else if (fieldValue === 'true' || fieldValue === 'false') {
+        obj[fieldName] = fieldValue === 'true';
+      } else {
+        obj[fieldName] = fieldValue;
+      }
+    }
+    
+    // Extract arrays (elements containing <item> or <string> children)
+    const arrayRegex = /<([a-zA-Z]+)>((?:[\s\S]*?)<(?:item|string)[^>]*>[\s\S]*?)<\/\1>/gs;
+    let arrayMatch;
+    while ((arrayMatch = arrayRegex.exec(xml)) !== null) {
+      const arrayName = arrayMatch[1];
+      const arrayContent = arrayMatch[2];
+      
+      if (arrayContent.includes('<item')) {
+        obj[arrayName] = this.parseComplexArray(arrayContent);
+      } else if (arrayContent.includes('<string>')) {
+        const strings: string[] = [];
+        const strRegex = /<string>(.*?)<\/string>/gs;
+        let strMatch;
+        while ((strMatch = strRegex.exec(arrayContent)) !== null) {
+          strings.push(strMatch[1].trim());
+        }
+        obj[arrayName] = strings;
+      }
+    }
+    
+    return obj;
+  }
+
   private parseComplexArray(xml: string): any[] {
     const items: any[] = [];
     const itemRegex = /<item[^>]*>(.*?)<\/item>/gs;
@@ -151,6 +254,8 @@ export class SoapClient {
         
         if (/^\d+$/.test(fieldValue)) {
           item[fieldName] = parseInt(fieldValue, 10);
+        } else if (fieldValue === 'true' || fieldValue === 'false') {
+          item[fieldName] = fieldValue === 'true';
         } else {
           item[fieldName] = fieldValue;
         }
@@ -184,7 +289,7 @@ export class SoapClient {
     console.log(`Original URL: ${this.config.serviceUrl}`);
     console.log(`Normalized URL: ${normalizedUrl}`);
     console.log(`Method: ${method}`);
-    console.log('Envelope (first 500 chars):', envelope.substring(0, 500));
+    console.log('Envelope (first 800 chars):', envelope.substring(0, 800));
 
     const namespace = this.config.namespace || normalizedUrl;
     const requestHeaders: Record<string, string> = {

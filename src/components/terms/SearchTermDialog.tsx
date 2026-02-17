@@ -6,13 +6,24 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { ClientSelector } from "@/components/shared/ClientSelector";
+import { Plus, X, Wand2, ChevronDown, ChevronRight, Search, HelpCircle, Loader2, Ban } from "lucide-react";
 
 interface SearchTermDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   term: any;
+}
+
+interface TermoBloqueio {
+  termo: string;
+  contido: boolean;
 }
 
 export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogProps) => {
@@ -29,6 +40,20 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
   const [services, setServices] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
+  // New fields
+  const [oab, setOab] = useState("");
+  const [variacoes, setVariacoes] = useState<string[]>([]);
+  const [novaVariacao, setNovaVariacao] = useState("");
+  const [termosBloqueio, setTermosBloqueio] = useState<TermoBloqueio[]>([]);
+  const [novoTermoBloqueio, setNovoTermoBloqueio] = useState("");
+  const [novoTermoContido, setNovoTermoContido] = useState(false);
+  const [abrangencias, setAbrangencias] = useState<string[]>([]);
+  const [abrangenciasDisponiveis, setAbrangenciasDisponiveis] = useState<string[]>([]);
+  const [abrangenciaSearch, setAbrangenciaSearch] = useState("");
+  const [isGeneratingVariations, setIsGeneratingVariations] = useState(false);
+  const [isLoadingAbrangencias, setIsLoadingAbrangencias] = useState(false);
+  const [abrangenciasOpen, setAbrangenciasOpen] = useState(false);
+
   useEffect(() => {
     if (open) {
       fetchPartners();
@@ -40,17 +65,32 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
           partner_service_id: term.partner_service_id || "",
           is_active: term.is_active ?? true,
         });
-        if (term.partner_id) {
-          fetchServices(term.partner_id);
-        }
-        // Load existing client links
+        if (term.partner_id) fetchServices(term.partner_id);
         fetchTermClients(term.id);
+        // Load metadata
+        const meta = term.metadata || {};
+        setVariacoes(meta.variacoes || []);
+        setTermosBloqueio(meta.termos_bloqueio || []);
+        setAbrangencias(meta.abrangencias || []);
+        setOab(meta.oab || "");
       } else {
+        resetNewFields();
         setSelectedClients([]);
         setClientError(false);
       }
     }
   }, [open, term]);
+
+  const resetNewFields = () => {
+    setOab("");
+    setVariacoes([]);
+    setNovaVariacao("");
+    setTermosBloqueio([]);
+    setNovoTermoBloqueio("");
+    setNovoTermoContido(false);
+    setAbrangencias([]);
+    setAbrangenciaSearch("");
+  };
 
   const fetchPartners = async () => {
     const { data } = await supabase.from("partners").select("id, name").eq("is_active", true);
@@ -76,6 +116,102 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
     setSelectedClients((data || []).map((d) => d.client_system_id));
   };
 
+  // Generate variations automatically via SOAP
+  const handleGenerateVariations = async () => {
+    if (!formData.partner_service_id || !formData.term) {
+      toast.error("Selecione um serviço e preencha o termo primeiro");
+      return;
+    }
+    setIsGeneratingVariations(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("manage-search-terms", {
+        body: {
+          service_id: formData.partner_service_id,
+          action: "gerar_variacoes",
+          data: { nome: formData.term, tipo_variacao: 1 },
+        },
+      });
+      if (error) throw error;
+      const novas = data?.data?.variacoes || [];
+      if (novas.length === 0) {
+        toast.info("Nenhuma variação gerada automaticamente");
+      } else {
+        // Merge without duplicates
+        const merged = [...new Set([...variacoes, ...novas])];
+        setVariacoes(merged);
+        toast.success(`${novas.length} variações geradas`);
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao gerar variações");
+    } finally {
+      setIsGeneratingVariations(false);
+    }
+  };
+
+  // Fetch available abrangencias via SOAP
+  const handleFetchAbrangencias = async () => {
+    if (!formData.partner_service_id) {
+      toast.error("Selecione um serviço primeiro");
+      return;
+    }
+    setIsLoadingAbrangencias(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("manage-search-terms", {
+        body: {
+          service_id: formData.partner_service_id,
+          action: "buscar_abrangencias",
+        },
+      });
+      if (error) throw error;
+      const lista = data?.data?.abrangencias || [];
+      setAbrangenciasDisponiveis(lista);
+      if (lista.length === 0) {
+        toast.info("Nenhuma abrangência disponível retornada");
+      } else {
+        toast.success(`${lista.length} abrangências carregadas`);
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao buscar abrangências");
+    } finally {
+      setIsLoadingAbrangencias(false);
+    }
+  };
+
+  const addVariacao = () => {
+    const v = novaVariacao.trim();
+    if (!v) return;
+    if (variacoes.includes(v)) { toast.error("Variação já existe"); return; }
+    setVariacoes([...variacoes, v]);
+    setNovaVariacao("");
+  };
+
+  const removeVariacao = (index: number) => {
+    setVariacoes(variacoes.filter((_, i) => i !== index));
+  };
+
+  const addTermoBloqueio = () => {
+    const t = novoTermoBloqueio.trim();
+    if (!t) return;
+    if (termosBloqueio.some(tb => tb.termo === t)) { toast.error("Termo de bloqueio já existe"); return; }
+    setTermosBloqueio([...termosBloqueio, { termo: t, contido: novoTermoContido }]);
+    setNovoTermoBloqueio("");
+    setNovoTermoContido(false);
+  };
+
+  const removeTermoBloqueio = (index: number) => {
+    setTermosBloqueio(termosBloqueio.filter((_, i) => i !== index));
+  };
+
+  const toggleAbrangencia = (sigla: string) => {
+    setAbrangencias(prev =>
+      prev.includes(sigla) ? prev.filter(a => a !== sigla) : [...prev, sigla]
+    );
+  };
+
+  const filteredAbrangencias = abrangenciasDisponiveis.filter(a =>
+    a.toLowerCase().includes(abrangenciaSearch.toLowerCase())
+  );
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -88,10 +224,17 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
     setIsLoading(true);
 
     try {
-      const dataToSave = {
+      const metadata: any = {};
+      if (variacoes.length > 0) metadata.variacoes = variacoes;
+      if (termosBloqueio.length > 0) metadata.termos_bloqueio = termosBloqueio;
+      if (abrangencias.length > 0) metadata.abrangencias = abrangencias;
+      if (oab) metadata.oab = oab;
+
+      const dataToSave: any = {
         ...formData,
         partner_id: formData.partner_id || null,
         partner_service_id: formData.partner_service_id || null,
+        metadata,
       };
 
       let termId: string;
@@ -126,9 +269,11 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
     }
   };
 
+  const isNameType = formData.term_type === "name";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{term ? "Editar Termo" : "Novo Termo de Busca"}</DialogTitle>
           <DialogDescription>
@@ -137,6 +282,7 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Term */}
           <div className="space-y-2">
             <Label htmlFor="term">Termo</Label>
             <Input
@@ -148,6 +294,7 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
             />
           </div>
 
+          {/* Type */}
           <div className="space-y-2">
             <Label htmlFor="type">Tipo</Label>
             <Select value={formData.term_type} onValueChange={(value) => setFormData({ ...formData, term_type: value })}>
@@ -159,6 +306,21 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
             </Select>
           </div>
 
+          {/* OAB (only for name type) */}
+          {isNameType && (
+            <div className="space-y-2">
+              <Label htmlFor="oab">OAB (opcional)</Label>
+              <Input
+                id="oab"
+                value={oab}
+                onChange={(e) => setOab(e.target.value)}
+                placeholder="Ex: 123456|MG"
+              />
+              <p className="text-xs text-muted-foreground">Formato: CÓDIGO|UF</p>
+            </div>
+          )}
+
+          {/* Partner */}
           <div className="space-y-2">
             <Label htmlFor="partner">Parceiro (opcional)</Label>
             <Select
@@ -206,6 +368,208 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
             error={clientError}
           />
 
+          {/* === VARIATIONS SECTION === */}
+          {isNameType && (
+            <Collapsible>
+              <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium w-full py-2 hover:text-primary transition-colors">
+                <ChevronRight className="h-4 w-4 transition-transform data-[state=open]:rotate-90" />
+                Variações
+                {variacoes.length > 0 && (
+                  <Badge variant="secondary" className="ml-auto">{variacoes.length}</Badge>
+                )}
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-3 pt-2">
+                <div className="flex gap-2">
+                  <Input
+                    value={novaVariacao}
+                    onChange={(e) => setNovaVariacao(e.target.value)}
+                    placeholder="Adicionar variação..."
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addVariacao(); } }}
+                  />
+                  <Button type="button" variant="outline" size="icon" onClick={addVariacao}>
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={handleGenerateVariations}
+                          disabled={isGeneratingVariations || !formData.partner_service_id}
+                        >
+                          {isGeneratingVariations ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Gerar variações automaticamente</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+                {variacoes.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {variacoes.map((v, i) => (
+                      <Badge key={i} variant="secondary" className="gap-1 pr-1">
+                        {v}
+                        <button type="button" onClick={() => removeVariacao(i)} className="hover:text-destructive">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Variações ortográficas do nome que também serão monitoradas
+                </p>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+
+          {/* === BLOCKING TERMS SECTION === */}
+          {isNameType && (
+            <Collapsible>
+              <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium w-full py-2 hover:text-primary transition-colors">
+                <ChevronRight className="h-4 w-4 transition-transform data-[state=open]:rotate-90" />
+                <Ban className="h-4 w-4" />
+                Termos de Bloqueio
+                {termosBloqueio.length > 0 && (
+                  <Badge variant="secondary" className="ml-auto">{termosBloqueio.length}</Badge>
+                )}
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      Termos de bloqueio impedem a captura de publicações quando encontrados junto ao nome pesquisado
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-3 pt-2">
+                <div className="flex gap-2 items-end">
+                  <div className="flex-1 space-y-1">
+                    <Input
+                      value={novoTermoBloqueio}
+                      onChange={(e) => setNovoTermoBloqueio(e.target.value)}
+                      placeholder="Termo bloqueador..."
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTermoBloqueio(); } }}
+                    />
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="contido"
+                        checked={novoTermoContido}
+                        onCheckedChange={(checked) => setNovoTermoContido(checked === true)}
+                      />
+                      <label htmlFor="contido" className="text-xs text-muted-foreground cursor-pointer">
+                        Somente quando contido no nome
+                      </label>
+                    </div>
+                  </div>
+                  <Button type="button" variant="outline" size="icon" onClick={addTermoBloqueio} className="shrink-0">
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+                {termosBloqueio.length > 0 && (
+                  <div className="space-y-1.5">
+                    {termosBloqueio.map((tb, i) => (
+                      <div key={i} className="flex items-center gap-2 bg-muted/50 rounded-md px-3 py-1.5 text-sm">
+                        <Ban className="h-3.5 w-3.5 text-destructive shrink-0" />
+                        <span className="flex-1 font-medium">{tb.termo}</span>
+                        {tb.contido && (
+                          <Badge variant="outline" className="text-xs">contido</Badge>
+                        )}
+                        <button type="button" onClick={() => removeTermoBloqueio(i)} className="hover:text-destructive">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+
+          {/* === SCOPES (ABRANGENCIAS) SECTION === */}
+          {isNameType && (
+            <Collapsible open={abrangenciasOpen} onOpenChange={setAbrangenciasOpen}>
+              <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium w-full py-2 hover:text-primary transition-colors">
+                <ChevronRight className="h-4 w-4 transition-transform data-[state=open]:rotate-90" />
+                Abrangências (Diários)
+                {abrangencias.length > 0 && (
+                  <Badge variant="secondary" className="ml-auto">{abrangencias.length} selecionados</Badge>
+                )}
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-3 pt-2">
+                {abrangenciasDisponiveis.length === 0 ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full gap-2"
+                    onClick={handleFetchAbrangencias}
+                    disabled={isLoadingAbrangencias || !formData.partner_service_id}
+                  >
+                    {isLoadingAbrangencias ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                    Carregar abrangências disponíveis
+                  </Button>
+                ) : (
+                  <>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        value={abrangenciaSearch}
+                        onChange={(e) => setAbrangenciaSearch(e.target.value)}
+                        placeholder="Filtrar diários..."
+                        className="pl-10"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => setAbrangencias([...abrangenciasDisponiveis])}>
+                        Selecionar Todos
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setAbrangencias([])}>
+                        Limpar
+                      </Button>
+                    </div>
+                    <ScrollArea className="h-[150px] rounded-md border p-2">
+                      <div className="space-y-1">
+                        {filteredAbrangencias.map((sigla) => (
+                          <div
+                            key={sigla}
+                            className="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted/50 cursor-pointer"
+                            onClick={() => toggleAbrangencia(sigla)}
+                          >
+                            <Checkbox
+                              checked={abrangencias.includes(sigla)}
+                              onCheckedChange={() => toggleAbrangencia(sigla)}
+                            />
+                            <span className="text-sm">{sigla}</span>
+                          </div>
+                        ))}
+                        {filteredAbrangencias.length === 0 && (
+                          <p className="text-sm text-muted-foreground text-center py-4">Nenhum diário encontrado</p>
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </>
+                )}
+                {abrangencias.length > 0 && abrangenciasDisponiveis.length === 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {abrangencias.map((a, i) => (
+                      <Badge key={i} variant="secondary" className="gap-1 pr-1">
+                        {a}
+                        <button type="button" onClick={() => setAbrangencias(abrangencias.filter((_, j) => j !== i))} className="hover:text-destructive">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+
+          {/* Active toggle */}
           <div className="flex items-center justify-between">
             <Label htmlFor="active">Termo Ativo</Label>
             <Switch

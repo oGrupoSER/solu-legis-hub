@@ -1339,6 +1339,7 @@ export type Database = {
           created_at: string | null
           id: string
           is_active: boolean | null
+          metadata: Json | null
           partner_id: string | null
           partner_service_id: string | null
           solucionare_code: number | null
@@ -1351,6 +1352,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           is_active?: boolean | null
+          metadata?: Json | null
           partner_id?: string | null
           partner_service_id?: string | null
           solucionare_code?: number | null
@@ -1363,6 +1365,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           is_active?: boolean | null
+          metadata?: Json | null
           partner_id?: string | null
           partner_service_id?: string | null
           solucionare_code?: number | null
