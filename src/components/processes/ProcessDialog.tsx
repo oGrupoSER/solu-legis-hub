@@ -185,7 +185,11 @@ export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogPr
           },
         });
 
-        if (error) throw error;
+        if (error) {
+          const errStr = error.message || String(error);
+          const jsonMatch = errStr.match(/\{.*"error"\s*:\s*"([^"]+)".*\}/);
+          throw new Error(jsonMatch?.[1] || errStr);
+        }
         if (!data?.success) throw new Error(data?.error || "Erro ao cadastrar processo");
       }
 
@@ -197,7 +201,14 @@ export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogPr
       onSuccess();
     } catch (error) {
       console.error("Error registering process:", error);
-      toast.error(error instanceof Error ? error.message : "Erro ao cadastrar processo");
+      const msg = error instanceof Error ? error.message : "Erro ao cadastrar processo";
+      if (msg.includes("Instância informada inválida") || msg.includes("instância")) {
+        toast.error("A instância selecionada não é aceita pelo parceiro. Selecione 1ª, 2ª ou Instâncias Superiores.");
+      } else if (msg.includes("já cadastrado") || msg.includes("already")) {
+        toast.error("Este processo já está cadastrado no parceiro.");
+      } else {
+        toast.error(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -328,7 +339,6 @@ export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogPr
                   <Select value={formData.instance} onValueChange={(v) => setFormData(prev => ({ ...prev, instance: v }))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="0">Todas</SelectItem>
                       <SelectItem value="1">1ª Instância</SelectItem>
                       <SelectItem value="2">2ª Instância</SelectItem>
                       <SelectItem value="3">Instâncias Superiores</SelectItem>
