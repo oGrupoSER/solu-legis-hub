@@ -118,15 +118,20 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
 
   // Generate variations automatically via SOAP
   const handleGenerateVariations = async () => {
-    if (!formData.partner_service_id || !formData.term) {
-      toast.error("Selecione um serviço e preencha o termo primeiro");
+    if (!formData.term) {
+      toast.error("Preencha o termo primeiro");
       return;
     }
     setIsGeneratingVariations(true);
     try {
+      const serviceId = await resolveServiceId();
+      if (!serviceId) {
+        toast.error("Nenhum serviço de termos/publicações ativo encontrado");
+        return;
+      }
       const { data, error } = await supabase.functions.invoke("manage-search-terms", {
         body: {
-          service_id: formData.partner_service_id,
+          service_id: serviceId,
           action: "gerar_variacoes",
           data: { nome: formData.term, tipo_variacao: 1 },
         },
@@ -136,7 +141,6 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
       if (novas.length === 0) {
         toast.info("Nenhuma variação gerada automaticamente");
       } else {
-        // Merge without duplicates
         const merged = [...new Set([...variacoes, ...novas])];
         setVariacoes(merged);
         toast.success(`${novas.length} variações geradas`);
@@ -148,17 +152,32 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
     }
   };
 
+  // Resolve a service_id for SOAP calls (use selected or find any active terms service)
+  const resolveServiceId = async (): Promise<string | null> => {
+    if (formData.partner_service_id) return formData.partner_service_id;
+    // Fallback: find any active terms/publications service
+    const { data } = await supabase
+      .from("partner_services")
+      .select("id")
+      .in("service_type", ["terms", "publications"])
+      .eq("is_active", true)
+      .limit(1)
+      .single();
+    return data?.id || null;
+  };
+
   // Fetch available abrangencias via SOAP
   const handleFetchAbrangencias = async () => {
-    if (!formData.partner_service_id) {
-      toast.error("Selecione um serviço primeiro");
-      return;
-    }
     setIsLoadingAbrangencias(true);
     try {
+      const serviceId = await resolveServiceId();
+      if (!serviceId) {
+        toast.error("Nenhum serviço de termos/publicações ativo encontrado");
+        return;
+      }
       const { data, error } = await supabase.functions.invoke("manage-search-terms", {
         body: {
-          service_id: formData.partner_service_id,
+          service_id: serviceId,
           action: "buscar_abrangencias",
         },
       });
@@ -397,7 +416,7 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
                           variant="outline"
                           size="icon"
                           onClick={handleGenerateVariations}
-                          disabled={isGeneratingVariations || !formData.partner_service_id}
+                          disabled={isGeneratingVariations || !formData.term}
                         >
                           {isGeneratingVariations ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
                         </Button>
@@ -507,7 +526,7 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
                     variant="outline"
                     className="w-full gap-2"
                     onClick={handleFetchAbrangencias}
-                    disabled={isLoadingAbrangencias || !formData.partner_service_id}
+                    disabled={isLoadingAbrangencias}
                   >
                     {isLoadingAbrangencias ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                     Carregar abrangências disponíveis
