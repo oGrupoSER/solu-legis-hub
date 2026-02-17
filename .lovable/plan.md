@@ -1,67 +1,85 @@
 
 
-# Plano: Adicionar Endpoints de Gerenciamento ao Playground de API e Postman
+# Plano: Filtros Avancados e Indicador de Confirmacao por Registro
 
 ## Contexto
 
-O Playground de API e a colecao Postman atualmente cobrem apenas endpoints de **consulta** (GET) e **confirmacao de lote** (POST simples). Os endpoints de **gerenciamento** (cadastrar, editar, excluir termos/processos) implementados nas edge functions nao estao disponiveis para teste nem documentados para clientes.
+As telas de Publicacoes, Distribuicoes e Andamentos precisam de:
+1. Filtros por **cliente**, **parceiro** e **periodo** (algumas telas ja tem parceiro/periodo parcialmente)
+2. Indicador visual por registro mostrando se o cliente ja **confirmou o recebimento**
+3. Ao clicar no indicador, exibir **data/hora** e **IP de origem** da confirmacao
+4. Filtro por status de confirmacao (confirmado / nao confirmado)
+
+## Analise do Estado Atual
+
+| Tela | Filtro Cliente | Filtro Parceiro | Filtro Periodo | Confirmacao |
+|------|---------------|-----------------|----------------|-------------|
+| Publicacoes (PublicationsTable) | Nao tem | Tem | Tem | Nao tem |
+| Distribuicoes (Distributions) | Nao tem | Nao tem | Nao tem | Nao tem |
+| Andamentos (ProcessMovements) | Nao tem | Nao tem | Nao tem | Nao tem |
+
+O modelo de confirmacao atual e por **lote** (tabela `api_delivery_cursors`), sem rastreamento por registro individual. Nao ha dados de IP nem timestamp por registro.
 
 ## O Que Sera Feito
 
-### 1. Suporte a Body JSON no Playground
+### 1. Nova Tabela: `record_confirmations`
 
-O playground atual so envia query params. Os endpoints de gerenciamento usam POST/PUT/DELETE com body JSON. Sera adicionado:
-- Campo `bodyParams` na interface `EndpointDef` para definir campos do body
-- Marcacao de campos como **obrigatorios** ou opcionais
-- Editor de body JSON no painel de parametros
-- Atualizacao do `handleTest` para enviar body quando presente
+Rastreia confirmacoes individuais por registro e por cliente:
 
-### 2. Novos Endpoints por Aba
+| Coluna | Tipo | Descricao |
+|--------|------|-----------|
+| id | uuid PK | Identificador |
+| record_id | uuid NOT NULL | ID do registro (publicacao, distribuicao ou movimento) |
+| record_type | text NOT NULL | "publications", "distributions" ou "movements" |
+| client_system_id | uuid NOT NULL | Cliente que confirmou |
+| confirmed_at | timestamptz | Data/hora da confirmacao |
+| ip_address | text | IP de origem da requisicao |
+| created_at | timestamptz | Timestamp de criacao |
 
-**Aba Processos (sync-process-management):**
-| Endpoint | Metodo | Campos Obrigatorios | Campos Opcionais |
-|----------|--------|---------------------|------------------|
-| Cadastrar Processo | POST | processNumber, serviceId, instance | uf, codTribunal, comarca, autor, reu, clientSystemId |
-| Excluir Processo | POST | processNumber, serviceId | clientSystemId |
-| Status do Processo | POST | processNumber, serviceId | - |
-| Listar Processos Cadastrados | POST | serviceId | - |
-| Reenviar Pendentes | POST | serviceId | - |
+Indice unico em (record_id, record_type, client_system_id) para evitar duplicatas.
+RLS: SELECT para authenticated, INSERT para service role.
 
-**Aba Distribuicoes (manage-distribution-terms):**
-| Endpoint | Metodo | Campos Obrigatorios | Campos Opcionais |
-|----------|--------|---------------------|------------------|
-| Cadastrar Nome | POST | serviceId, nome | codTipoConsulta, listInstancias, abrangencias, qtdDiasCapturaRetroativa, listDocumentos, listOab, client_system_id |
-| Editar Nome | POST | serviceId, termId | nome, codNome, codTipoConsulta, listInstancias, abrangencias, qtdDiasCapturaRetroativa, listDocumentos, listOab |
-| Ativar Nome | POST | serviceId, codNome | - |
-| Desativar Nome | POST | serviceId, codNome | - |
-| Excluir Nome | POST | serviceId, codNome | client_system_id |
-| Listar Nomes | POST | serviceId | - |
+### 2. Atualizar Endpoints de Confirmacao (api-processes, api-distributions, api-publications)
 
-**Aba Publicacoes (manage-publication-terms / manage-search-terms):**
-| Endpoint | Metodo | Campos Obrigatorios | Campos Opcionais |
-|----------|--------|---------------------|------------------|
-| Cadastrar Nome | POST | service_id, term, term_type | variacoes, termos_bloqueio, abrangencias, oab, client_system_id |
-| Editar Nome | POST | service_id, term_id, term, term_type | variacoes, termos_bloqueio, abrangencias, oab |
-| Excluir Nome | POST | service_id, term_id, term_type | client_system_id |
-| Listar Termos | POST | service_id, term_type | - |
+Quando o cliente chama `POST ?action=confirm`:
+- Alem de atualizar o `api_delivery_cursors`, inserir registros na tabela `record_confirmations` para cada item do lote entregue
+- Capturar o IP da requisicao via headers (`x-forwarded-for` ou `x-real-ip`)
+- Gravar o timestamp da confirmacao
 
-### 3. Organizacao Visual
+### 3. Adicionar Filtros nas 3 Telas
 
-Cada aba tera dois grupos de endpoints separados visualmente:
-- **Consulta** (endpoints existentes - api-processes, api-distributions, api-publications)
-- **Gerenciamento** (novos endpoints - sync-process-management, manage-distribution-terms, manage-publication-terms/manage-search-terms)
+**Publicacoes (PublicationsTable.tsx):**
+- Adicionar filtro por **Cliente** (Select com client_systems)
+- Filtro de confirmacao ja e viavel apos a nova tabela
 
-Um separador visual com label distinguira os dois grupos.
+**Distribuicoes (Distributions.tsx):**
+- Adicionar filtro por **Parceiro** (Select com partners)
+- Adicionar filtro por **Cliente** (Select com client_systems)
+- Adicionar filtro por **Periodo** (DateRangePicker reutilizado)
 
-### 4. Atualizacao da Colecao Postman
+**Andamentos (ProcessMovements.tsx):**
+- Adicionar filtro por **Parceiro** (via processes.partner_id)
+- Adicionar filtro por **Cliente** (via client_processes)
+- Adicionar filtro por **Periodo** (DateRangePicker)
 
-Adicionar subpastas de gerenciamento dentro de cada pasta existente na colecao Postman, com body de exemplo e descricao de cada campo.
+### 4. Indicador Visual de Confirmacao
 
-### 5. Autenticacao
+Em cada linha da tabela, adicionar uma coluna "Confirmacao" com:
+- Icone verde (CheckCircle) se pelo menos um cliente confirmou
+- Icone cinza (Circle) se nenhum cliente confirmou ainda
+- Ao clicar, abrir um **Popover/Dialog** com a lista de clientes que confirmaram, mostrando:
+  - Nome do cliente
+  - Data e hora da confirmacao
+  - IP de origem
 
-Os endpoints de gerenciamento usam JWT (Supabase Auth) diferente dos endpoints de consulta (token customizado). O playground detectara o tipo de endpoint e:
-- Para endpoints `api-*`: usara o token selecionado como Bearer
-- Para endpoints de gerenciamento: usara o JWT do usuario logado (sessao Supabase) automaticamente, com indicacao visual no UI
+### 5. Filtro por Status de Confirmacao
+
+Adicionar Select com 3 opcoes em cada tela:
+- "Todos" (sem filtro)
+- "Confirmados" (registros com pelo menos 1 entrada em record_confirmations)
+- "Nao confirmados" (registros sem entrada)
+
+Para filtrar, utilizar subquery ou left join com record_confirmations.
 
 ---
 
@@ -71,49 +89,41 @@ Os endpoints de gerenciamento usam JWT (Supabase Auth) diferente dos endpoints d
 
 | Arquivo | Acao |
 |---------|------|
-| `src/pages/ApiTesting.tsx` | Adicionar interface bodyParams, novos endpoints de gerenciamento, suporte a body JSON, separacao visual consulta/gerenciamento, logica de auth JWT |
-| `src/lib/postman-collection.ts` | Adicionar pastas de gerenciamento com body de exemplo |
+| Migracao SQL | Criar tabela `record_confirmations` com indices e RLS |
+| `src/components/publications/PublicationsTable.tsx` | Adicionar filtro por cliente e confirmacao, coluna de status |
+| `src/pages/Distributions.tsx` | Adicionar filtros por parceiro, cliente, periodo e confirmacao |
+| `src/pages/ProcessMovements.tsx` | Adicionar filtros por parceiro, cliente, periodo e confirmacao |
+| `supabase/functions/api-publications/index.ts` | Gravar record_confirmations no confirm |
+| `supabase/functions/api-distributions/index.ts` | Gravar record_confirmations no confirm |
+| `supabase/functions/api-processes/index.ts` | Gravar record_confirmations no confirm |
 
-### Interface Atualizada
+### Componente Reutilizavel: ConfirmationBadge
 
-```text
-interface EndpointDef {
-  id: string;
-  label: string;
-  method: string;
-  description: string;
-  path: string;
-  category: 'query' | 'management';  // NOVO
-  authType: 'token' | 'jwt';         // NOVO
-  params: Array<{
-    key: string;
-    label: string;
-    placeholder: string;
-    type?: string;
-    required?: boolean;               // NOVO
-  }>;
-  bodyParams?: Array<{               // NOVO - campos do body JSON
-    key: string;
-    label: string;
-    placeholder: string;
-    type?: string;
-    required?: boolean;
-  }>;
-}
-```
+Criar componente `src/components/shared/ConfirmationBadge.tsx` que:
+- Recebe `recordId` e `recordType`
+- Consulta `record_confirmations` para esse registro
+- Exibe icone verde/cinza
+- Ao clicar, abre Popover com detalhes (cliente, data/hora, IP)
 
-### Logica de Envio
+### Logica de Filtragem por Confirmacao
 
-Para endpoints com `bodyParams`, o `handleTest` construira um body JSON com os valores preenchidos. Campos vazios opcionais nao serao incluidos no body. Campos obrigatorios serao validados antes do envio.
+Para filtrar registros confirmados/nao confirmados sem degradar performance:
+- Buscar IDs confirmados via query separada em `record_confirmations` filtrada por `record_type`
+- Aplicar filtro `.in('id', confirmedIds)` ou `.not.in('id', confirmedIds)` na query principal
+- Limitar a subquery ao tipo de registro da tela atual
 
-### Exemplos de Codigo Atualizados
-
-Os snippets curl/javascript/python incluirao o body JSON quando aplicavel:
+### Captura de IP nos Endpoints
 
 ```text
-curl -X POST ".../sync-process-management" \
-  -H "Authorization: Bearer JWT_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"action":"register","serviceId":"...","processNumber":"..."}'
+const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+  || req.headers.get('x-real-ip')
+  || 'unknown';
 ```
+
+### Filtro por Cliente nas Publicacoes/Distribuicoes
+
+Como publicacoes e distribuicoes nao tem link direto com `client_systems`, o filtro por cliente funcionara via:
+- Publicacoes: `client_search_terms` -> `search_terms` -> `publications.matched_terms` (pelo termo)
+- Distribuicoes: `client_search_terms` -> `search_terms` -> `distributions.term` (pelo termo)
+- Andamentos: `client_processes` -> `processes` -> `process_movements.process_id` (direto)
 
