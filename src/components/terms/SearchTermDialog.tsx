@@ -8,12 +8,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
 import { ClientSelector } from "@/components/shared/ClientSelector";
-import { Plus, X, Wand2, ChevronDown, ChevronRight, Search, HelpCircle, Loader2, Ban } from "lucide-react";
+import { Plus, X, Wand2, Search, HelpCircle, Loader2, Ban, ChevronLeft, ChevronRight, Check } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface SearchTermDialogProps {
   open: boolean;
@@ -26,7 +26,14 @@ interface TermoBloqueio {
   contido: boolean;
 }
 
+const STEPS = [
+  { label: "Dados Básicos", description: "Termo, tipo e clientes" },
+  { label: "Variações e Bloqueios", description: "Refine a busca" },
+  { label: "Abrangências", description: "Diários monitorados" },
+];
+
 export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogProps) => {
+  const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState({
     term: "",
     term_type: "office",
@@ -40,7 +47,7 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
   const [services, setServices] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // New fields
+  // Advanced fields
   const [oab, setOab] = useState("");
   const [variacoes, setVariacoes] = useState<string[]>([]);
   const [novaVariacao, setNovaVariacao] = useState("");
@@ -52,10 +59,13 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
   const [abrangenciaSearch, setAbrangenciaSearch] = useState("");
   const [isGeneratingVariations, setIsGeneratingVariations] = useState(false);
   const [isLoadingAbrangencias, setIsLoadingAbrangencias] = useState(false);
-  const [abrangenciasOpen, setAbrangenciasOpen] = useState(false);
+
+  const isNameType = formData.term_type === "name";
+  const totalSteps = isNameType ? 3 : 1;
 
   useEffect(() => {
     if (open) {
+      setCurrentStep(0);
       fetchPartners();
       if (term) {
         setFormData({
@@ -67,7 +77,6 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
         });
         if (term.partner_id) fetchServices(term.partner_id);
         fetchTermClients(term.id);
-        // Load metadata
         const meta = term.metadata || {};
         setVariacoes(meta.variacoes || []);
         setTermosBloqueio(meta.termos_bloqueio || []);
@@ -90,6 +99,7 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
     setNovoTermoContido(false);
     setAbrangencias([]);
     setAbrangenciaSearch("");
+    setAbrangenciasDisponiveis([]);
   };
 
   const fetchPartners = async () => {
@@ -116,46 +126,8 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
     setSelectedClients((data || []).map((d) => d.client_system_id));
   };
 
-  // Generate variations automatically via SOAP
-  const handleGenerateVariations = async () => {
-    if (!formData.term) {
-      toast.error("Preencha o termo primeiro");
-      return;
-    }
-    setIsGeneratingVariations(true);
-    try {
-      const serviceId = await resolveServiceId();
-      if (!serviceId) {
-        toast.error("Nenhum serviço de termos/publicações ativo encontrado");
-        return;
-      }
-      const { data, error } = await supabase.functions.invoke("manage-search-terms", {
-        body: {
-          service_id: serviceId,
-          action: "gerar_variacoes",
-          data: { nome: formData.term, tipo_variacao: 1 },
-        },
-      });
-      if (error) throw error;
-      const novas = data?.data?.variacoes || [];
-      if (novas.length === 0) {
-        toast.info("Nenhuma variação gerada automaticamente");
-      } else {
-        const merged = [...new Set([...variacoes, ...novas])];
-        setVariacoes(merged);
-        toast.success(`${novas.length} variações geradas`);
-      }
-    } catch (error: any) {
-      toast.error(error.message || "Erro ao gerar variações");
-    } finally {
-      setIsGeneratingVariations(false);
-    }
-  };
-
-  // Resolve a service_id for SOAP calls (use selected or find any active terms service)
   const resolveServiceId = async (): Promise<string | null> => {
     if (formData.partner_service_id) return formData.partner_service_id;
-    // Fallback: find any active terms/publications service
     const { data } = await supabase
       .from("partner_services")
       .select("id")
@@ -166,34 +138,41 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
     return data?.id || null;
   };
 
-  // Fetch available abrangencias via SOAP
+  const handleGenerateVariations = async () => {
+    if (!formData.term) { toast.error("Preencha o termo primeiro"); return; }
+    setIsGeneratingVariations(true);
+    try {
+      const serviceId = await resolveServiceId();
+      if (!serviceId) { toast.error("Nenhum serviço ativo encontrado"); return; }
+      const { data, error } = await supabase.functions.invoke("manage-search-terms", {
+        body: { service_id: serviceId, action: "gerar_variacoes", data: { nome: formData.term, tipo_variacao: 1 } },
+      });
+      if (error) throw error;
+      const novas = data?.data?.variacoes || [];
+      if (novas.length === 0) { toast.info("Nenhuma variação gerada"); }
+      else {
+        setVariacoes([...new Set([...variacoes, ...novas])]);
+        toast.success(`${novas.length} variações geradas`);
+      }
+    } catch (error: any) { toast.error(error.message || "Erro ao gerar variações"); }
+    finally { setIsGeneratingVariations(false); }
+  };
+
   const handleFetchAbrangencias = async () => {
     setIsLoadingAbrangencias(true);
     try {
       const serviceId = await resolveServiceId();
-      if (!serviceId) {
-        toast.error("Nenhum serviço de termos/publicações ativo encontrado");
-        return;
-      }
+      if (!serviceId) { toast.error("Nenhum serviço ativo encontrado"); return; }
       const { data, error } = await supabase.functions.invoke("manage-search-terms", {
-        body: {
-          service_id: serviceId,
-          action: "buscar_abrangencias",
-        },
+        body: { service_id: serviceId, action: "buscar_abrangencias" },
       });
       if (error) throw error;
       const lista = data?.data?.abrangencias || [];
       setAbrangenciasDisponiveis(lista);
-      if (lista.length === 0) {
-        toast.info("Nenhuma abrangência disponível retornada");
-      } else {
-        toast.success(`${lista.length} abrangências carregadas`);
-      }
-    } catch (error: any) {
-      toast.error(error.message || "Erro ao buscar abrangências");
-    } finally {
-      setIsLoadingAbrangencias(false);
-    }
+      if (lista.length === 0) toast.info("Nenhuma abrangência retornada");
+      else toast.success(`${lista.length} abrangências carregadas`);
+    } catch (error: any) { toast.error(error.message || "Erro ao buscar abrangências"); }
+    finally { setIsLoadingAbrangencias(false); }
   };
 
   const addVariacao = () => {
@@ -204,21 +183,13 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
     setNovaVariacao("");
   };
 
-  const removeVariacao = (index: number) => {
-    setVariacoes(variacoes.filter((_, i) => i !== index));
-  };
-
   const addTermoBloqueio = () => {
     const t = novoTermoBloqueio.trim();
     if (!t) return;
-    if (termosBloqueio.some(tb => tb.termo === t)) { toast.error("Termo de bloqueio já existe"); return; }
+    if (termosBloqueio.some(tb => tb.termo === t)) { toast.error("Termo já existe"); return; }
     setTermosBloqueio([...termosBloqueio, { termo: t, contido: novoTermoContido }]);
     setNovoTermoBloqueio("");
     setNovoTermoContido(false);
-  };
-
-  const removeTermoBloqueio = (index: number) => {
-    setTermosBloqueio(termosBloqueio.filter((_, i) => i !== index));
   };
 
   const toggleAbrangencia = (sigla: string) => {
@@ -231,17 +202,27 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
     a.toLowerCase().includes(abrangenciaSearch.toLowerCase())
   );
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (selectedClients.length === 0) {
-      setClientError(true);
-      toast.error("Selecione ao menos um cliente");
-      return;
+  const validateStep = (step: number): boolean => {
+    if (step === 0) {
+      if (!formData.term.trim()) { toast.error("Preencha o termo"); return false; }
+      if (selectedClients.length === 0) { setClientError(true); toast.error("Selecione ao menos um cliente"); return false; }
+      setClientError(false);
+      return true;
     }
-    setClientError(false);
-    setIsLoading(true);
+    return true;
+  };
 
+  const handleNext = () => {
+    if (validateStep(currentStep)) {
+      setCurrentStep(Math.min(currentStep + 1, totalSteps - 1));
+    }
+  };
+
+  const handleBack = () => setCurrentStep(Math.max(currentStep - 1, 0));
+
+  const handleSubmit = async () => {
+    if (!validateStep(0)) { setCurrentStep(0); return; }
+    setIsLoading(true);
     try {
       const metadata: any = {};
       if (variacoes.length > 0) metadata.variacoes = variacoes;
@@ -257,7 +238,6 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
       };
 
       let termId: string;
-
       if (term) {
         const { error } = await supabase.from("search_terms").update(dataToSave).eq("id", term.id);
         if (error) throw error;
@@ -268,136 +248,184 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
         termId = inserted.id;
       }
 
-      // Sync client links
       await supabase.from("client_search_terms").delete().eq("search_term_id", termId);
       if (selectedClients.length > 0) {
-        const links = selectedClients.map((clientId) => ({
-          search_term_id: termId,
-          client_system_id: clientId,
-        }));
+        const links = selectedClients.map((clientId) => ({ search_term_id: termId, client_system_id: clientId }));
         const { error: linkError } = await supabase.from("client_search_terms").insert(links);
         if (linkError) throw linkError;
       }
 
       toast.success(term ? "Termo atualizado com sucesso" : "Termo criado com sucesso");
       onOpenChange(false);
-    } catch (error: any) {
-      toast.error(error.message || "Erro ao salvar termo");
-    } finally {
-      setIsLoading(false);
-    }
+    } catch (error: any) { toast.error(error.message || "Erro ao salvar termo"); }
+    finally { setIsLoading(false); }
   };
 
-  const isNameType = formData.term_type === "name";
+  // Auto-load abrangencias when entering step 3
+  useEffect(() => {
+    if (currentStep === 2 && abrangenciasDisponiveis.length === 0 && !isLoadingAbrangencias) {
+      handleFetchAbrangencias();
+    }
+  }, [currentStep]);
+
+  const isLastStep = currentStep === totalSteps - 1;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-[650px] max-h-[90vh] flex flex-col p-0 gap-0">
+        {/* Header */}
+        <DialogHeader className="px-6 pt-6 pb-4">
           <DialogTitle>{term ? "Editar Termo" : "Novo Termo de Busca"}</DialogTitle>
           <DialogDescription>
-            Configure o termo que será utilizado nas buscas e sincronizações
+            {isNameType
+              ? `Etapa ${currentStep + 1} de ${totalSteps} — ${STEPS[currentStep].description}`
+              : "Configure o termo que será utilizado nas buscas"}
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Term */}
-          <div className="space-y-2">
-            <Label htmlFor="term">Termo</Label>
-            <Input
-              id="term"
-              value={formData.term}
-              onChange={(e) => setFormData({ ...formData, term: e.target.value })}
-              placeholder="Digite o termo de busca"
-              required
-            />
-          </div>
-
-          {/* Type */}
-          <div className="space-y-2">
-            <Label htmlFor="type">Tipo</Label>
-            <Select value={formData.term_type} onValueChange={(value) => setFormData({ ...formData, term_type: value })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="office">Escritório</SelectItem>
-                <SelectItem value="name">Nome de Pesquisa</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* OAB (only for name type) */}
-          {isNameType && (
-            <div className="space-y-2">
-              <Label htmlFor="oab">OAB (opcional)</Label>
-              <Input
-                id="oab"
-                value={oab}
-                onChange={(e) => setOab(e.target.value)}
-                placeholder="Ex: 123456|MG"
-              />
-              <p className="text-xs text-muted-foreground">Formato: CÓDIGO|UF</p>
+        {/* Stepper indicator (only for name type) */}
+        {isNameType && (
+          <div className="px-6 pb-4">
+            <div className="flex items-center gap-1">
+              {STEPS.slice(0, totalSteps).map((step, i) => (
+                <div key={i} className="flex items-center flex-1">
+                  <button
+                    type="button"
+                    onClick={() => { if (i < currentStep || validateStep(currentStep)) setCurrentStep(i); }}
+                    className={cn(
+                      "flex items-center gap-2 text-xs font-medium rounded-full px-3 py-1.5 transition-all w-full",
+                      i === currentStep
+                        ? "bg-primary text-primary-foreground"
+                        : i < currentStep
+                        ? "bg-primary/15 text-primary"
+                        : "bg-muted text-muted-foreground"
+                    )}
+                  >
+                    <span className={cn(
+                      "flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold shrink-0",
+                      i < currentStep ? "bg-primary text-primary-foreground" : "bg-background/50"
+                    )}>
+                      {i < currentStep ? <Check className="h-3 w-3" /> : i + 1}
+                    </span>
+                    <span className="truncate hidden sm:inline">{step.label}</span>
+                  </button>
+                  {i < totalSteps - 1 && <div className="w-4 h-px bg-border shrink-0 mx-1" />}
+                </div>
+              ))}
             </div>
-          )}
-
-          {/* Partner */}
-          <div className="space-y-2">
-            <Label htmlFor="partner">Parceiro (opcional)</Label>
-            <Select
-              value={formData.partner_id}
-              onValueChange={(value) => {
-                const partnerId = value === "none" ? "" : value;
-                setFormData({ ...formData, partner_id: partnerId, partner_service_id: "" });
-                fetchServices(partnerId);
-              }}
-            >
-              <SelectTrigger><SelectValue placeholder="Selecione um parceiro" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Nenhum</SelectItem>
-                {partners.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
+        )}
 
-          {formData.partner_id && (
-            <div className="space-y-2">
-              <Label htmlFor="service">Serviço (opcional)</Label>
-              <Select
-                value={formData.partner_service_id}
-                onValueChange={(value) =>
-                  setFormData({ ...formData, partner_service_id: value === "none" ? "" : value })
-                }
-              >
-                <SelectTrigger><SelectValue placeholder="Selecione um serviço" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Nenhum</SelectItem>
-                  {services.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>{s.service_name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+        {/* Content area */}
+        <div className="flex-1 overflow-y-auto px-6 pb-2">
+          {/* STEP 1: Basic Data */}
+          {currentStep === 0 && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="term">Termo *</Label>
+                  <Input
+                    id="term"
+                    value={formData.term}
+                    onChange={(e) => setFormData({ ...formData, term: e.target.value })}
+                    placeholder="Digite o termo de busca"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="type">Tipo</Label>
+                  <Select value={formData.term_type} onValueChange={(value) => setFormData({ ...formData, term_type: value })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="office">Escritório</SelectItem>
+                      <SelectItem value="name">Nome de Pesquisa</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
 
-          <ClientSelector
-            serviceId={formData.partner_service_id || undefined}
-            selectedIds={selectedClients}
-            onChange={(ids) => { setSelectedClients(ids); setClientError(false); }}
-            error={clientError}
-          />
+              {isNameType && (
+                <div className="space-y-2">
+                  <Label htmlFor="oab">OAB (opcional)</Label>
+                  <Input
+                    id="oab"
+                    value={oab}
+                    onChange={(e) => setOab(e.target.value)}
+                    placeholder="Ex: 123456|MG"
+                  />
+                  <p className="text-xs text-muted-foreground">Formato: CÓDIGO|UF</p>
+                </div>
+              )}
 
-          {/* === VARIATIONS SECTION === */}
-          {isNameType && (
-            <Collapsible>
-              <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium w-full py-2 hover:text-primary transition-colors">
-                <ChevronRight className="h-4 w-4 transition-transform data-[state=open]:rotate-90" />
-                Variações
-                {variacoes.length > 0 && (
-                  <Badge variant="secondary" className="ml-auto">{variacoes.length}</Badge>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Parceiro (opcional)</Label>
+                  <Select
+                    value={formData.partner_id}
+                    onValueChange={(value) => {
+                      const partnerId = value === "none" ? "" : value;
+                      setFormData({ ...formData, partner_id: partnerId, partner_service_id: "" });
+                      fetchServices(partnerId);
+                    }}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Nenhum</SelectItem>
+                      {partners.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {formData.partner_id && (
+                  <div className="space-y-2">
+                    <Label>Serviço (opcional)</Label>
+                    <Select
+                      value={formData.partner_service_id}
+                      onValueChange={(value) => setFormData({ ...formData, partner_service_id: value === "none" ? "" : value })}
+                    >
+                      <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Nenhum</SelectItem>
+                        {services.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>{s.service_name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 )}
-              </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-3 pt-2">
+              </div>
+
+              <ClientSelector
+                serviceId={formData.partner_service_id || undefined}
+                selectedIds={selectedClients}
+                onChange={(ids) => { setSelectedClients(ids); setClientError(false); }}
+                error={clientError}
+              />
+
+              <div className="flex items-center justify-between pt-2 border-t">
+                <Label htmlFor="active">Termo Ativo</Label>
+                <Switch
+                  id="active"
+                  checked={formData.is_active}
+                  onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* STEP 2: Variations & Blocking Terms */}
+          {currentStep === 1 && isNameType && (
+            <div className="space-y-6">
+              {/* Variations */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-sm font-semibold">Variações</h4>
+                    <p className="text-xs text-muted-foreground">Variações ortográficas que também serão monitoradas</p>
+                  </div>
+                  {variacoes.length > 0 && <Badge variant="secondary">{variacoes.length}</Badge>}
+                </div>
                 <div className="flex gap-2">
                   <Input
                     value={novaVariacao}
@@ -405,7 +433,7 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
                     placeholder="Adicionar variação..."
                     onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addVariacao(); } }}
                   />
-                  <Button type="button" variant="outline" size="icon" onClick={addVariacao}>
+                  <Button type="button" variant="outline" size="icon" onClick={addVariacao} className="shrink-0">
                     <Plus className="h-4 w-4" />
                   </Button>
                   <TooltipProvider>
@@ -417,6 +445,7 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
                           size="icon"
                           onClick={handleGenerateVariations}
                           disabled={isGeneratingVariations || !formData.term}
+                          className="shrink-0"
                         >
                           {isGeneratingVariations ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
                         </Button>
@@ -430,44 +459,43 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
                     {variacoes.map((v, i) => (
                       <Badge key={i} variant="secondary" className="gap-1 pr-1">
                         {v}
-                        <button type="button" onClick={() => removeVariacao(i)} className="hover:text-destructive">
+                        <button type="button" onClick={() => setVariacoes(variacoes.filter((_, j) => j !== i))} className="hover:text-destructive">
                           <X className="h-3 w-3" />
                         </button>
                       </Badge>
                     ))}
                   </div>
                 )}
-                <p className="text-xs text-muted-foreground">
-                  Variações ortográficas do nome que também serão monitoradas
-                </p>
-              </CollapsibleContent>
-            </Collapsible>
-          )}
+              </div>
 
-          {/* === BLOCKING TERMS SECTION === */}
-          {isNameType && (
-            <Collapsible>
-              <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium w-full py-2 hover:text-primary transition-colors">
-                <ChevronRight className="h-4 w-4 transition-transform data-[state=open]:rotate-90" />
-                <Ban className="h-4 w-4" />
-                Termos de Bloqueio
-                {termosBloqueio.length > 0 && (
-                  <Badge variant="secondary" className="ml-auto">{termosBloqueio.length}</Badge>
-                )}
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
-                    </TooltipTrigger>
-                    <TooltipContent className="max-w-xs">
-                      Termos de bloqueio impedem a captura de publicações quando encontrados junto ao nome pesquisado
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-3 pt-2">
+              {/* Separator */}
+              <div className="border-t" />
+
+              {/* Blocking Terms */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Ban className="h-4 w-4 text-destructive" />
+                    <div>
+                      <h4 className="text-sm font-semibold">Termos de Bloqueio</h4>
+                      <p className="text-xs text-muted-foreground">Impedem a captura quando encontrados junto ao nome</p>
+                    </div>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs">
+                          Termos de bloqueio impedem a captura de publicações quando encontrados junto ao nome pesquisado.
+                          Marque "contido no nome" para bloquear apenas quando o termo estiver contido no texto do nome.
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                  {termosBloqueio.length > 0 && <Badge variant="secondary">{termosBloqueio.length}</Badge>}
+                </div>
                 <div className="flex gap-2 items-end">
-                  <div className="flex-1 space-y-1">
+                  <div className="flex-1 space-y-1.5">
                     <Input
                       value={novoTermoBloqueio}
                       onChange={(e) => setNovoTermoBloqueio(e.target.value)}
@@ -485,7 +513,7 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
                       </label>
                     </div>
                   </div>
-                  <Button type="button" variant="outline" size="icon" onClick={addTermoBloqueio} className="shrink-0">
+                  <Button type="button" variant="outline" size="icon" onClick={addTermoBloqueio} className="shrink-0 mb-6">
                     <Plus className="h-4 w-4" />
                   </Button>
                 </div>
@@ -495,116 +523,121 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
                       <div key={i} className="flex items-center gap-2 bg-muted/50 rounded-md px-3 py-1.5 text-sm">
                         <Ban className="h-3.5 w-3.5 text-destructive shrink-0" />
                         <span className="flex-1 font-medium">{tb.termo}</span>
-                        {tb.contido && (
-                          <Badge variant="outline" className="text-xs">contido</Badge>
-                        )}
-                        <button type="button" onClick={() => removeTermoBloqueio(i)} className="hover:text-destructive">
+                        {tb.contido && <Badge variant="outline" className="text-xs">contido</Badge>}
+                        <button type="button" onClick={() => setTermosBloqueio(termosBloqueio.filter((_, j) => j !== i))} className="hover:text-destructive">
                           <X className="h-3 w-3" />
                         </button>
                       </div>
                     ))}
                   </div>
                 )}
-              </CollapsibleContent>
-            </Collapsible>
+              </div>
+            </div>
           )}
 
-          {/* === SCOPES (ABRANGENCIAS) SECTION === */}
-          {isNameType && (
-            <Collapsible open={abrangenciasOpen} onOpenChange={setAbrangenciasOpen}>
-              <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium w-full py-2 hover:text-primary transition-colors">
-                <ChevronRight className="h-4 w-4 transition-transform data-[state=open]:rotate-90" />
-                Abrangências (Diários)
+          {/* STEP 3: Scopes (Abrangências) */}
+          {currentStep === 2 && isNameType && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm font-semibold">Abrangências (Diários)</h4>
+                  <p className="text-xs text-muted-foreground">Selecione os diários oficiais que serão monitorados</p>
+                </div>
                 {abrangencias.length > 0 && (
-                  <Badge variant="secondary" className="ml-auto">{abrangencias.length} selecionados</Badge>
+                  <Badge variant="secondary">{abrangencias.length} selecionados</Badge>
                 )}
-              </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-3 pt-2">
-                {abrangenciasDisponiveis.length === 0 ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full gap-2"
-                    onClick={handleFetchAbrangencias}
-                    disabled={isLoadingAbrangencias}
-                  >
-                    {isLoadingAbrangencias ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                    Carregar abrangências disponíveis
+              </div>
+
+              {isLoadingAbrangencias ? (
+                <div className="flex items-center justify-center py-12 gap-3 text-muted-foreground">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span className="text-sm">Carregando abrangências...</span>
+                </div>
+              ) : abrangenciasDisponiveis.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-3">
+                  <p className="text-sm text-muted-foreground">Nenhuma abrangência carregada</p>
+                  <Button type="button" variant="outline" className="gap-2" onClick={handleFetchAbrangencias}>
+                    <Search className="h-4 w-4" />
+                    Tentar novamente
                   </Button>
-                ) : (
-                  <>
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        value={abrangenciaSearch}
-                        onChange={(e) => setAbrangenciaSearch(e.target.value)}
-                        placeholder="Filtrar diários..."
-                        className="pl-10"
-                      />
-                    </div>
-                    <div className="flex gap-2">
-                      <Button type="button" variant="outline" size="sm" onClick={() => setAbrangencias([...abrangenciasDisponiveis])}>
-                        Selecionar Todos
-                      </Button>
-                      <Button type="button" variant="outline" size="sm" onClick={() => setAbrangencias([])}>
-                        Limpar
-                      </Button>
-                    </div>
-                    <ScrollArea className="h-[150px] rounded-md border p-2">
-                      <div className="space-y-1">
-                        {filteredAbrangencias.map((sigla) => (
-                          <div
-                            key={sigla}
-                            className="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted/50 cursor-pointer"
-                            onClick={() => toggleAbrangencia(sigla)}
-                          >
-                            <Checkbox
-                              checked={abrangencias.includes(sigla)}
-                              onCheckedChange={() => toggleAbrangencia(sigla)}
-                            />
-                            <span className="text-sm">{sigla}</span>
-                          </div>
-                        ))}
-                        {filteredAbrangencias.length === 0 && (
-                          <p className="text-sm text-muted-foreground text-center py-4">Nenhum diário encontrado</p>
-                        )}
-                      </div>
-                    </ScrollArea>
-                  </>
-                )}
-                {abrangencias.length > 0 && abrangenciasDisponiveis.length === 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {abrangencias.map((a, i) => (
-                      <Badge key={i} variant="secondary" className="gap-1 pr-1">
-                        {a}
-                        <button type="button" onClick={() => setAbrangencias(abrangencias.filter((_, j) => j !== i))} className="hover:text-destructive">
-                          <X className="h-3 w-3" />
-                        </button>
-                      </Badge>
-                    ))}
+                </div>
+              ) : (
+                <>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      value={abrangenciaSearch}
+                      onChange={(e) => setAbrangenciaSearch(e.target.value)}
+                      placeholder="Filtrar diários..."
+                      className="pl-10"
+                    />
                   </div>
-                )}
-              </CollapsibleContent>
-            </Collapsible>
+                  <div className="flex gap-2">
+                    <Button type="button" variant="outline" size="sm" onClick={() => setAbrangencias([...abrangenciasDisponiveis])}>
+                      Selecionar Todos
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setAbrangencias([])}>
+                      Limpar
+                    </Button>
+                    <span className="text-xs text-muted-foreground self-center ml-auto">
+                      {filteredAbrangencias.length} diários
+                    </span>
+                  </div>
+                  <ScrollArea className="h-[250px] rounded-md border">
+                    <div className="p-2 space-y-0.5">
+                      {filteredAbrangencias.map((sigla) => (
+                        <div
+                          key={sigla}
+                          className={cn(
+                            "flex items-center gap-2.5 px-3 py-1.5 rounded-md cursor-pointer transition-colors text-sm",
+                            abrangencias.includes(sigla) ? "bg-primary/10 text-primary" : "hover:bg-muted/50"
+                          )}
+                          onClick={() => toggleAbrangencia(sigla)}
+                        >
+                          <Checkbox checked={abrangencias.includes(sigla)} onCheckedChange={() => toggleAbrangencia(sigla)} />
+                          <span className="font-medium">{sigla}</span>
+                        </div>
+                      ))}
+                      {filteredAbrangencias.length === 0 && (
+                        <p className="text-sm text-muted-foreground text-center py-8">Nenhum diário encontrado</p>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </>
+              )}
+            </div>
           )}
+        </div>
 
-          {/* Active toggle */}
-          <div className="flex items-center justify-between">
-            <Label htmlFor="active">Termo Ativo</Label>
-            <Switch
-              id="active"
-              checked={formData.is_active}
-              onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
-            />
-          </div>
+        {/* Footer with navigation */}
+        <div className="flex items-center justify-between px-6 py-4 border-t bg-muted/30">
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => currentStep > 0 ? handleBack() : onOpenChange(false)}
+            className="gap-1.5"
+          >
+            {currentStep > 0 ? (
+              <><ChevronLeft className="h-4 w-4" /> Voltar</>
+            ) : (
+              "Cancelar"
+            )}
+          </Button>
 
-          <div className="flex justify-end gap-2 pt-4">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-            <Button type="submit" disabled={isLoading}>
-              {isLoading ? "Salvando..." : term ? "Atualizar" : "Criar"}
-            </Button>
+          <div className="flex gap-2">
+            {isLastStep ? (
+              <Button onClick={handleSubmit} disabled={isLoading} className="gap-1.5">
+                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                {isLoading ? "Salvando..." : term ? "Atualizar" : "Criar"}
+              </Button>
+            ) : (
+              <Button type="button" onClick={handleNext} className="gap-1.5">
+                Próximo
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            )}
           </div>
-        </form>
+        </div>
       </DialogContent>
     </Dialog>
   );
