@@ -9,10 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Info } from "lucide-react";
+import { Info, ChevronLeft, ChevronRight } from "lucide-react";
 import { ClientSelector } from "@/components/shared/ClientSelector";
 
-// CNJ format: NNNNNNN-DD.AAAA.J.TR.OOOO
 const CNJ_REGEX = /^\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}$/;
 
 function formatCNJ(value: string): string {
@@ -27,6 +26,12 @@ function formatCNJ(value: string): string {
   return formatted;
 }
 
+const UF_OPTIONS = [
+  "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA",
+  "MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN",
+  "RS","RO","RR","SC","SP","SE","TO","TS"
+];
+
 interface ProcessDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -39,14 +44,15 @@ interface PartnerService {
   partner_id: string;
 }
 
-const UF_OPTIONS = [
-  "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA",
-  "MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN",
-  "RS","RO","RR","SC","SP","SE","TO"
+const STEPS = [
+  { label: "Dados Básicos", number: 1 },
+  { label: "Localização", number: 2 },
+  { label: "Partes", number: 3 },
 ];
 
 export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogProps) {
   const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState(1);
   const [services, setServices] = useState<PartnerService[]>([]);
   const [partnerOfficeCode, setPartnerOfficeCode] = useState<number | null>(null);
   const [duplicateInfo, setDuplicateInfo] = useState<string | null>(null);
@@ -57,12 +63,17 @@ export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogPr
     serviceId: "",
     uf: "",
     instance: "1",
+    codTribunal: "",
+    comarca: "",
+    autor: "",
+    reu: "",
   });
 
   useEffect(() => {
     if (open) {
       fetchServices();
       setDuplicateInfo(null);
+      setStep(1);
     }
   }, [open]);
 
@@ -74,7 +85,6 @@ export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogPr
     }
   }, [formData.serviceId]);
 
-  // Check for duplicate when process number changes
   useEffect(() => {
     const checkDuplicate = async () => {
       const pn = formData.processNumber.trim();
@@ -125,34 +135,40 @@ export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogPr
     setPartnerOfficeCode(oc);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
+  const validateStep1 = (): boolean => {
     if (!formData.processNumber.trim()) {
       toast.error("Número do processo é obrigatório");
-      return;
+      return false;
     }
-
     if (!CNJ_REGEX.test(formData.processNumber.trim())) {
       toast.error("Formato CNJ inválido. Use: NNNNNNN-DD.AAAA.J.TR.OOOO");
-      return;
+      return false;
     }
-
     if (selectedClients.length === 0) {
       setClientError(true);
       toast.error("Selecione ao menos um cliente");
-      return;
+      return false;
     }
-
     if (!partnerOfficeCode) {
       toast.error("Parceiro não possui código de escritório configurado");
-      return;
+      return false;
     }
+    return true;
+  };
+
+  const handleNext = () => {
+    if (step === 1 && !validateStep1()) return;
+    setStep(prev => Math.min(prev + 1, 3));
+  };
+
+  const handleBack = () => setStep(prev => Math.max(prev - 1, 1));
+
+  const handleSubmit = async () => {
+    if (!validateStep1()) { setStep(1); return; }
 
     try {
       setLoading(true);
 
-      // Register for each selected client
       for (const clientId of selectedClients) {
         const { data, error } = await supabase.functions.invoke("sync-process-management", {
           body: {
@@ -162,6 +178,10 @@ export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogPr
             clientSystemId: clientId,
             uf: formData.uf || undefined,
             instance: parseInt(formData.instance) || 0,
+            codTribunal: formData.codTribunal ? parseInt(formData.codTribunal) : undefined,
+            comarca: formData.comarca || undefined,
+            autor: formData.autor || undefined,
+            reu: formData.reu || undefined,
           },
         });
 
@@ -174,7 +194,6 @@ export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogPr
           ? `Processo vinculado a ${selectedClients.length} clientes`
           : "Processo cadastrado com sucesso"
       );
-
       onSuccess();
     } catch (error) {
       console.error("Error registering process:", error);
@@ -190,11 +209,16 @@ export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogPr
       serviceId: services.length === 1 ? services[0].id : "",
       uf: "",
       instance: "1",
+      codTribunal: "",
+      comarca: "",
+      autor: "",
+      reu: "",
     });
     setSelectedClients([]);
     setClientError(false);
     setDuplicateInfo(null);
     setPartnerOfficeCode(null);
+    setStep(1);
   };
 
   return (
@@ -202,107 +226,204 @@ export function ProcessDialog({ open, onOpenChange, onSuccess }: ProcessDialogPr
       if (!isOpen) resetForm();
       onOpenChange(isOpen);
     }}>
-      <DialogContent className="sm:max-w-[500px]">
-        <form onSubmit={handleSubmit}>
-          <DialogHeader>
-            <DialogTitle>Cadastrar Novo Processo</DialogTitle>
-            <DialogDescription>
-              Adicione um processo para monitoramento. O sistema verificará automaticamente se o processo já existe.
-            </DialogDescription>
-          </DialogHeader>
+      <DialogContent className="sm:max-w-[600px]">
+        <DialogHeader>
+          <DialogTitle>Cadastrar Novo Processo</DialogTitle>
+          <DialogDescription>
+            Adicione um processo para monitoramento de andamentos.
+          </DialogDescription>
+        </DialogHeader>
 
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="processNumber">Número do Processo (CNJ) *</Label>
-              <Input
-                id="processNumber"
-                placeholder="0000000-00.0000.0.00.0000"
-                value={formData.processNumber}
-                onChange={(e) => setFormData(prev => ({ ...prev, processNumber: formatCNJ(e.target.value) }))}
-                required
-              />
+        {/* Stepper */}
+        <div className="flex items-center justify-between mb-2">
+          {STEPS.map((s, i) => (
+            <div key={s.number} className="flex items-center flex-1">
+              <div className="flex items-center gap-2">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-colors ${
+                  step >= s.number
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "border-muted-foreground/30 text-muted-foreground"
+                }`}>
+                  {s.number}
+                </div>
+                <span className={`text-xs font-medium hidden sm:inline ${step >= s.number ? "text-foreground" : "text-muted-foreground"}`}>
+                  {s.label}
+                </span>
+              </div>
+              {i < STEPS.length - 1 && (
+                <div className={`flex-1 h-0.5 mx-2 ${step > s.number ? "bg-primary" : "bg-muted"}`} />
+              )}
             </div>
+          ))}
+        </div>
 
-            {duplicateInfo && (
+        <div className="min-h-[280px]">
+          {/* Step 1: Dados Básicos */}
+          {step === 1 && (
+            <div className="grid gap-4 py-2">
+              <div className="grid gap-2">
+                <Label htmlFor="processNumber">Número do Processo (CNJ) *</Label>
+                <Input
+                  id="processNumber"
+                  placeholder="0000000-00.0000.0.00.0000"
+                  value={formData.processNumber}
+                  onChange={(e) => setFormData(prev => ({ ...prev, processNumber: formatCNJ(e.target.value) }))}
+                />
+              </div>
+
+              {duplicateInfo && (
+                <Alert>
+                  <Info className="h-4 w-4" />
+                  <AlertDescription>{duplicateInfo}</AlertDescription>
+                </Alert>
+              )}
+
+              {services.length > 1 && (
+                <div className="grid gap-2">
+                  <Label>Serviço</Label>
+                  <Select value={formData.serviceId} onValueChange={(v) => setFormData(prev => ({ ...prev, serviceId: v }))}>
+                    <SelectTrigger><SelectValue placeholder="Selecione um serviço" /></SelectTrigger>
+                    <SelectContent>
+                      {services.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>{s.service_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              <ClientSelector
+                serviceId={formData.serviceId || undefined}
+                selectedIds={selectedClients}
+                onChange={(ids) => { setSelectedClients(ids); setClientError(false); }}
+                error={clientError}
+              />
+
+              {partnerOfficeCode && (
+                <div className="grid gap-2">
+                  <Label>Código do Escritório (Parceiro)</Label>
+                  <Input value={partnerOfficeCode.toString()} disabled className="bg-muted" />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Step 2: Localização e Instância */}
+          {step === 2 && (
+            <div className="grid gap-4 py-2">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label>UF</Label>
+                  <Select value={formData.uf} onValueChange={(v) => setFormData(prev => ({ ...prev, uf: v }))}>
+                    <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                    <SelectContent>
+                      {UF_OPTIONS.map((uf) => (
+                        <SelectItem key={uf} value={uf}>{uf === "TS" ? "TS - Tribunais Superiores" : uf}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label>Instância *</Label>
+                  <Select value={formData.instance} onValueChange={(v) => setFormData(prev => ({ ...prev, instance: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">Todas</SelectItem>
+                      <SelectItem value="1">1ª Instância</SelectItem>
+                      <SelectItem value="2">2ª Instância</SelectItem>
+                      <SelectItem value="3">Instâncias Superiores</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="codTribunal">Código do Tribunal</Label>
+                  <Input
+                    id="codTribunal"
+                    type="number"
+                    placeholder="Ex: 8"
+                    value={formData.codTribunal}
+                    onChange={(e) => setFormData(prev => ({ ...prev, codTribunal: e.target.value }))}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="comarca">Comarca</Label>
+                  <Input
+                    id="comarca"
+                    placeholder="Ex: São Paulo"
+                    value={formData.comarca}
+                    onChange={(e) => setFormData(prev => ({ ...prev, comarca: e.target.value }))}
+                  />
+                </div>
+              </div>
+
               <Alert>
                 <Info className="h-4 w-4" />
-                <AlertDescription>{duplicateInfo}</AlertDescription>
+                <AlertDescription>
+                  Código do Tribunal e Comarca são opcionais. Preencha para maior precisão na localização do processo.
+                </AlertDescription>
               </Alert>
-            )}
-
-            {services.length > 1 && (
-              <div className="grid gap-2">
-                <Label htmlFor="service">Serviço</Label>
-                <Select
-                  value={formData.serviceId}
-                  onValueChange={(v) => setFormData(prev => ({ ...prev, serviceId: v }))}
-                >
-                  <SelectTrigger><SelectValue placeholder="Selecione um serviço" /></SelectTrigger>
-                  <SelectContent>
-                    {services.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>{s.service_name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            <ClientSelector
-              serviceId={formData.serviceId || undefined}
-              selectedIds={selectedClients}
-              onChange={(ids) => { setSelectedClients(ids); setClientError(false); }}
-              error={clientError}
-            />
-
-            {partnerOfficeCode && (
-              <div className="grid gap-2">
-                <Label>Código do Escritório (Parceiro)</Label>
-                <Input value={partnerOfficeCode.toString()} disabled />
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="uf">UF</Label>
-                <Select
-                  value={formData.uf}
-                  onValueChange={(v) => setFormData(prev => ({ ...prev, uf: v }))}
-                >
-                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    {UF_OPTIONS.map((uf) => (
-                      <SelectItem key={uf} value={uf}>{uf}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="instance">Instância</Label>
-                <Select
-                  value={formData.instance}
-                  onValueChange={(v) => setFormData(prev => ({ ...prev, instance: v }))}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="0">Todas</SelectItem>
-                    <SelectItem value="1">1ª Instância</SelectItem>
-                    <SelectItem value="2">2ª Instância</SelectItem>
-                    <SelectItem value="3">Instâncias Superiores</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
-          </div>
+          )}
 
-          <DialogFooter>
+          {/* Step 3: Partes do Processo */}
+          {step === 3 && (
+            <div className="grid gap-4 py-2">
+              <div className="grid gap-2">
+                <Label htmlFor="autor">Autor</Label>
+                <Input
+                  id="autor"
+                  placeholder="Nome do autor do processo"
+                  value={formData.autor}
+                  onChange={(e) => setFormData(prev => ({ ...prev, autor: e.target.value }))}
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="reu">Réu</Label>
+                <Input
+                  id="reu"
+                  placeholder="Nome do réu do processo"
+                  value={formData.reu}
+                  onChange={(e) => setFormData(prev => ({ ...prev, reu: e.target.value }))}
+                />
+              </div>
+
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  Informar autor e réu é opcional, mas pode acelerar a validação do processo junto ao tribunal.
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="flex justify-between sm:justify-between gap-2">
+          <div>
+            {step > 1 && (
+              <Button type="button" variant="outline" onClick={handleBack} disabled={loading}>
+                <ChevronLeft className="h-4 w-4 mr-1" /> Voltar
+              </Button>
+            )}
+          </div>
+          <div className="flex gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? "Cadastrando..." : "Cadastrar Processo"}
-            </Button>
-          </DialogFooter>
-        </form>
+            {step < 3 ? (
+              <Button type="button" onClick={handleNext}>
+                Próximo <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            ) : (
+              <Button type="button" onClick={handleSubmit} disabled={loading}>
+                {loading ? "Cadastrando..." : "Cadastrar Processo"}
+              </Button>
+            )}
+          </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

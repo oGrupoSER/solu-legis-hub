@@ -80,7 +80,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { action, serviceId, processNumber, clientSystemId, uf, instance } = body;
+    const { action, serviceId, processNumber, clientSystemId, uf, instance, codTribunal, comarca, autor, reu } = body;
 
     console.log(`Process management action: ${action}`);
 
@@ -138,13 +138,27 @@ serve(async (req) => {
           processRecord = existingProcess;
         } else {
           console.log(`Registering new process with Solucionare: ${processNumber}`);
-          const registerData = await client.post('/CadastraNovoProcesso', {
+          const registerBody: Record<string, any> = {
             numProcesso: processNumber.trim(),
             codEscritorio: officeCode,
             UF: uf || '',
             instancia: instance || 0,
-          });
+          };
+          if (codTribunal) registerBody.codTribunal = codTribunal;
+          if (comarca) registerBody.Comarca = comarca;
+          if (autor) registerBody.Autor = autor;
+          if (reu) registerBody.Reu = reu;
+
+          const registerData = await client.post('/CadastraNovoProcesso', registerBody);
           registeredInSolucionare = true;
+
+          const rawData = {
+            ...(registerData || {}),
+            codTribunal: codTribunal || undefined,
+            Comarca: comarca || undefined,
+            Autor: autor || undefined,
+            Reu: reu || undefined,
+          };
 
           const { data: inserted, error: insertError } = await supabase
             .from('processes')
@@ -158,7 +172,7 @@ serve(async (req) => {
               status_description: STATUS_CODES[2],
               uf: uf || null,
               instance: instance?.toString() || null,
-              raw_data: registerData || {},
+              raw_data: rawData,
               solucionare_status: 'synced',
             }, { onConflict: 'process_number' })
             .select()
@@ -260,7 +274,7 @@ serve(async (req) => {
 
         const { data: pendingProcesses } = await supabase
           .from('processes')
-          .select('id, process_number, uf, instance, cod_escritorio')
+          .select('id, process_number, uf, instance, cod_escritorio, raw_data')
           .eq('solucionare_status', 'pending')
           .eq('partner_service_id', service.id);
 
@@ -271,19 +285,26 @@ serve(async (req) => {
           console.log(`Sending ${pendingProcesses.length} pending processes to Solucionare`);
           for (const proc of pendingProcesses) {
             try {
-              const registerData = await client.post('/CadastraNovoProcesso', {
+              const raw = (proc.raw_data as Record<string, any>) || {};
+              const registerBody: Record<string, any> = {
                 numProcesso: proc.process_number,
                 codEscritorio: officeCode,
                 UF: proc.uf || '',
                 instancia: parseInt(proc.instance || '0') || 0,
-              });
+              };
+              if (raw.codTribunal) registerBody.codTribunal = raw.codTribunal;
+              if (raw.Comarca || raw.comarca) registerBody.Comarca = raw.Comarca || raw.comarca;
+              if (raw.Autor || raw.autor) registerBody.Autor = raw.Autor || raw.autor;
+              if (raw.Reu || raw.reu) registerBody.Reu = raw.Reu || raw.reu;
+
+              const registerData = await client.post('/CadastraNovoProcesso', registerBody);
 
               await supabase.from('processes').update({
                 cod_processo: registerData?.codProcesso || null,
                 status_code: 2,
                 status_description: STATUS_CODES[2],
                 solucionare_status: 'synced',
-                raw_data: registerData || {},
+                raw_data: { ...raw, ...(registerData || {}) },
                 updated_at: new Date().toISOString(),
               }).eq('id', proc.id);
 
