@@ -158,7 +158,7 @@ const distributionEndpoints: EndpointDef[] = [
   {
     id: "register-dist-term", label: "Cadastrar Nome", method: "POST", path: "manage-distribution-terms",
     category: "management", authType: "jwt",
-    description: "Cadastra um novo nome/termo para monitoramento de distribuições na Solucionare.",
+    description: "Cadastra um novo nome/termo para monitoramento de distribuições na Solucionare.\n⚠️ Limite: máximo ~100 abrangências por requisição.",
     params: [],
     bodyParams: [
       { key: "serviceId", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
@@ -420,6 +420,17 @@ const ApiTesting = () => {
       }
     }
 
+    // Validate abrangências limit for distribution endpoints
+    if (selectedEndpoint.path === "manage-distribution-terms" && bodyValues["abrangencias"]) {
+      try {
+        const abr = JSON.parse(bodyValues["abrangencias"]);
+        if (Array.isArray(abr) && abr.length > 100) {
+          toast.error(`A lista de abrangências contém ${abr.length} itens, mas o limite da API do parceiro é de ~100. Reduza a seleção antes de enviar.`);
+          return;
+        }
+      } catch { /* will be caught later as invalid JSON */ }
+    }
+
     setIsLoading(true);
     const startTime = Date.now();
     try {
@@ -458,7 +469,16 @@ const ApiTesting = () => {
         data,
       });
       setResponseTime(Date.now() - startTime);
-      toast[res.ok ? "success" : "error"](res.ok ? "Requisição executada" : `Erro: ${res.status}`);
+      if (res.ok) {
+        toast.success("Requisição executada");
+      } else {
+        const errMsg = data?.error || data?.message || `Status ${res.status}`;
+        if (typeof errMsg === "string" && (errMsg.includes("excede o limite") || errMsg.includes("abrangências") || errMsg.includes("truncated"))) {
+          toast.error(`Limite da API do parceiro: a lista de abrangências excede o máximo permitido (~100). Reduza a seleção e tente novamente.`);
+        } else {
+          toast.error(`Erro: ${errMsg}`);
+        }
+      }
     } catch (error: any) {
       setResponse({ status: 0, statusText: "Network Error", data: { error: error.message } });
       toast.error("Erro de rede");
