@@ -474,6 +474,8 @@ function DistributionTermDialog({
 
       // Convert "Todas" (4) to [1, 2, 3] since API only accepts 1, 2, or 3
       const resolvedInstancias = form.listInstancias.includes(4) ? [1, 2, 3] : form.listInstancias;
+      // Deduplicate abrangencias
+      const uniqueAbrangencias = [...new Set(selectedAbrangencias)];
 
       const body: any = {
         action: isEditing ? "editName" : "registerName",
@@ -481,7 +483,7 @@ function DistributionTermDialog({
         nome: form.nome,
         codTipoConsulta: parseInt(form.codTipoConsulta),
         listInstancias: resolvedInstancias,
-        abrangencias: selectedAbrangencias,
+        abrangencias: uniqueAbrangencias,
         clientIds: selectedClients,
       };
 
@@ -522,7 +524,16 @@ function DistributionTermDialog({
       handleOpenChange(false);
       queryClient.invalidateQueries({ queryKey: ["distribution-terms"] });
     },
-    onError: (error) => toast.error(`Erro: ${error.message}`),
+    onError: (error) => {
+      const msg = error.message || '';
+      if (msg.includes('já se encontra cadastrado') || msg.includes('já cadastrado')) {
+        toast.error('Este nome já está cadastrado no parceiro. Reative-o ou exclua definitivamente antes de cadastrar novamente.');
+      } else if (msg.includes('truncated')) {
+        toast.error('Dados excedem o limite da API. Tente selecionar menos abrangências.');
+      } else {
+        toast.error(`Erro: ${msg}`);
+      }
+    },
   });
 
   const dialogTitle = isEditing ? "Editar Nome Monitorado" : "Cadastrar Nome para Monitoramento";
