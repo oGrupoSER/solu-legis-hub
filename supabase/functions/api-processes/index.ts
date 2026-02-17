@@ -59,6 +59,40 @@ serve(async (req) => {
         return jsonResponse({ error: 'No pending batch to confirm' }, 400, rateLimitHeaders);
       }
 
+      const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+        || req.headers.get('x-real-ip')
+        || 'unknown';
+
+      // Get client's process IDs and their movements to record confirmations
+      const { data: clientProcs } = await supabase
+        .from('client_processes')
+        .select('process_id')
+        .eq('client_system_id', authResult.clientSystemId);
+
+      if (clientProcs && clientProcs.length > 0) {
+        const procIds = clientProcs.map(cp => cp.process_id);
+        const { data: movements } = await supabase
+          .from('process_movements')
+          .select('id')
+          .in('process_id', procIds)
+          .order('data_andamento', { ascending: false })
+          .limit(cursor.batch_size || 500);
+
+        if (movements && movements.length > 0) {
+          const confirmations = movements.map(m => ({
+            record_id: m.id,
+            record_type: 'movements',
+            client_system_id: authResult.clientSystemId!,
+            confirmed_at: new Date().toISOString(),
+            ip_address: ip,
+          }));
+
+          await supabase
+            .from('record_confirmations')
+            .upsert(confirmations, { onConflict: 'record_id,record_type,client_system_id' });
+        }
+      }
+
       await supabase
         .from('api_delivery_cursors')
         .update({ pending_confirmation: false, confirmed_at: new Date().toISOString() })

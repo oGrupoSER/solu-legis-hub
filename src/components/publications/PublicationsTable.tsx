@@ -11,6 +11,7 @@ import { format } from "date-fns";
 import { PublicationDetailDialog } from "./PublicationDetailDialog";
 import { DateRangePicker } from "./DateRangePicker";
 import { HighlightedContent } from "./HighlightedContent";
+import { ConfirmationBadge } from "@/components/shared/ConfirmationBadge";
 import {
   Pagination,
   PaginationContent,
@@ -41,6 +42,8 @@ export function PublicationsTable() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterGazette, setFilterGazette] = useState<string>("all");
   const [filterPartner, setFilterPartner] = useState<string>("all");
+  const [filterClient, setFilterClient] = useState<string>("all");
+  const [filterConfirmation, setFilterConfirmation] = useState<string>("all");
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
     from: undefined,
     to: undefined,
@@ -49,36 +52,26 @@ export function PublicationsTable() {
   const [totalCount, setTotalCount] = useState(0);
   const [gazetteOptions, setGazetteOptions] = useState<string[]>([]);
   const [partnerOptions, setPartnerOptions] = useState<{ id: string; name: string }[]>([]);
+  const [clientOptions, setClientOptions] = useState<{ id: string; name: string }[]>([]);
+  const [confirmedIds, setConfirmedIds] = useState<Set<string>>(new Set());
   const itemsPerPage = 20;
 
   useEffect(() => {
     fetchPublications();
-  }, [currentPage, searchTerm, filterGazette, filterPartner, dateRange]);
+  }, [currentPage, searchTerm, filterGazette, filterPartner, filterClient, filterConfirmation, dateRange]);
 
   useEffect(() => {
     fetchFilterOptions();
     
-    // Realtime subscription
     const channel = supabase
       .channel('publications-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'publications'
-        },
-        () => fetchPublications()
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'publications' }, () => fetchPublications())
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   const fetchFilterOptions = async () => {
-    // Fetch unique gazettes
     const { data: gazetteData } = await supabase
       .from("publications")
       .select("gazette_name")
@@ -87,18 +80,57 @@ export function PublicationsTable() {
     const gazettes = [...new Set(gazetteData?.map(g => g.gazette_name).filter(Boolean))];
     setGazetteOptions(gazettes as string[]);
 
-    // Fetch partners
     const { data: partnerData } = await supabase
       .from("partners")
       .select("id, name")
       .eq("is_active", true);
-    
     setPartnerOptions(partnerData || []);
+
+    const { data: clientData } = await supabase
+      .from("client_systems")
+      .select("id, name")
+      .eq("is_active", true);
+    setClientOptions(clientData || []);
   };
 
   const fetchPublications = async () => {
     try {
       setIsLoading(true);
+
+      // Fetch confirmed IDs for publications
+      const { data: confirmations } = await supabase
+        .from("record_confirmations")
+        .select("record_id")
+        .eq("record_type", "publications");
+      const confirmedSet = new Set((confirmations || []).map(c => c.record_id));
+      setConfirmedIds(confirmedSet);
+
+      // If filtering by client, get client terms first
+      let clientTermFilter: string[] | null = null;
+      if (filterClient !== "all") {
+        const { data: clientTermLinks } = await supabase
+          .from("client_search_terms")
+          .select("search_term_id")
+          .eq("client_system_id", filterClient);
+        if (clientTermLinks && clientTermLinks.length > 0) {
+          const termIds = clientTermLinks.map(ct => ct.search_term_id);
+          const { data: terms } = await supabase
+            .from("search_terms")
+            .select("term")
+            .in("id", termIds);
+          clientTermFilter = (terms || []).map(t => t.term);
+        } else {
+          clientTermFilter = [];
+        }
+      }
+
+      // If client has no terms, return empty
+      if (clientTermFilter !== null && clientTermFilter.length === 0) {
+        setPublications([]);
+        setTotalCount(0);
+        setIsLoading(false);
+        return;
+      }
       
       let query = supabase
         .from("publications")
@@ -106,34 +138,37 @@ export function PublicationsTable() {
         .order("publication_date", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false });
 
-      // Apply filters
       if (searchTerm) {
         query = query.or(`content.ilike.%${searchTerm}%,matched_terms.cs.{${searchTerm}}`);
       }
+      if (filterGazette !== "all") query = query.eq("gazette_name", filterGazette);
+      if (filterPartner !== "all") query = query.eq("partner_id", filterPartner);
+      if (clientTermFilter) query = query.overlaps("matched_terms", clientTermFilter);
+      if (dateRange.from) query = query.gte("publication_date", format(dateRange.from, "yyyy-MM-dd"));
+      if (dateRange.to) query = query.lte("publication_date", format(dateRange.to, "yyyy-MM-dd"));
 
-      if (filterGazette !== "all") {
-        query = query.eq("gazette_name", filterGazette);
+      // Confirmation filter
+      if (filterConfirmation === "confirmed") {
+        const ids = Array.from(confirmedSet);
+        if (ids.length === 0) {
+          setPublications([]);
+          setTotalCount(0);
+          setIsLoading(false);
+          return;
+        }
+        query = query.in("id", ids);
+      } else if (filterConfirmation === "not_confirmed") {
+        const ids = Array.from(confirmedSet);
+        if (ids.length > 0) {
+          query = query.not("id", "in", `(${ids.join(",")})`);
+        }
       }
 
-      if (filterPartner !== "all") {
-        query = query.eq("partner_id", filterPartner);
-      }
-
-      // Date range filter
-      if (dateRange.from) {
-        query = query.gte("publication_date", format(dateRange.from, "yyyy-MM-dd"));
-      }
-      if (dateRange.to) {
-        query = query.lte("publication_date", format(dateRange.to, "yyyy-MM-dd"));
-      }
-
-      // Pagination
       const from = (currentPage - 1) * itemsPerPage;
       const to = from + itemsPerPage - 1;
       query = query.range(from, to);
 
       const { data, error, count } = await query;
-
       if (error) throw error;
       
       setPublications(data || []);
@@ -148,10 +183,7 @@ export function PublicationsTable() {
 
   const totalPages = Math.ceil(totalCount / itemsPerPage);
 
-  const getContentPreview = (content: string | null) => {
-    if (!content) return "Sem conteúdo";
-    return content.length > 150 ? `${content.substring(0, 150)}...` : content;
-  };
+  const hasActiveFilters = searchTerm || filterGazette !== "all" || filterPartner !== "all" || filterClient !== "all" || filterConfirmation !== "all" || dateRange.from;
 
   if (isLoading) {
     return (
@@ -164,16 +196,13 @@ export function PublicationsTable() {
   return (
     <div className="space-y-4 p-6">
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="flex-1 relative">
+      <div className="flex flex-col sm:flex-row gap-4 flex-wrap">
+        <div className="flex-1 relative min-w-[200px]">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Buscar no conteúdo ou termos..."
             value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setCurrentPage(1);
-            }}
+            onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
             className="pl-10"
           />
         </div>
@@ -181,47 +210,51 @@ export function PublicationsTable() {
         <DateRangePicker
           from={dateRange.from}
           to={dateRange.to}
-          onSelect={(range) => {
-            setDateRange(range);
-            setCurrentPage(1);
-          }}
+          onSelect={(range) => { setDateRange(range); setCurrentPage(1); }}
         />
 
-        <Select value={filterGazette} onValueChange={(value) => {
-          setFilterGazette(value);
-          setCurrentPage(1);
-        }}>
+        <Select value={filterGazette} onValueChange={(v) => { setFilterGazette(v); setCurrentPage(1); }}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Gazeta" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas as Gazetas</SelectItem>
-            {gazetteOptions.map((gazette) => (
-              <SelectItem key={gazette} value={gazette}>
-                {gazette}
-              </SelectItem>
-            ))}
+            {gazetteOptions.map((g) => <SelectItem key={g} value={g}>{g}</SelectItem>)}
           </SelectContent>
         </Select>
 
-        <Select value={filterPartner} onValueChange={(value) => {
-          setFilterPartner(value);
-          setCurrentPage(1);
-        }}>
+        <Select value={filterPartner} onValueChange={(v) => { setFilterPartner(v); setCurrentPage(1); }}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Parceiro" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os Parceiros</SelectItem>
-            {partnerOptions.map((partner) => (
-              <SelectItem key={partner.id} value={partner.id}>
-                {partner.name}
-              </SelectItem>
-            ))}
+            {partnerOptions.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
           </SelectContent>
         </Select>
 
-        {(searchTerm || filterGazette !== "all" || filterPartner !== "all" || dateRange.from) && (
+        <Select value={filterClient} onValueChange={(v) => { setFilterClient(v); setCurrentPage(1); }}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Cliente" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os Clientes</SelectItem>
+            {clientOptions.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+
+        <Select value={filterConfirmation} onValueChange={(v) => { setFilterConfirmation(v); setCurrentPage(1); }}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Confirmação" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="confirmed">Confirmados</SelectItem>
+            <SelectItem value="not_confirmed">Não confirmados</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {hasActiveFilters && (
           <Button
             variant="ghost"
             size="icon"
@@ -229,6 +262,8 @@ export function PublicationsTable() {
               setSearchTerm("");
               setFilterGazette("all");
               setFilterPartner("all");
+              setFilterClient("all");
+              setFilterConfirmation("all");
               setDateRange({ from: undefined, to: undefined });
               setCurrentPage(1);
             }}
@@ -254,13 +289,14 @@ export function PublicationsTable() {
               <TableHead>Termos</TableHead>
               <TableHead>Parceiro/Serviço</TableHead>
               <TableHead>Preview</TableHead>
+              <TableHead className="w-[80px]">Confirm.</TableHead>
               <TableHead className="w-[100px]">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {publications.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                   Nenhuma publicação encontrada
                 </TableCell>
               </TableRow>
@@ -279,44 +315,36 @@ export function PublicationsTable() {
                     <div className="flex flex-wrap gap-1 max-w-[200px]">
                       {publication.matched_terms && publication.matched_terms.length > 0 ? (
                         publication.matched_terms.slice(0, 3).map((term, idx) => (
-                          <Badge key={idx} variant="secondary" className="text-xs">
-                            {term}
-                          </Badge>
+                          <Badge key={idx} variant="secondary" className="text-xs">{term}</Badge>
                         ))
                       ) : (
                         <span className="text-muted-foreground text-sm">-</span>
                       )}
                       {publication.matched_terms && publication.matched_terms.length > 3 && (
-                        <Badge variant="outline" className="text-xs">
-                          +{publication.matched_terms.length - 3}
-                        </Badge>
+                        <Badge variant="outline" className="text-xs">+{publication.matched_terms.length - 3}</Badge>
                       )}
                     </div>
                   </TableCell>
                   <TableCell className="text-sm">
                     <div>
                       <div className="font-medium">{publication.partners?.name || "-"}</div>
-                      <div className="text-muted-foreground text-xs">
-                        {publication.partner_services?.service_name || "-"}
-                      </div>
+                      <div className="text-muted-foreground text-xs">{publication.partner_services?.service_name || "-"}</div>
                     </div>
                   </TableCell>
                   <TableCell className="max-w-xs">
                     <div className="text-sm text-muted-foreground line-clamp-2">
-                      <HighlightedContent
-                        content={publication.content || ""}
-                        terms={publication.matched_terms || []}
-                        maxLength={150}
-                      />
+                      <HighlightedContent content={publication.content || ""} terms={publication.matched_terms || []} maxLength={150} />
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setSelectedPublication(publication)}
-                      className="gap-1"
-                    >
+                    <ConfirmationBadge
+                      recordId={publication.id}
+                      recordType="publications"
+                      isConfirmed={confirmedIds.has(publication.id)}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Button variant="ghost" size="sm" onClick={() => setSelectedPublication(publication)} className="gap-1">
                       <Eye className="h-4 w-4" />
                       Ver
                     </Button>
@@ -343,32 +371,20 @@ export function PublicationsTable() {
                   className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
                 />
               </PaginationItem>
-              
               {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                 let pageNum;
-                if (totalPages <= 5) {
-                  pageNum = i + 1;
-                } else if (currentPage <= 3) {
-                  pageNum = i + 1;
-                } else if (currentPage >= totalPages - 2) {
-                  pageNum = totalPages - 4 + i;
-                } else {
-                  pageNum = currentPage - 2 + i;
-                }
-                
+                if (totalPages <= 5) pageNum = i + 1;
+                else if (currentPage <= 3) pageNum = i + 1;
+                else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
+                else pageNum = currentPage - 2 + i;
                 return (
                   <PaginationItem key={pageNum}>
-                    <PaginationLink
-                      onClick={() => setCurrentPage(pageNum)}
-                      isActive={currentPage === pageNum}
-                      className="cursor-pointer"
-                    >
+                    <PaginationLink onClick={() => setCurrentPage(pageNum)} isActive={currentPage === pageNum} className="cursor-pointer">
                       {pageNum}
                     </PaginationLink>
                   </PaginationItem>
                 );
               })}
-
               <PaginationItem>
                 <PaginationNext
                   onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
@@ -380,7 +396,6 @@ export function PublicationsTable() {
         </div>
       )}
 
-      {/* Detail Dialog */}
       {selectedPublication && (
         <PublicationDetailDialog
           publication={selectedPublication}

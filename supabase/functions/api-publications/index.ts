@@ -76,6 +76,33 @@ serve(async (req) => {
         return jsonResponse({ error: 'No pending batch to confirm' }, 400, rateLimitHeaders);
       }
 
+      // Capture IP
+      const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+        || req.headers.get('x-real-ip')
+        || 'unknown';
+
+      // Get delivered publication IDs to record individual confirmations
+      const batchSize = cursor.batch_size || 500;
+      const { data: deliveredPubs } = await supabase
+        .from('publications')
+        .select('id')
+        .order('publication_date', { ascending: false })
+        .limit(batchSize);
+
+      if (deliveredPubs && deliveredPubs.length > 0) {
+        const confirmations = deliveredPubs.map(pub => ({
+          record_id: pub.id,
+          record_type: 'publications',
+          client_system_id: authResult.clientSystemId!,
+          confirmed_at: new Date().toISOString(),
+          ip_address: ip,
+        }));
+
+        await supabase
+          .from('record_confirmations')
+          .upsert(confirmations, { onConflict: 'record_id,record_type,client_system_id' });
+      }
+
       await supabase
         .from('api_delivery_cursors')
         .update({ pending_confirmation: false, confirmed_at: new Date().toISOString() })

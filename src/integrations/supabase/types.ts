@@ -1334,6 +1334,44 @@ export type Database = {
           },
         ]
       }
+      record_confirmations: {
+        Row: {
+          client_system_id: string
+          confirmed_at: string
+          created_at: string
+          id: string
+          ip_address: string | null
+          record_id: string
+          record_type: string
+        }
+        Insert: {
+          client_system_id: string
+          confirmed_at?: string
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          record_id: string
+          record_type: string
+        }
+        Update: {
+          client_system_id?: string
+          confirmed_at?: string
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          record_id?: string
+          record_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "record_confirmations_client_system_id_fkey"
+            columns: ["client_system_id"]
+            isOneToOne: false
+            referencedRelation: "client_systems"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       search_terms: {
         Row: {
           created_at: string | null
