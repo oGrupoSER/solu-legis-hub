@@ -229,10 +229,8 @@ serve(async (req) => {
       }
 
       case 'registerName': {
-        const { nome, instancia, abrangencia } = params;
+        const { nome, codTipoConsulta, listInstancias, abrangencias, qtdDiasCapturaRetroativa, listDocumentos, listOab } = params;
         if (!nome) throw new Error('nome is required');
-
-        const instanciaCode = typeof instancia === 'number' ? instancia : parseInt(instancia) || 1;
 
         // DEDUPLICATION: Check if term exists
         const { data: existing } = await supabase
@@ -246,22 +244,34 @@ serve(async (req) => {
         let termRecord;
         let registeredInSolucionare = false;
 
+        const metadata = {
+          codTipoConsulta: codTipoConsulta || 1,
+          listInstancias: listInstancias || [1],
+          listAbrangencias: abrangencias || [],
+          qtdDiasCapturaRetroativa: qtdDiasCapturaRetroativa || null,
+          listDocumentos: listDocumentos || [],
+          listOab: listOab || [],
+        };
+
         if (existing) {
+          // Update metadata locally
+          await supabase.from('search_terms').update({ metadata, updated_at: new Date().toISOString() }).eq('id', existing.id);
           termRecord = existing;
         } else {
-          // listAbrangencias now receives string[] (diary siglas like "DJE-SP", "CISP")
-          const abrangencias: string[] = params.abrangencias || [];
-          const requestBody = {
+          const requestBody: any = {
             codEscritorio: officeCode,
             nome,
-            codTipoConsulta: 3,
-            listInstancias: [instanciaCode],
-            listAbrangencias: abrangencias,
+            codTipoConsulta: codTipoConsulta || 1,
+            listInstancias: listInstancias || [1],
+            listAbrangencias: abrangencias || [],
           };
+          if (qtdDiasCapturaRetroativa) requestBody.qtdDiasCapturaRetroativa = qtdDiasCapturaRetroativa;
+          if (listDocumentos && listDocumentos.length > 0) requestBody.listDocumentos = listDocumentos;
+          if (listOab && listOab.length > 0) requestBody.listOab = listOab;
+
           console.log(`[registerName] Request body:`, JSON.stringify(requestBody));
           
-          let registerResult;
-          registerResult = await apiRequest(service.service_url, '/CadastrarNome', jwtToken, 'POST', requestBody);
+          const registerResult = await apiRequest(service.service_url, '/CadastrarNome', jwtToken, 'POST', requestBody);
           result = registerResult;
           registeredInSolucionare = true;
 
@@ -270,6 +280,7 @@ serve(async (req) => {
             term: nome, term_type: 'distribution',
             partner_service_id: serviceId, partner_id: service.partner_id,
             is_active: true, solucionare_code: solCode, solucionare_status: 'synced',
+            metadata,
           }).select().single();
           termRecord = inserted;
         }
@@ -279,6 +290,43 @@ serve(async (req) => {
         }
 
         result = { registeredInSolucionare, local: termRecord, linkedToClient: !!client_system_id };
+        break;
+      }
+
+      case 'editName': {
+        const { termId, codNome, nome, codTipoConsulta: editTipo, listInstancias: editInst, abrangencias: editAbr, qtdDiasCapturaRetroativa: editRetro, listDocumentos: editDocs, listOab: editOabs } = params;
+        if (!termId) throw new Error('termId is required');
+
+        const metadata = {
+          codTipoConsulta: editTipo || 1,
+          listInstancias: editInst || [1],
+          listAbrangencias: editAbr || [],
+          qtdDiasCapturaRetroativa: editRetro || null,
+          listDocumentos: editDocs || [],
+          listOab: editOabs || [],
+        };
+
+        // If has codNome, try to edit on Solucionare (instancias + abrangencias)
+        if (codNome) {
+          try {
+            await apiRequest(service.service_url, '/EditarInstanciaAbrangenciaNome', jwtToken, 'PUT', {
+              codNome,
+              listInstancias: editInst || [1],
+              listAbrangencias: editAbr || [],
+            });
+            console.log(`[editName] Updated instancias/abrangencias on Solucionare for codNome ${codNome}`);
+          } catch (e) {
+            console.error(`[editName] Failed to update on Solucionare:`, e);
+          }
+        }
+
+        await supabase.from('search_terms').update({
+          term: nome || undefined,
+          metadata,
+          updated_at: new Date().toISOString(),
+        }).eq('id', termId);
+
+        result = { updated: true, termId };
         break;
       }
 
