@@ -148,11 +148,29 @@ export class SoapClient {
         return this.parseComplexArray(retornoSection[1]);
       }
 
-      // Check for <return> with complex content (getNomePesquisa returns object)
+      // Check for <return> with complex content
       const returnSection = bodyContent.match(/<return(?:\s[^>]*)?>([\s\S]*?)<\/return>/);
       if (returnSection) {
         const returnContent = returnSection[1];
-        // If it contains sub-elements, parse as complex object
+        
+        // Check if items contain simple text (no nested elements) - e.g., getAbrangencias
+        const firstItem = returnContent.match(/<item[^>]*>([\s\S]*?)<\/item>/);
+        const isSimpleArray = firstItem && !firstItem[1].includes('<');
+        
+        if (returnContent.includes('<item') && isSimpleArray) {
+          // Simple string items: <item>VALUE</item>
+          const items: string[] = [];
+          const itemRegex = /<item[^>]*>([\s\S]*?)<\/item>/gs;
+          let itemMatch;
+          while ((itemMatch = itemRegex.exec(returnContent)) !== null) {
+            const val = itemMatch[1].trim();
+            if (val) items.push(val);
+          }
+          console.log(`Extracted ${items.length} simple string items from <return>`);
+          return items;
+        }
+        
+        // If it contains sub-elements with nested structure, parse as complex object
         if (returnContent.includes('<') && !returnContent.match(/^[^<]*$/)) {
           console.log('Parsing complex return object');
           return this.parseComplexObject(returnContent);

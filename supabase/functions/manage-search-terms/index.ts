@@ -19,7 +19,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-function resolveSolucionareEndpoint(serviceUrl: string): { endpoint: string; namespace: string } {
+function resolveSolucionareEndpoint(serviceUrl: string, module: 'nomes' | 'escritorios' = 'nomes'): { endpoint: string; namespace: string } {
+  const phpFile = module === 'escritorios' ? 'escritorios.php' : 'nomes.php';
   try {
     const u = new URL(serviceUrl);
     let base = `${u.protocol}//${u.host}`;
@@ -28,7 +29,7 @@ function resolveSolucionareEndpoint(serviceUrl: string): { endpoint: string; nam
     const idx = path.toLowerCase().indexOf('/recorte/webservice');
     if (idx !== -1) {
       const root = path.substring(0, idx + '/recorte/webservice'.length);
-      const endpointPath = `${root}/20200116/service/nomes.php`;
+      const endpointPath = `${root}/20200116/service/${phpFile}`;
       const full = `${base}${endpointPath}`;
       return { endpoint: full, namespace: full };
     }
@@ -171,8 +172,17 @@ Deno.serve(async (req) => {
       case 'gerar_variacoes':
         result.data = await gerarVariacoes(soapClient, data!);
         break;
-      case 'buscar_abrangencias':
-        result.data = await buscarAbrangencias(soapClient);
+      case 'buscar_abrangencias': {
+        // getAbrangencias is on the Escritórios module, not Nomes
+        const { endpoint: escEndpoint, namespace: escNamespace } = resolveSolucionareEndpoint(service.service_url, 'escritorios');
+        const escSoapClient = new SoapClient({
+          serviceUrl: escEndpoint,
+          nomeRelacional: service.nome_relacional,
+          token: service.token,
+          namespace: escNamespace,
+        });
+        result.data = await buscarAbrangencias(escSoapClient);
+      }
         break;
       case 'visualizar_nome':
         result.data = await visualizarNome(soapClient, data!);
