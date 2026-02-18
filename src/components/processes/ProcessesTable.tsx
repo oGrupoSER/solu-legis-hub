@@ -7,9 +7,10 @@ import { Button } from "@/components/ui/button";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock, MoreHorizontal, Pencil, Trash2, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock, MoreHorizontal, Pencil, Trash2, RefreshCw, Info } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ClientBadges } from "@/components/shared/ClientBadges";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { EditProcessDialog } from "@/components/processes/EditProcessDialog";
 import { toast } from "sonner";
 
@@ -26,6 +27,7 @@ interface Process {
   last_sync_at: string | null;
   solucionare_status: string;
   partner_service_id: string | null;
+  raw_data: any;
   client_processes?: { client_systems: { name: string } }[];
 }
 
@@ -169,9 +171,31 @@ export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: Proce
                   <TableCell>{process.uf || "-"}</TableCell>
                   <TableCell>{process.instance || "-"}</TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={statusColors[process.status_code || 0] || ""}>
-                      {process.status_description || process.status || "Pendente"}
-                    </Badge>
+                  {(() => {
+                    const errorReason = process.raw_data?.descricaoClassificacaoStatus;
+                    const hasError = process.status_code === 7 && errorReason;
+                    return hasError ? (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex items-center gap-1 cursor-help">
+                              <Badge variant="outline" className={statusColors[process.status_code || 0] || ""}>
+                                {process.status_description || process.status || "Pendente"}
+                              </Badge>
+                              <Info className="h-3.5 w-3.5 text-destructive" />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" className="max-w-xs">
+                            <p className="text-xs font-medium">Motivo: {errorReason}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    ) : (
+                      <Badge variant="outline" className={statusColors[process.status_code || 0] || ""}>
+                        {process.status_description || process.status || "Pendente"}
+                      </Badge>
+                    );
+                  })()}
                    </TableCell>
                    <TableCell>
                      {process.solucionare_status === 'synced' ? (
