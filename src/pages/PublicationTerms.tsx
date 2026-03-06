@@ -319,9 +319,44 @@ const PublicationTerms = () => {
 
       <SearchTermDialog
         open={dialogOpen}
-        onOpenChange={(open) => {
+        onOpenChange={async (open) => {
+          const wasCreating = dialogOpen && !open && !editingTerm;
           setDialogOpen(open);
-          if (!open) { setEditingTerm(null); fetchTerms(); }
+          if (!open) {
+            setEditingTerm(null);
+            fetchTerms();
+
+            // Auto-sync publications after creating a new term
+            if (wasCreating) {
+              try {
+                toast.info("Buscando publicações para o novo termo...");
+
+                // Find an active publications REST service
+                const { data: pubServices } = await supabase
+                  .from("partner_services")
+                  .select("id")
+                  .eq("service_type", "publications")
+                  .eq("is_active", true)
+                  .limit(1);
+
+                if (pubServices && pubServices.length > 0) {
+                  const { data: syncResult, error } = await supabase.functions.invoke("sync-publications", {
+                    body: { service_id: pubServices[0].id },
+                  });
+
+                  if (error) throw error;
+
+                  const count = syncResult?.records_synced ?? syncResult?.totalInserted ?? 0;
+                  toast.success(`Sincronização concluída: ${count} publicações encontradas`);
+                } else {
+                  toast.warning("Nenhum serviço de publicações ativo encontrado para sincronizar");
+                }
+              } catch (error: any) {
+                console.error("Auto-sync publications error:", error);
+                toast.error("Erro ao buscar publicações: " + (error.message || "Erro desconhecido"));
+              }
+            }
+          }
         }}
         term={editingTerm}
       />
