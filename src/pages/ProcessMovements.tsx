@@ -464,7 +464,7 @@ export default function ProcessMovements() {
       <div className="flex flex-col sm:flex-row gap-4 flex-wrap">
         <div className="relative min-w-[200px] flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10" />
+          <Input placeholder="Buscar por número do processo ou código..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10" />
         </div>
 
         <DateRangePicker from={dateRange.from} to={dateRange.to} onSelect={(range) => setDateRange(range)} />
