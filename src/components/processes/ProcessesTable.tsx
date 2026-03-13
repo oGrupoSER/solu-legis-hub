@@ -172,7 +172,8 @@ export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: Proce
               return (
                 <TableRow key={process.id}>
                   <TableCell className="font-mono text-sm">{process.process_number}</TableCell>
-                  <TableCell>{process.uf || "-"}</TableCell>
+                  <TableCell className="text-sm">{process.raw_data?.codProcesso || process.cod_processo || "-"}</TableCell>
+                   <TableCell>{process.uf || "-"}</TableCell>
                   <TableCell>{process.instance || "-"}</TableCell>
                   <TableCell>
                   {(() => {
