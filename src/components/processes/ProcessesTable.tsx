@@ -81,8 +81,8 @@ export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: Proce
         query = query.or(`process_number.ilike.%${searchQuery}%,tribunal.ilike.%${searchQuery}%`);
       }
 
-      if (filterStatus !== "all" && STATUS_FILTER_MAP[filterStatus]) {
-        query = query.eq("status_code", STATUS_FILTER_MAP[filterStatus]);
+      if (filterStatus !== "all") {
+        query = query.eq("status_description", filterStatus);
       }
 
       const { data, error, count } = await query;
