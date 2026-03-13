@@ -218,16 +218,6 @@ export function PublicationsTable() {
           </SelectContent>
         </Select>
 
-        <Select value={filterPartner} onValueChange={(v) => { setFilterPartner(v); setCurrentPage(1); }}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Parceiro" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os Parceiros</SelectItem>
-            {partnerOptions.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-
         <Select value={filterClient} onValueChange={(v) => { setFilterClient(v); setCurrentPage(1); }}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Cliente" />

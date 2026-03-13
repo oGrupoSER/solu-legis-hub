@@ -182,16 +182,6 @@ export default function Distributions() {
               onSelect={(range) => setDateRange(range)}
             />
 
-            <Select value={filterPartner} onValueChange={setFilterPartner}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Parceiro" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os Parceiros</SelectItem>
-                {partners?.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-
             <Select value={filterClient} onValueChange={setFilterClient}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Cliente" />
