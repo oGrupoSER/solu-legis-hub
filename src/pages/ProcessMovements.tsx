@@ -85,7 +85,14 @@ async function fetchAllProcesses(searchQuery: string, filterPartner: string, fil
       .order("process_number")
       .range(from, from + PAGE_SIZE - 1);
 
-    if (searchQuery) query = query.or(`process_number.ilike.%${searchQuery}%,tribunal.ilike.%${searchQuery}%,cod_processo::text.ilike.%${searchQuery}%`);
+    if (searchQuery) {
+      const trimmed = searchQuery.trim();
+      if (/^\d+$/.test(trimmed)) {
+        query = query.eq("cod_processo", parseInt(trimmed, 10));
+      } else {
+        query = query.ilike("process_number", `%${trimmed}%`);
+      }
+    }
     if (filterPartner !== "all") query = query.eq("partner_id", filterPartner);
     if (filterClient !== "all" && clientProcessIds && clientProcessIds.length > 0) {
       query = query.in("id", clientProcessIds);
