@@ -528,7 +528,85 @@ async function syncAllMovementsByProcess(client: RestClient, supabase: any, serv
       } catch (err) {
         console.error(`Error fetching movements for process ${process.cod_processo}:`, err);
       }
+}
+
+/**
+ * Sync ALL Documents by Process
+ * GET /BuscaTodosDocumentosPorProcesso?codProcesso={code} - returns ALL documents for a specific process
+ * Links documents to movements if codAndamento matches an existing movement, otherwise keeps as loose process documents
+ */
+async function syncAllDocumentsByProcess(client: RestClient, supabase: any, service: any): Promise<number> {
+  try {
+    // Get all processes with cod_processo
+    const { data: processes, error: procError } = await supabase
+      .from('processes')
+      .select('id, cod_processo')
+      .not('cod_processo', 'is', null)
+      .eq('partner_service_id', service.id);
+
+    if (procError || !processes?.length) {
+      console.log('No processes found for all-documents sync');
+      return 0;
     }
+
+    console.log(`Fetching all documents for ${processes.length} processes`);
+    let totalSynced = 0;
+
+    for (const process of processes) {
+      try {
+        const data = await client.get('/BuscaTodosDocumentosPorProcesso', {
+          codProcesso: process.cod_processo,
+        });
+
+        if (!Array.isArray(data) || data.length === 0) {
+          continue;
+        }
+
+        // Lookup movement IDs for documents that have codAndamento
+        const uniqueCodAndamentos = [...new Set(data.map((d: any) => d.codAndamento).filter(Boolean))];
+        let movementMap = new Map<number, string>();
+
+        if (uniqueCodAndamentos.length > 0) {
+          const { data: movements } = await supabase
+            .from('process_movements')
+            .select('id, cod_andamento')
+            .in('cod_andamento', uniqueCodAndamentos);
+          
+          movementMap = new Map((movements || []).map((m: any) => [m.cod_andamento, m.id]));
+        }
+
+        const docInserts = data.map((doc: any) => ({
+          cod_documento: doc.codDocumento,
+          cod_processo: doc.codProcesso,
+          cod_andamento: doc.codAndamento || null,
+          cod_agrupador: doc.codAgrupador || null,
+          process_id: process.id,
+          movement_id: doc.codAndamento ? movementMap.get(doc.codAndamento) || null : null,
+          documento_url: doc.urlDocumento || null,
+          raw_data: doc,
+        }));
+
+        const { error: docError } = await supabase
+          .from('process_documents')
+          .upsert(docInserts, { onConflict: 'cod_documento' });
+
+        if (docError) {
+          console.error(`Error upserting documents for process ${process.cod_processo}:`, docError);
+        } else {
+          totalSynced += data.length;
+          console.log(`Process ${process.cod_processo}: ${data.length} documents`);
+        }
+      } catch (err) {
+        console.error(`Error fetching documents for process ${process.cod_processo}:`, err);
+      }
+    }
+
+    return totalSynced;
+  } catch (error) {
+    console.error('Error in syncAllDocumentsByProcess:', error);
+    return 0;
+  }
+}
 
     return totalSynced;
   } catch (error) {
