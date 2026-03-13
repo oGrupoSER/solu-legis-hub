@@ -18,9 +18,7 @@ const INITIAL_STAGES: Omit<SyncStage, "status">[] = [
   { id: "send-pending", label: "Enviando processos pendentes" },
   { id: "sync-status", label: "Atualizando status dos processos" },
   { id: "groupers", label: "Buscando agrupadores" },
-  { id: "movements", label: "Buscando novos andamentos" },
   { id: "all-movements", label: "Buscando todos andamentos por processo" },
-  { id: "documents", label: "Buscando documentos" },
   { id: "all-documents", label: "Buscando todos documentos por processo" },
   { id: "covers", label: "Atualizando capas dos processos" },
   { id: "dependencies", label: "Buscando dependências" },
@@ -72,9 +70,7 @@ export function SyncProgressDialog({ open, onOpenChange, onComplete }: SyncProgr
     // Stages 3-7: sync-process-updates individual types
     const updateStages: { id: string; syncType: string }[] = [
       { id: "groupers", syncType: "groupers" },
-      { id: "movements", syncType: "movements" },
       { id: "all-movements", syncType: "all-movements" },
-      { id: "documents", syncType: "documents" },
       { id: "all-documents", syncType: "all-documents" },
       { id: "covers", syncType: "covers" },
       { id: "dependencies", syncType: "dependencies" },
