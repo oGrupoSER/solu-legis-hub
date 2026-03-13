@@ -70,7 +70,7 @@ export default function Distributions() {
   });
 
   const { data: distributions, isLoading } = useQuery({
-    queryKey: ["distributions", searchTerm, filterPartner, filterClient, filterConfirmation, dateRange],
+    queryKey: ["distributions", searchTerm, filterClient, filterConfirmation, dateRange],
     queryFn: async () => {
       // Client term filter
       let clientTermFilter: string[] | null = null;
