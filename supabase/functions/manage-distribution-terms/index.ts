@@ -123,9 +123,10 @@ serve(async (req) => {
       case 'listNames': {
         // Try fetching from API first
         let apiNames: any[] = [];
+        console.log(`[listNames] Using officeCode=${officeCode}, partnerOfficeCode=${partnerOfficeCode}`);
         try {
           const rawResponse = await apiRequest(service.service_url, `/BuscaNomesCadastrados?codEscritorio=${officeCode}`, jwtToken);
-          console.log(`[listNames] Full API response:`, JSON.stringify(rawResponse));
+          console.log(`[listNames] API returned ${Array.isArray(rawResponse) ? rawResponse.length : 0} names`);
           apiNames = Array.isArray(rawResponse) ? rawResponse : [];
         } catch (e: any) {
           if (e.message?.includes('400')) {
