@@ -16,6 +16,14 @@ import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { useNavigate } from "react-router-dom";
 import { DateRangePicker } from "@/components/publications/DateRangePicker";
 import { ConfirmationBadge } from "@/components/shared/ConfirmationBadge";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 
 interface RegisteredProcess {
   id: string;
@@ -53,6 +61,21 @@ export default function ProcessMovements() {
   const [filterConfirmation, setFilterConfirmation] = useState<string>("all");
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
   const [confirmedIds, setConfirmedIds] = useState<Set<string>>(new Set());
+  const [processesPage, setProcessesPage] = useState(1);
+  const [movementsPage, setMovementsPage] = useState(1);
+  const itemsPerPage = 10;
+
+  // Reset pages when filters change
+  useEffect(() => {
+    setProcessesPage(1);
+    setMovementsPage(1);
+  }, [searchQuery, filterPartner, filterClient, filterConfirmation, dateRange]);
+
+  // Reset pages when tab changes
+  useEffect(() => {
+    setProcessesPage(1);
+    setMovementsPage(1);
+  }, [activeTab]);
 
   useEffect(() => {
     const fetchConfirmed = async () => {
@@ -236,6 +259,58 @@ export default function ProcessMovements() {
 
   const hasActiveFilters = searchQuery || filterPartner !== "all" || filterClient !== "all" || filterConfirmation !== "all" || dateRange.from;
 
+  // Pagination for processes tab
+  const totalProcesses = processes.length;
+  const totalProcessPages = Math.ceil(totalProcesses / itemsPerPage);
+  const paginatedProcesses = processes.slice((processesPage - 1) * itemsPerPage, processesPage * itemsPerPage);
+
+  // Pagination for movements tab
+  const totalMovements = movements.length;
+  const totalMovementPages = Math.ceil(totalMovements / itemsPerPage);
+  const paginatedMovements = movements.slice((movementsPage - 1) * itemsPerPage, movementsPage * itemsPerPage);
+
+  const renderPagination = (currentPage: number, totalPages: number, totalItems: number, setPage: (p: number) => void, label: string) => {
+    if (totalPages <= 1) return null;
+    return (
+      <div className="flex items-center justify-between mt-4 px-4 pb-4">
+        <p className="text-sm text-muted-foreground">
+          Mostrando {(currentPage - 1) * itemsPerPage + 1} a{" "}
+          {Math.min(currentPage * itemsPerPage, totalItems)} de {totalItems} {label}
+        </p>
+        <Pagination>
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious
+                onClick={() => setPage(Math.max(1, currentPage - 1))}
+                className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+              />
+            </PaginationItem>
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              let pageNum;
+              if (totalPages <= 5) pageNum = i + 1;
+              else if (currentPage <= 3) pageNum = i + 1;
+              else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
+              else pageNum = currentPage - 2 + i;
+              return (
+                <PaginationItem key={pageNum}>
+                  <PaginationLink onClick={() => setPage(pageNum)} isActive={currentPage === pageNum} className="cursor-pointer">
+                    {pageNum}
+                  </PaginationLink>
+                </PaginationItem>
+              );
+            })}
+            <PaginationItem>
+              <PaginationNext
+                onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
+                className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      </div>
+    );
+  };
+
   return (
     <div className="container py-8 space-y-6">
       <BreadcrumbNav items={[{ label: "Dashboard", href: "/" }, { label: "Processos", href: "/processes" }, { label: "Andamentos" }]} />
@@ -357,7 +432,7 @@ export default function ProcessMovements() {
                   ) : processes.length === 0 ? (
                     <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8"><FileText className="h-10 w-10 mx-auto mb-2 text-muted-foreground/50" />Nenhum processo com status Cadastrado</TableCell></TableRow>
                   ) : (
-                    processes.map((proc) => (
+                    paginatedProcesses.map((proc) => (
                       <TableRow key={proc.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/processes/${proc.id}`)}>
                         <TableCell className="font-mono text-sm">{proc.process_number}</TableCell>
                         <TableCell>{proc.cod_escritorio || "-"}</TableCell>
@@ -376,6 +451,7 @@ export default function ProcessMovements() {
                   )}
                 </TableBody>
               </Table>
+              {renderPagination(processesPage, totalProcessPages, totalProcesses, setProcessesPage, "processos")}
             </CardContent>
           </Card>
         </TabsContent>
@@ -401,7 +477,7 @@ export default function ProcessMovements() {
                   ) : movements.length === 0 ? (
                     <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8"><FileText className="h-10 w-10 mx-auto mb-2 text-muted-foreground/50" />Nenhum andamento encontrado</TableCell></TableRow>
                   ) : (
-                    movements.map((mov) => (
+                    paginatedMovements.map((mov) => (
                       <TableRow key={mov.id} className="cursor-pointer hover:bg-muted/50" onClick={() => mov.process_id && navigate(`/processes/${mov.process_id}`)}>
                         <TableCell className="font-mono text-sm">{(mov.processes as any)?.process_number || "-"}</TableCell>
                         <TableCell><Badge variant="outline">{(mov.processes as any)?.tribunal || "-"}</Badge></TableCell>
@@ -425,6 +501,7 @@ export default function ProcessMovements() {
                   )}
                 </TableBody>
               </Table>
+              {renderPagination(movementsPage, totalMovementPages, totalMovements, setMovementsPage, "andamentos")}
             </CardContent>
           </Card>
         </TabsContent>

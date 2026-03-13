@@ -14,6 +14,14 @@ import { RefreshCw, Search, FileText, Building2, Loader2, X } from "lucide-react
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { DateRangePicker } from "@/components/publications/DateRangePicker";
 import { ConfirmationBadge } from "@/components/shared/ConfirmationBadge";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 
 export default function Distributions() {
   const queryClient = useQueryClient();
@@ -23,6 +31,13 @@ export default function Distributions() {
   const [filterConfirmation, setFilterConfirmation] = useState<string>("all");
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
   const [confirmedIds, setConfirmedIds] = useState<Set<string>>(new Set());
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterPartner, filterClient, filterConfirmation, dateRange]);
 
   // Fetch confirmed IDs
   useEffect(() => {
@@ -121,6 +136,10 @@ export default function Distributions() {
 
   const hasActiveFilters = searchTerm || filterPartner !== "all" || filterClient !== "all" || filterConfirmation !== "all" || dateRange.from;
 
+  const totalItems = distributions?.length || 0;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const paginatedDistributions = distributions?.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage) || [];
+
   return (
     <div className="space-y-6">
       <BreadcrumbNav items={[{ label: "Dashboard", href: "/" }, { label: "Distribuições" }]} />
@@ -139,7 +158,7 @@ export default function Distributions() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Total de Distribuições</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{distributions?.length || 0}</div></CardContent>
+          <CardContent><div className="text-2xl font-bold">{totalItems}</div></CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Serviços Ativos</CardTitle></CardHeader>
@@ -221,53 +240,94 @@ export default function Distributions() {
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
-          ) : distributions?.length === 0 ? (
+          ) : totalItems === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <FileText className="h-12 w-12 text-muted-foreground/50 mb-4" />
               <p className="text-muted-foreground">Nenhuma distribuição encontrada</p>
               <p className="text-sm text-muted-foreground">Cadastre nomes em "Nomes Monitorados" ou sincronize os dados</p>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Número do Processo</TableHead>
-                  <TableHead>Tribunal</TableHead>
-                  <TableHead>Termo Monitorado</TableHead>
-                  <TableHead>Data Distribuição</TableHead>
-                  <TableHead>Parceiro</TableHead>
-                  <TableHead>Serviço</TableHead>
-                  <TableHead>Recebido em</TableHead>
-                  <TableHead className="w-[80px]">Confirm.</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {distributions?.map((dist) => (
-                  <TableRow key={dist.id}>
-                    <TableCell className="font-mono text-sm">{dist.process_number}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline"><Building2 className="mr-1 h-3 w-3" />{dist.tribunal || "N/A"}</Badge>
-                    </TableCell>
-                    <TableCell>{dist.term || "-"}</TableCell>
-                    <TableCell>
-                      {dist.distribution_date ? format(new Date(dist.distribution_date), "dd/MM/yyyy", { locale: ptBR }) : "-"}
-                    </TableCell>
-                    <TableCell className="text-sm">{(dist as any).partners?.name || "-"}</TableCell>
-                    <TableCell className="text-muted-foreground">{(dist.partner_services as any)?.service_name || "-"}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {dist.created_at ? format(new Date(dist.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR }) : "-"}
-                    </TableCell>
-                    <TableCell>
-                      <ConfirmationBadge
-                        recordId={dist.id}
-                        recordType="distributions"
-                        isConfirmed={confirmedIds.has(dist.id)}
-                      />
-                    </TableCell>
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Número do Processo</TableHead>
+                    <TableHead>Tribunal</TableHead>
+                    <TableHead>Termo Monitorado</TableHead>
+                    <TableHead>Data Distribuição</TableHead>
+                    <TableHead>Parceiro</TableHead>
+                    <TableHead>Serviço</TableHead>
+                    <TableHead>Recebido em</TableHead>
+                    <TableHead className="w-[80px]">Confirm.</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {paginatedDistributions.map((dist) => (
+                    <TableRow key={dist.id}>
+                      <TableCell className="font-mono text-sm">{dist.process_number}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline"><Building2 className="mr-1 h-3 w-3" />{dist.tribunal || "N/A"}</Badge>
+                      </TableCell>
+                      <TableCell>{dist.term || "-"}</TableCell>
+                      <TableCell>
+                        {dist.distribution_date ? format(new Date(dist.distribution_date), "dd/MM/yyyy", { locale: ptBR }) : "-"}
+                      </TableCell>
+                      <TableCell className="text-sm">{(dist as any).partners?.name || "-"}</TableCell>
+                      <TableCell className="text-muted-foreground">{(dist.partner_services as any)?.service_name || "-"}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {dist.created_at ? format(new Date(dist.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR }) : "-"}
+                      </TableCell>
+                      <TableCell>
+                        <ConfirmationBadge
+                          recordId={dist.id}
+                          recordType="distributions"
+                          isConfirmed={confirmedIds.has(dist.id)}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between mt-4">
+                  <p className="text-sm text-muted-foreground">
+                    Mostrando {(currentPage - 1) * itemsPerPage + 1} a{" "}
+                    {Math.min(currentPage * itemsPerPage, totalItems)} de {totalItems} distribuições
+                  </p>
+                  <Pagination>
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious
+                          onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                          className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                        />
+                      </PaginationItem>
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let pageNum;
+                        if (totalPages <= 5) pageNum = i + 1;
+                        else if (currentPage <= 3) pageNum = i + 1;
+                        else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
+                        else pageNum = currentPage - 2 + i;
+                        return (
+                          <PaginationItem key={pageNum}>
+                            <PaginationLink onClick={() => setCurrentPage(pageNum)} isActive={currentPage === pageNum} className="cursor-pointer">
+                              {pageNum}
+                            </PaginationLink>
+                          </PaginationItem>
+                        );
+                      })}
+                      <PaginationItem>
+                        <PaginationNext
+                          onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                          className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

@@ -54,7 +54,7 @@ export function PublicationsTable() {
   const [partnerOptions, setPartnerOptions] = useState<{ id: string; name: string }[]>([]);
   const [clientOptions, setClientOptions] = useState<{ id: string; name: string }[]>([]);
   const [confirmedIds, setConfirmedIds] = useState<Set<string>>(new Set());
-  const itemsPerPage = 20;
+  const itemsPerPage = 10;
 
   useEffect(() => {
     fetchPublications();
