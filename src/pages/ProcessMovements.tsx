@@ -526,8 +526,6 @@ export default function ProcessMovements() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Número do Processo</TableHead>
-                    <TableHead>Escritório</TableHead>
-                    <TableHead>Tribunal</TableHead>
                     <TableHead>UF</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Andamentos</TableHead>
