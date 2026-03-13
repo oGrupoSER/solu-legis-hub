@@ -420,8 +420,7 @@ serve(async (req) => {
             if (!pn) continue;
 
             const inst = proc.instancia ? String(proc.instancia) : '1';
-            const statusString = (proc.status || '').toUpperCase();
-            const statusCode = proc.codStatus || proc.statusCode || STATUS_STRING_TO_CODE[statusString] || 2;
+            const resolved = resolveStatus(proc);
 
             const upsertData: any = {
               process_number: pn,
@@ -430,15 +429,16 @@ serve(async (req) => {
               partner_id: service.partner_id,
               cod_escritorio: officeCode,
               cod_processo: proc.codProcesso || null,
-              status_code: statusCode,
-              status_description: STATUS_CODES[statusCode] || proc.descricaoStatus || proc.status || 'Desconhecido',
+              status: resolved.statusLabel,
+              status_code: resolved.statusCode,
+              status_description: resolved.statusLabel,
               solucionare_status: 'synced',
               raw_data: proc,
               updated_at: new Date().toISOString(),
               uf: proc.UF || proc.uf || null,
               data_cadastro: proc.dataCadastro || null,
-              cod_classificacao_status: proc.codClassificacaoStatus || null,
-              descricao_classificacao_status: proc.descricaoClassificacaoStatus || null,
+              cod_classificacao_status: resolved.codClassificacaoStatus,
+              descricao_classificacao_status: resolved.descricaoClassificacaoStatus,
             };
 
             const { error } = await supabase
