@@ -527,7 +527,16 @@ async function syncAllMovementsByProcess(client: RestClient, supabase: any, serv
         }
       } catch (err) {
         console.error(`Error fetching movements for process ${process.cod_processo}:`, err);
+      } catch (err) {
+        console.error(`Error fetching movements for process ${process.cod_processo}:`, err);
       }
+    }
+
+    return totalSynced;
+  } catch (error) {
+    console.error('Error in syncAllMovementsByProcess:', error);
+    return 0;
+  }
 }
 
 /**
