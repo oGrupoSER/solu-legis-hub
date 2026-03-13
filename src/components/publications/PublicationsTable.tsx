@@ -41,7 +41,7 @@ export function PublicationsTable() {
   const [selectedPublication, setSelectedPublication] = useState<Publication | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterGazette, setFilterGazette] = useState<string>("all");
-  const [filterPartner, setFilterPartner] = useState<string>("all");
+  
   const [filterClient, setFilterClient] = useState<string>("all");
   const [filterConfirmation, setFilterConfirmation] = useState<string>("all");
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
