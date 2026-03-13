@@ -256,7 +256,7 @@ const PublicationTerms = () => {
                 <TableRow>
                    <TableHead>Termo</TableHead>
                    <TableHead>Tipo</TableHead>
-                   <TableHead>Clientes</TableHead>
+                   
                    <TableHead>Solucionare</TableHead>
                    <TableHead>Status</TableHead>
                    <TableHead className="text-right">Ações</TableHead>
