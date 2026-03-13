@@ -129,8 +129,17 @@ Deno.serve(async (req) => {
     const tokenJWT = authResult?.tokenJWT;
     if (!tokenJWT) throw new Error('Authentication failed: no tokenJWT returned');
 
-    // 2. Fetch existing terms from Solucionare
-    console.log('Step 2: Fetching existing terms from Solucionare...');
+    // 2. Get entitled clients for auto-linking imported terms
+    const { data: entitledClients } = await supabase
+      .from('client_system_services')
+      .select('client_system_id')
+      .eq('partner_service_id', serviceId)
+      .eq('is_active', true);
+    const entitledClientIds = (entitledClients || []).map((c: any) => c.client_system_id);
+    console.log(`Found ${entitledClientIds.length} entitled clients for service ${serviceId}`);
+
+    // 3. Fetch existing terms from Solucionare
+    console.log('Step 3: Fetching existing terms from Solucionare...');
     let termsImported = 0;
     let codUltimoNome = 1;
     let hasMore = true;
