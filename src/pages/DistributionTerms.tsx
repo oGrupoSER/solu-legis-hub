@@ -762,8 +762,6 @@ export default function DistributionTerms() {
                 <TableRow>
                   <TableHead>Nome</TableHead>
                   <TableHead>Tipo Consulta</TableHead>
-                  <TableHead>Parceiro</TableHead>
-                  <TableHead>Clientes</TableHead>
                   <TableHead>Solucionare</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Cadastrado em</TableHead>
