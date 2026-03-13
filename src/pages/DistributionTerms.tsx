@@ -616,12 +616,12 @@ export default function DistributionTerms() {
     onError: (error) => toast.error(`Erro ao sincronizar: ${error.message}`),
   });
 
-  // Delete mutation — call edge function to delete from API + local
-  const deleteMutation = useMutation({
+  // Deactivate mutation — call edge function to deactivate on API + local
+  const deactivateMutation = useMutation({
     mutationFn: async (term: DistributionTerm) => {
       if (!term.solucionare_code) {
-        // No solucionare_code, just delete locally
-        const { error } = await supabase.from("search_terms").delete().eq("id", term.id);
+        // No solucionare_code, just deactivate locally
+        const { error } = await supabase.from("search_terms").update({ is_active: false }).eq("id", term.id);
         if (error) throw error;
         return;
       }
@@ -631,24 +631,19 @@ export default function DistributionTerms() {
 
       const { data, error } = await supabase.functions.invoke("manage-distribution-terms", {
         body: {
-          action: "deleteName",
+          action: "deactivateName",
           serviceId,
           codNome: term.solucionare_code,
-          termo: term.term,
         },
       });
       if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || "Erro ao excluir");
-
-      // Also delete the local record
-      await supabase.from("client_search_terms").delete().eq("search_term_id", term.id);
-      await supabase.from("search_terms").delete().eq("id", term.id);
+      if (!data?.success) throw new Error(data?.error || "Erro ao desativar");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["distribution-terms"] });
-      toast.success("Nome removido com sucesso");
+      toast.success("Nome desativado com sucesso");
     },
-    onError: (error) => toast.error(`Erro ao remover: ${error.message}`),
+    onError: (error) => toast.error(`Erro ao desativar: ${error.message}`),
   });
 
   const filteredTerms = terms.filter((t) => {
@@ -811,11 +806,13 @@ export default function DistributionTerms() {
                             <Button size="sm" variant="ghost" onClick={() => { setEditTerm(term); }}>
                               <Edit className="h-3.5 w-3.5 mr-1" /> Editar
                             </Button>
-                            <Button size="sm" variant="ghost" className="text-destructive" onClick={() => {
-                              if (confirm("Tem certeza que deseja excluir este nome? Ele será removido também do parceiro.")) deleteMutation.mutate(term);
-                            }}>
-                              Excluir
-                            </Button>
+                            {term.is_active && (
+                              <Button size="sm" variant="ghost" className="text-amber-600" onClick={() => {
+                                if (confirm("Tem certeza que deseja desativar este nome? Ele será desativado no parceiro.")) deactivateMutation.mutate(term);
+                              }}>
+                                Desativar
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
