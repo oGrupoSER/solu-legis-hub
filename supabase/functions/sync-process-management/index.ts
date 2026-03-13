@@ -21,11 +21,11 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 const STATUS_CODES: Record<number, string> = {
-  2: 'Validando',
-  4: 'Cadastrado',
-  5: 'Arquivado',
-  6: 'Segredo de Justiça',
-  7: 'Erro na Validação',
+  2: 'VALIDANDO',
+  4: 'CADASTRADO',
+  5: 'ARQUIVADO',
+  6: 'SEGREDO',
+  7: 'ERRO',
 };
 
 const STATUS_STRING_TO_CODE: Record<string, number> = {
@@ -36,9 +36,33 @@ const STATUS_STRING_TO_CODE: Record<string, number> = {
   'SEGREDO DE JUSTICA': 6,
   'SEGREDO DE JUSTIÇA': 6,
   'ERRO': 7,
+  'ERRO NA VALIDACAO': 7,
+  'ERRO NA VALIDAÇÃO': 7,
 };
 
 const INSTANCES = [1, 2, 3];
+
+function normalizeStatusPayload(payload: any): any {
+  if (Array.isArray(payload)) return payload[0] ?? null;
+  if (payload && typeof payload === 'object' && payload[0]) return payload[0];
+  return payload;
+}
+
+function resolveStatus(payload: any) {
+  const statusString = String(payload?.status || '').trim().toUpperCase();
+  const mappedCode = statusString ? STATUS_STRING_TO_CODE[statusString] : undefined;
+  const statusCode = mappedCode || payload?.codStatus || payload?.statusCode || 2;
+  const statusLabel = String(
+    payload?.status || STATUS_CODES[statusCode] || payload?.descricaoStatus || 'DESCONHECIDO'
+  ).trim();
+
+  return {
+    statusCode,
+    statusLabel,
+    codClassificacaoStatus: payload?.codClassificacaoStatus ?? null,
+    descricaoClassificacaoStatus: payload?.descricaoClassificacaoStatus ?? null,
+  };
+}
 
 async function getOfficeCode(supabase: any, serviceId: string): Promise<number> {
   const { data, error } = await supabase
