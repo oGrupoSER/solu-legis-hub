@@ -144,6 +144,7 @@ export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: Proce
         <TableHeader>
           <TableRow>
               <TableHead>Número do Processo</TableHead>
+              <TableHead>Código</TableHead>
               <TableHead>UF</TableHead>
               <TableHead>Instância</TableHead>
               <TableHead>Status</TableHead>
