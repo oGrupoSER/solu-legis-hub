@@ -81,8 +81,6 @@ export function PublicationsTable() {
     setGazetteOptions(gazettes as string[]);
 
     const { data: clientData } = await supabase
-
-    const { data: clientData } = await supabase
       .from("client_systems")
       .select("id, name")
       .eq("is_active", true);
