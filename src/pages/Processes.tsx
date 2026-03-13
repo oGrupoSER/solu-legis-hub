@@ -10,47 +10,16 @@ import { ProcessesTable } from "@/components/processes/ProcessesTable";
 import { ProcessDialog } from "@/components/processes/ProcessDialog";
 import { ProcessesStats } from "@/components/processes/ProcessesStats";
 import { BulkClientLinkDialog } from "@/components/shared/BulkClientLinkDialog";
+import { SyncProgressDialog } from "@/components/processes/SyncProgressDialog";
 import { supabase } from "@/integrations/supabase/client";
 
 const Processes = () => {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [bulkLinkOpen, setBulkLinkOpen] = useState(false);
-  const [syncing, setSyncing] = useState(false);
+  const [syncDialogOpen, setSyncDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
-
-  const handleSync = async () => {
-    try {
-      setSyncing(true);
-      
-      // Step 1: Send pending processes to Solucionare
-      toast.info("Enviando processos pendentes e sincronizando...");
-      const { data: sendData } = await supabase.functions.invoke("sync-process-management", {
-        body: { action: "send-pending" },
-      });
-      const sent = sendData?.sent || 0;
-
-      // Step 2: Fetch/update from Solucionare
-      const { data, error } = await supabase.functions.invoke("sync-process-management", {
-        body: { action: "sync" },
-      });
-
-      if (error) throw error;
-      
-      const synced = data?.synced || 0;
-      const parts = [];
-      if (sent > 0) parts.push(`${sent} enviados`);
-      if (synced > 0) parts.push(`${synced} atualizados`);
-      toast.success(`Sincronização concluída${parts.length > 0 ? ': ' + parts.join(', ') : ''}`);
-      setRefreshTrigger(prev => prev + 1);
-    } catch (error) {
-      console.error("Sync error:", error);
-      toast.error("Erro ao sincronizar processos");
-    } finally {
-      setSyncing(false);
-    }
-  };
 
   const handleProcessCreated = () => {
     setDialogOpen(false);
@@ -115,13 +84,12 @@ const Processes = () => {
             Vincular Clientes
           </Button>
           <Button
-            onClick={handleSync}
+            onClick={() => setSyncDialogOpen(true)}
             variant="outline"
             size="sm"
             className="gap-2"
-            disabled={syncing}
           >
-            <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
+            <RefreshCw className="h-4 w-4" />
             Sincronizar
           </Button>
           <Button
@@ -189,6 +157,12 @@ const Processes = () => {
         onOpenChange={setBulkLinkOpen}
         entityType="processes"
         onSuccess={() => setRefreshTrigger(prev => prev + 1)}
+      />
+
+      <SyncProgressDialog
+        open={syncDialogOpen}
+        onOpenChange={setSyncDialogOpen}
+        onComplete={() => setRefreshTrigger(prev => prev + 1)}
       />
     </div>
   );

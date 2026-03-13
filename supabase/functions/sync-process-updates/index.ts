@@ -590,262 +590,143 @@ async function linkOrphanDocuments(supabase: any): Promise<number> {
 
 /**
  * Sync Covers (Capas) with Parties and Lawyers
- * GET /BuscaProcessosComCapaAtualizada?codEscritorio={code} - returns list of codProcesso with updated covers
- * POST /BuscaDadosCapaEStatusVariosProcessos - gets cover details for multiple processes
+ * For each CADASTRADO process with cod_processo, call GET /BuscaDadosCapaProcessoPorProcesso?codProcesso=X
+ * Returns full cover data including autor, reu, advogados
  */
 async function syncCovers(client: RestClient, supabase: any, service: any, officeCode: number): Promise<number> {
   try {
-    // Get processes with updated covers - filtered by codEscritorio
-    let processesWithUpdates = await client.get('/BuscaProcessosComCapaAtualizada', { codEscritorio: officeCode });
-    
-    if (!Array.isArray(processesWithUpdates) || processesWithUpdates.length === 0) {
-      console.log('No processes with updated covers found');
+    // Get all local processes with cod_processo that are CADASTRADO (status_code = 4)
+    const { data: localProcesses, error: procError } = await supabase
+      .from('processes')
+      .select('id, cod_processo, process_number')
+      .eq('cod_escritorio', officeCode)
+      .not('cod_processo', 'is', null);
+
+    if (procError || !localProcesses?.length) {
+      console.log('No processes found for cover sync');
       return 0;
     }
 
-    console.log(`Found ${processesWithUpdates.length} processes with updated covers (filtered by codEscritorio=${officeCode})`);
-
-    // Create a map from codProcesso to codProcessoCapaAtualizada for confirmation
-    const confirmationMap = new Map<number, number>();
-    for (const p of processesWithUpdates) {
-      if (p.codProcesso && p.codProcessoCapaAtualizada) {
-        confirmationMap.set(p.codProcesso, p.codProcessoCapaAtualizada);
-      }
-    }
-
-    // Get cover details for these processes
-    const codProcessos = processesWithUpdates.map((p: any) => p.codProcesso || p).filter(Boolean);
-    
-    if (codProcessos.length === 0) return 0;
-
-    // POST /BuscaDadosCapaEStatusVariosProcessos expects array of codProcesso directly
-    const coversData = await client.post('/BuscaDadosCapaEStatusVariosProcessos', codProcessos);
-
-    if (!Array.isArray(coversData) || coversData.length === 0) {
-      console.log('No cover data returned');
-      return 0;
-    }
-
-    console.log(`Got cover data for ${coversData.length} processes`);
-
-    // Get all process IDs and grouper IDs in batch
-    const uniqueCodProcessos = [...new Set(coversData.map((c: any) => c.codProcesso).filter(Boolean))];
-    const uniqueCodAgrupadores = [...new Set(coversData.map((c: any) => c.codAgrupador).filter(Boolean))];
-
-    // Auto-create any processes that don't exist yet
-    const { data: existingProcesses } = await supabase
-      .from('processes')
-      .select('id, cod_processo')
-      .in('cod_processo', uniqueCodProcessos);
-    
-    const existingCodProcessos = new Set((existingProcesses || []).map((p: any) => p.cod_processo));
-    const missingCodProcessos = uniqueCodProcessos.filter(cp => !existingCodProcessos.has(cp));
-
-    if (missingCodProcessos.length > 0) {
-      console.log(`Auto-creating ${missingCodProcessos.length} missing processes from covers`);
-      
-      for (const codProcesso of missingCodProcessos) {
-        const cover = coversData.find((c: any) => c.codProcesso === codProcesso);
-        const processNumber = cover?.numProcesso || `unknown-${codProcesso}`;
-        
-        const { data: existingByCod } = await supabase
-          .from('processes')
-          .select('id')
-          .eq('cod_processo', codProcesso)
-          .single();
-        
-        if (existingByCod) continue;
-        
-        const { error: insertError } = await supabase
-          .from('processes')
-          .insert({
-            process_number: processNumber,
-            cod_processo: codProcesso,
-            cod_escritorio: officeCode,
-            partner_service_id: service.id,
-            partner_id: service.partner_id,
-            status_code: 4,
-            status_description: 'Cadastrado',
-            raw_data: { source: 'cover_sync', codProcesso },
-          });
-        
-        if (insertError) {
-          if (insertError.code === '23505') {
-            await supabase
-              .from('processes')
-              .update({ cod_processo: codProcesso, cod_escritorio: officeCode })
-              .eq('process_number', processNumber)
-              .is('cod_processo', null);
-          } else {
-            console.error(`Error inserting process ${processNumber}:`, insertError);
-          }
-        }
-      }
-    }
-
-    // Re-fetch processes after auto-creation
-    const { data: processes } = await supabase
-      .from('processes')
-      .select('id, cod_processo')
-      .in('cod_processo', uniqueCodProcessos);
-    
-    const processMap = new Map((processes || []).map((p: any) => [p.cod_processo, p.id]));
-
-    const { data: groupers } = await supabase
-      .from('process_groupers')
-      .select('id, cod_agrupador')
-      .in('cod_agrupador', uniqueCodAgrupadores);
-    
-    const grouperMap = new Map((groupers || []).map((g: any) => [g.cod_agrupador, g.id]));
+    console.log(`Fetching covers for ${localProcesses.length} processes`);
 
     let synced = 0;
-    const confirmIds: number[] = [];
-    const coverInserts: any[] = [];
-    const partyInserts: any[] = [];
-    const lawyerInserts: any[] = [];
-    const processUpdates: any[] = [];
 
-    for (const cover of coversData) {
-      const processId = processMap.get(cover.codProcesso);
-      if (!processId) {
-        console.log(`Process not found for codProcesso: ${cover.codProcesso}`);
-        continue;
-      }
+    for (const proc of localProcesses) {
+      try {
+        const coversData = await client.get('/BuscaDadosCapaProcessoPorProcesso', { codProcesso: proc.cod_processo });
 
-      const dadosCapa = Array.isArray(cover.dadosCapa) && cover.dadosCapa.length > 0 
-        ? cover.dadosCapa[0] 
-        : {};
-      
-      const codAgrupador = dadosCapa.codAgrupador || cover.codAgrupador || null;
-      const grouperId = codAgrupador ? grouperMap.get(codAgrupador) || null : null;
-
-      let valorCausa = null;
-      if (dadosCapa.valor) {
-        const valorStr = dadosCapa.valor.replace(/[R$\s.]/g, '').replace(',', '.');
-        valorCausa = parseFloat(valorStr) || null;
-      }
-
-      coverInserts.push({
-        process_id: processId,
-        grouper_id: grouperId,
-        cod_agrupador: codAgrupador,
-        cod_processo: cover.codProcesso,
-        comarca: dadosCapa.comarca || null,
-        vara: dadosCapa.vara || null,
-        tribunal: dadosCapa.tribunal || cover.nomeSistema || null,
-        assunto: dadosCapa.assunto || null,
-        natureza: dadosCapa.natureza || null,
-        tipo_acao: dadosCapa.tipoAcao || null,
-        classe: dadosCapa.classe || null,
-        juiz: dadosCapa.juiz || null,
-        situacao: cover.status || dadosCapa.situacao || null,
-        area: dadosCapa.area || null,
-        valor_causa: valorCausa,
-        data_distribuicao: dadosCapa.dataDistribuicao || null,
-        data_atualizacao: dadosCapa.dataRecebimento || cover.dataUltimaConsultaProcesso || null,
-        raw_data: cover,
-      });
-
-      const confirmId = confirmationMap.get(cover.codProcesso);
-      if (confirmId) {
-        confirmIds.push(confirmId);
-      }
-      synced++;
-
-      const allParties = [
-        ...(Array.isArray(cover.autor) ? cover.autor : []),
-        ...(Array.isArray(cover.reu) ? cover.reu : []),
-        ...(Array.isArray(cover.outrosEnvolvidos) ? cover.outrosEnvolvidos : []),
-      ];
-      
-      for (const polo of allParties) {
-        if (!polo.nome) continue;
-        partyInserts.push({
-          process_id: processId,
-          cod_processo_polo: polo.codProcessoPolo || null,
-          cod_agrupador: polo.codAgrupador || codAgrupador || null,
-          tipo_polo: polo.tipoPolo || (polo.descricaoTipoPolo === 'Ativo' ? 1 : 2),
-          nome: polo.nome,
-          cpf: polo.cpf || null,
-          cnpj: polo.cnpj || null,
-          tipo_pessoa: polo.tipoPessoa || null,
-          raw_data: polo,
-        });
-      }
-
-      if (Array.isArray(cover.advogadoProcesso)) {
-        for (const adv of cover.advogadoProcesso) {
-          if (!adv.nome) continue;
-          lawyerInserts.push({
-            process_id: processId,
-            cod_processo_polo: adv.codProcessoPolo || null,
-            cod_agrupador: adv.codAgrupador || codAgrupador || null,
-            nome_advogado: adv.nome || adv.nomeAdvogado,
-            num_oab: adv.oab || adv.numOAB || null,
-            uf_oab: adv.ufOAB || null,
-            tipo_oab: adv.tipoOAB || null,
-            raw_data: adv,
-          });
+        if (!Array.isArray(coversData) || coversData.length === 0) {
+          continue;
         }
+
+        for (const cover of coversData) {
+          const codAgrupador = cover.codAgrupador || null;
+
+          // Find or skip grouper
+          let grouperId = null;
+          if (codAgrupador) {
+            const { data: grp } = await supabase
+              .from('process_groupers')
+              .select('id')
+              .eq('cod_agrupador', codAgrupador)
+              .maybeSingle();
+            grouperId = grp?.id || null;
+          }
+
+          let valorCausa = null;
+          if (cover.valor) {
+            const valorStr = String(cover.valor).replace(/[R$\s.]/g, '').replace(',', '.');
+            valorCausa = parseFloat(valorStr) || null;
+          }
+
+          const coverInsert = {
+            process_id: proc.id,
+            grouper_id: grouperId,
+            cod_agrupador: codAgrupador,
+            cod_processo: cover.codProcesso,
+            comarca: cover.comarca || null,
+            vara: cover.vara || null,
+            tribunal: cover.tribunal || null,
+            assunto: cover.assunto || null,
+            natureza: cover.natureza || null,
+            tipo_acao: cover.tipoAcao || null,
+            juiz: cover.juiz || null,
+            area: cover.area || null,
+            valor_causa: valorCausa,
+            data_distribuicao: cover.dataDistribuicao || null,
+            digital: cover.digital ?? null,
+            link_consulta_processo: cover.linkConsultaProcesso || null,
+            sigla_sistema: cover.siglaSistema || null,
+            nome_sistema: cover.nomeSistema || null,
+            cod_sistema: cover.codSistema || null,
+            raw_data: cover,
+          };
+
+          const { error: coverError } = await supabase
+            .from('process_covers')
+            .upsert(coverInsert, { onConflict: 'process_id,cod_agrupador' });
+
+          if (coverError) {
+            console.error(`Error upserting cover for process ${proc.cod_processo}:`, coverError);
+            continue;
+          }
+
+          // Parties: autor + reu + outrosEnvolvidos
+          const allParties = [
+            ...(Array.isArray(cover.autor) ? cover.autor : []),
+            ...(Array.isArray(cover.reu) ? cover.reu : []),
+            ...(Array.isArray(cover.outrosEnvolvidos) ? cover.outrosEnvolvidos : []),
+          ];
+
+          for (const polo of allParties) {
+            if (!polo.nome) continue;
+            await supabase
+              .from('process_parties')
+              .upsert({
+                process_id: proc.id,
+                cod_processo_polo: polo.codProcessoPolo || null,
+                cod_agrupador: polo.codAgrupador || codAgrupador || null,
+                tipo_polo: polo.tipoPolo || (polo.descricaoTipoPolo === 'Ativo' ? 1 : 2),
+                nome: polo.nome,
+                cpf: polo.cpf || null,
+                cnpj: polo.cnpj || null,
+                tipo_pessoa: polo.tipoPessoa || null,
+                raw_data: polo,
+              }, { onConflict: 'process_id,nome,tipo_polo', ignoreDuplicates: true });
+          }
+
+          // Lawyers
+          if (Array.isArray(cover.advogadoProcesso)) {
+            for (const adv of cover.advogadoProcesso) {
+              if (!adv.nome) continue;
+              await supabase
+                .from('process_lawyers')
+                .upsert({
+                  process_id: proc.id,
+                  cod_processo_polo: adv.codProcessoPolo || null,
+                  cod_agrupador: adv.codAgrupador || codAgrupador || null,
+                  nome_advogado: adv.nome,
+                  num_oab: adv.oab || null,
+                  raw_data: adv,
+                }, { onConflict: 'process_id,cod_processo_polo,nome_advogado', ignoreDuplicates: true });
+            }
+          }
+
+          synced++;
+        }
+
+        // Update last_cover_sync_at
+        await supabase
+          .from('processes')
+          .update({ last_cover_sync_at: new Date().toISOString() })
+          .eq('id', proc.id);
+
+      } catch (coverErr) {
+        console.error(`Error fetching cover for codProcesso ${proc.cod_processo}:`, coverErr);
       }
-
-      processUpdates.push({
-        id: processId,
-        last_cover_sync_at: new Date().toISOString(),
-        process_number: cover.numProcesso || undefined,
-      });
     }
 
-    // Batch upsert covers
-    if (coverInserts.length > 0) {
-      const { error: coverError } = await supabase
-        .from('process_covers')
-        .upsert(coverInserts, { onConflict: 'process_id,cod_agrupador' });
-      
-      if (coverError) {
-        console.error('Error batch upserting covers:', coverError);
-      } else {
-        console.log(`Batch upserted ${coverInserts.length} covers`);
-      }
-    }
-
-    // Batch upsert parties
-    if (partyInserts.length > 0) {
-      const { error: partyError } = await supabase
-        .from('process_parties')
-        .upsert(partyInserts, { onConflict: 'process_id,nome,tipo_polo', ignoreDuplicates: true });
-      
-      if (partyError) {
-        console.error('Error batch upserting parties:', partyError);
-      } else {
-        console.log(`Batch upserted ${partyInserts.length} parties`);
-      }
-    }
-
-    // Batch upsert lawyers
-    if (lawyerInserts.length > 0) {
-      const { error: lawyerError } = await supabase
-        .from('process_lawyers')
-        .upsert(lawyerInserts, { onConflict: 'process_id,cod_processo_polo,nome_advogado', ignoreDuplicates: true });
-      
-      if (lawyerError) {
-        console.error('Error batch upserting lawyers:', lawyerError);
-      } else {
-        console.log(`Batch upserted ${lawyerInserts.length} lawyers`);
-      }
-    }
-
-    // Update processes
-    for (const update of processUpdates) {
-      const { id, ...data } = update;
-      await supabase.from('processes').update(data).eq('id', id);
-    }
-
-    // DISABLED: Do not confirm receipt - legacy system is the official confirmer
-    if (confirmIds.length > 0) {
-      console.log(`Skipping confirmation for ${confirmIds.length} cover updates (legacy system handles confirmations)`);
-    }
-
+    console.log(`Synced ${synced} covers`);
     return synced;
   } catch (error) {
     console.error('Error syncing covers:', error);
