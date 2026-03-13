@@ -129,14 +129,93 @@ Deno.serve(async (req) => {
     const tokenJWT = authResult?.tokenJWT;
     if (!tokenJWT) throw new Error('Authentication failed: no tokenJWT returned');
 
-    // 2. Fetch publications
-    console.log('Step 2: Fetching publications...');
+    // 2. Fetch existing terms from Solucionare
+    console.log('Step 2: Fetching existing terms from Solucionare...');
+    let termsImported = 0;
+    let codUltimoNome = 1;
+    let hasMore = true;
+
+    while (hasMore) {
+      const termsResult = await apiCall(
+        `/Nome/nome_buscarPorCodEscritorio?codEscritorio=${COD_ESCRITORIO}&codUltimoNome=${codUltimoNome}`,
+        'GET', tokenJWT, undefined, serviceId, syncLogId!,
+      );
+
+      const names = Array.isArray(termsResult) ? termsResult : [];
+      console.log(`Fetched ${names.length} terms (codUltimoNome=${codUltimoNome})`);
+
+      if (names.length === 0) {
+        hasMore = false;
+        break;
+      }
+
+      for (const nameObj of names) {
+        try {
+          const nome = nameObj.nome || nameObj.name;
+          const codNome = nameObj.codNome || nameObj.cod_nome;
+          if (!nome) continue;
+
+          // Check if term already exists locally
+          const { data: existing } = await supabase
+            .from('search_terms')
+            .select('id')
+            .eq('term', nome)
+            .eq('term_type', 'name')
+            .eq('partner_service_id', serviceId)
+            .maybeSingle();
+
+          if (!existing) {
+            // Import term locally
+            await supabase.from('search_terms').insert({
+              term: nome,
+              term_type: 'name',
+              partner_id: service.partner_id,
+              partner_service_id: serviceId,
+              is_active: true,
+              solucionare_code: codNome || null,
+              solucionare_status: 'synced',
+              metadata: codNome ? { cod_nome: codNome, abrangencias: ['TODAS'] } : {},
+            });
+            termsImported++;
+            console.log(`Imported term: ${nome} (codNome: ${codNome})`);
+          } else {
+            // Update solucionare_code if we have it and it's missing locally
+            if (codNome) {
+              await supabase.from('search_terms').update({
+                solucionare_code: codNome,
+                solucionare_status: 'synced',
+                updated_at: new Date().toISOString(),
+              }).eq('id', existing.id);
+            }
+          }
+
+          // Track pagination
+          if (codNome && codNome > codUltimoNome) {
+            codUltimoNome = codNome;
+          }
+        } catch (e) {
+          console.error('Error processing term:', e);
+        }
+      }
+
+      // If we got fewer results than expected, stop paginating
+      if (names.length < 100) {
+        hasMore = false;
+      } else {
+        codUltimoNome = codUltimoNome + 1;
+      }
+    }
+
+    console.log(`Terms sync: ${termsImported} new terms imported`);
+
+    // 3. Fetch publications
+    console.log('Step 3: Fetching publications...');
     const pubResult = await apiCall(
       `/Publicacao/publicacao_buscar?codEscritorio=${COD_ESCRITORIO}`, 'GET', tokenJWT,
       undefined, serviceId, syncLogId!,
     );
 
-    // 3. Process results
+    // 4. Process publication results
     let recordsSynced = 0;
     const publications = Array.isArray(pubResult) ? pubResult : [];
     console.log(`Received ${publications.length} publications`);
@@ -182,7 +261,7 @@ Deno.serve(async (req) => {
     if (syncLogId) {
       await supabase.from('sync_logs').update({
         status: 'success',
-        records_synced: recordsSynced,
+        records_synced: recordsSynced + termsImported,
         completed_at: new Date().toISOString(),
       }).eq('id', syncLogId);
     }
@@ -192,10 +271,11 @@ Deno.serve(async (req) => {
       .update({ last_sync_at: new Date().toISOString() })
       .eq('id', serviceId);
 
-    console.log(`=== Sync complete: ${recordsSynced} new publications ===`);
+    console.log(`=== Sync complete: ${termsImported} terms imported, ${recordsSynced} new publications ===`);
 
     return new Response(JSON.stringify({
       success: true,
+      terms_imported: termsImported,
       records_synced: recordsSynced,
       total_received: publications.length,
     }), {
