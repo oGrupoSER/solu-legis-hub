@@ -207,6 +207,13 @@ Deno.serve(async (req) => {
                 updated_at: new Date().toISOString(),
               }).eq('id', existing.id);
             }
+            // Auto-link existing term to entitled clients too
+            for (const clientId of entitledClientIds) {
+              await supabase.from('client_search_terms').upsert(
+                { search_term_id: existing.id, client_system_id: clientId },
+                { onConflict: 'client_system_id,search_term_id' }
+              );
+            }
           }
 
           // Track pagination
