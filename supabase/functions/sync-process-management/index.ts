@@ -385,15 +385,17 @@ serve(async (req) => {
           console.log(`Checking status for ${localProcesses.length} local processes`);
           for (const proc of localProcesses) {
             try {
-              const statusData = await client.get('/BuscaStatusProcesso', { codProcesso: proc.cod_processo });
-              if (statusData) {
-                const statusString = (statusData.status || '').toUpperCase();
-                const statusCode = statusData.codStatus || STATUS_STRING_TO_CODE[statusString] || 2;
+              const rawStatusData = await client.get('/BuscaStatusProcesso', { codProcesso: proc.cod_processo });
+              const statusPayload = normalizeStatusPayload(rawStatusData);
+
+              if (statusPayload) {
+                const resolved = resolveStatus(statusPayload);
                 await supabase.from('processes').update({
-                  status_code: statusCode,
-                  status_description: STATUS_CODES[statusCode] || statusData.descricaoStatus || statusData.status || 'Desconhecido',
-                  cod_classificacao_status: statusData.codClassificacaoStatus || null,
-                  descricao_classificacao_status: statusData.descricaoClassificacaoStatus || null,
+                  status: resolved.statusLabel,
+                  status_code: resolved.statusCode,
+                  status_description: resolved.statusLabel,
+                  cod_classificacao_status: resolved.codClassificacaoStatus,
+                  descricao_classificacao_status: resolved.descricaoClassificacaoStatus,
                   updated_at: new Date().toISOString(),
                 }).eq('id', proc.id);
                 statusUpdated++;
