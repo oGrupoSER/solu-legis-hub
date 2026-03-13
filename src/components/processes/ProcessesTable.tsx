@@ -154,7 +154,7 @@ export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: Proce
         <TableBody>
           {loading ? (
              <TableRow>
-               <TableCell colSpan={10} className="text-center py-8">
+               <TableCell colSpan={7} className="text-center py-8">
                  <div className="animate-pulse">Carregando...</div>
               </TableCell>
             </TableRow>
