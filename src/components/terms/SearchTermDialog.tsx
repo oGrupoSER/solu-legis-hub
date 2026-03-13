@@ -293,12 +293,7 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
     finally { setIsLoading(false); }
   };
 
-  // Auto-load abrangencias when entering step 3
-  useEffect(() => {
-    if (currentStep === 2 && abrangenciasDisponiveis.length === 0 && !isLoadingAbrangencias) {
-      handleFetchAbrangencias();
-    }
-  }, [currentStep]);
+  // Abrangências is now always "TODAS" - no need to auto-load
 
   const isLastStep = currentStep === totalSteps - 1;
 
