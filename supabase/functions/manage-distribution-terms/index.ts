@@ -116,7 +116,7 @@ serve(async (req) => {
 
     const service = await getService(supabase, serviceId);
     const jwtToken = await authenticate(service);
-    const officeCode = await getOfficeCode(supabase, serviceId);
+    const { serviceCode: officeCode, partnerCode: partnerOfficeCode } = await getOfficeCodes(supabase, serviceId);
     let result;
 
     switch (action) {
