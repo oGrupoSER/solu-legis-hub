@@ -124,7 +124,7 @@ serve(async (req) => {
         // Try fetching from API first
         let apiNames: any[] = [];
         try {
-          const rawResponse = await apiRequest(service.service_url, `/BuscaNomesCadastrados?codEscritorio=${partnerOfficeCode}`, jwtToken);
+          const rawResponse = await apiRequest(service.service_url, `/BuscaNomesCadastrados?codEscritorio=${officeCode}`, jwtToken);
           console.log(`[listNames] Full API response:`, JSON.stringify(rawResponse));
           apiNames = Array.isArray(rawResponse) ? rawResponse : [];
         } catch (e: any) {
