@@ -32,6 +32,7 @@ const STATUS_STRING_TO_CODE: Record<string, number> = {
   'VALIDANDO': 2,
   'CADASTRADO': 4,
   'ARQUIVADO': 5,
+  'SEGREDO': 6,
   'SEGREDO DE JUSTICA': 6,
   'SEGREDO DE JUSTIÇA': 6,
   'ERRO': 7,
