@@ -260,7 +260,6 @@ export function PublicationsTable() {
             onClick={() => {
               setSearchTerm("");
               setFilterGazette("all");
-              setFilterPartner("all");
               setFilterClient("all");
               setFilterConfirmation("all");
               setDateRange({ from: undefined, to: undefined });
