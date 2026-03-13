@@ -108,7 +108,8 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
   }, [open, term]);
 
   const resetNewFields = () => {
-    setOab("");
+    setOabNumero("");
+    setOabUf("");
     setVariacoes([]);
     setNovaVariacao("");
     setTermosBloqueio([]);
