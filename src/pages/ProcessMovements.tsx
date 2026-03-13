@@ -604,6 +604,12 @@ export default function ProcessMovements() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <SyncProgressDialog
+        open={syncDialogOpen}
+        onOpenChange={setSyncDialogOpen}
+        onComplete={handleSyncComplete}
+      />
     </div>
   );
 }
