@@ -45,13 +45,14 @@ function resolveSolucionareEndpoint(serviceUrl: string, module: 'nomes' | 'escri
 interface ManageRequest {
   service_id: string;
   client_system_id?: string;
-  action: 'cadastrar_nome' | 'editar_nome' | 'ativar_nome' | 'desativar_nome' | 'excluir_nome' |
+  action: 'cadastrar_nome' | 'editar_nome' | 'ativar_nome' | 'desativar_nome' | 'excluir_nome' | 'excluir_nome_rest' |
           'cadastrar_escritorio' | 'ativar_escritorio' | 'desativar_escritorio' |
           'listar_nomes' | 'listar_escritorios' | 'sync_all' |
           'gerar_variacoes' | 'buscar_abrangencias' | 'visualizar_nome';
   data?: {
     nome?: string;
     cod_nome?: number;
+    term_id?: string;
     escritorio?: string;
     cod_escritorio?: number;
     instancias?: number[];
