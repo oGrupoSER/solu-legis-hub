@@ -20,6 +20,24 @@ const Processes = () => {
   const [syncDialogOpen, setSyncDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [statusOptions, setStatusOptions] = useState<{ code: number | null; description: string }[]>([]);
+
+  useEffect(() => {
+    const fetchStatusOptions = async () => {
+      const { data } = await supabase
+        .from("processes")
+        .select("status_code, status_description");
+      if (data) {
+        const map = new Map<string, { code: number | null; description: string }>();
+        data.forEach((p) => {
+          const desc = p.status_description || "Sem status";
+          if (!map.has(desc)) map.set(desc, { code: p.status_code, description: desc });
+        });
+        setStatusOptions(Array.from(map.values()));
+      }
+    };
+    fetchStatusOptions();
+  }, [refreshTrigger]);
 
   const handleProcessCreated = () => {
     setDialogOpen(false);
