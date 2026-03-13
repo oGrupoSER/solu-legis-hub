@@ -99,28 +99,6 @@ export function TermActionsDropdown({
 
         <DropdownMenuSeparator />
 
-        {term.is_active ? (
-          <DropdownMenuItem
-            onClick={() =>
-              handleAction(term.term_type === "name" ? "desativar_nome" : "desativar_escritorio")
-            }
-          >
-            <PowerOff className="mr-2 h-4 w-4" />
-            Desativar
-          </DropdownMenuItem>
-        ) : (
-          <DropdownMenuItem
-            onClick={() =>
-              handleAction(term.term_type === "name" ? "ativar_nome" : "ativar_escritorio")
-            }
-          >
-            <Power className="mr-2 h-4 w-4" />
-            Ativar
-          </DropdownMenuItem>
-        )}
-
-        <DropdownMenuSeparator />
-
         <DropdownMenuItem onClick={handleDelete} className="text-destructive focus:text-destructive">
           <Trash2 className="mr-2 h-4 w-4" />
           Excluir
