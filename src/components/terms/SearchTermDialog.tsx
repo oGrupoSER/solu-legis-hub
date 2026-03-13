@@ -82,7 +82,15 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
         setVariacoes(meta.variacoes || []);
         setTermosBloqueio(meta.termos_bloqueio || []);
         setAbrangencias(meta.abrangencias || []);
-        setOab(meta.oab || "");
+        const oabStr = meta.oab || "";
+        if (oabStr.includes("|")) {
+          const [num, uf] = oabStr.split("|");
+          setOabNumero(num || "");
+          setOabUf(uf || "");
+        } else {
+          setOabNumero("");
+          setOabUf("");
+        }
       } else {
         resetNewFields();
         setFormData({
