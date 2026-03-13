@@ -142,15 +142,12 @@ export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: Proce
       <Table>
         <TableHeader>
           <TableRow>
-             <TableHead>Número do Processo</TableHead>
-             <TableHead>Escritório</TableHead>
-             <TableHead>Tribunal</TableHead>
-             <TableHead>UF</TableHead>
-             <TableHead>Instância</TableHead>
-             <TableHead>Status</TableHead>
-             <TableHead>Solucionare</TableHead>
-             <TableHead>Clientes</TableHead>
-             <TableHead>Última Sincronização</TableHead>
+              <TableHead>Número do Processo</TableHead>
+              <TableHead>UF</TableHead>
+              <TableHead>Instância</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Solucionare</TableHead>
+              <TableHead>Última Sincronização</TableHead>
              <TableHead className="w-[60px]">Ações</TableHead>
           </TableRow>
         </TableHeader>
