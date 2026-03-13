@@ -129,8 +129,17 @@ Deno.serve(async (req) => {
     const tokenJWT = authResult?.tokenJWT;
     if (!tokenJWT) throw new Error('Authentication failed: no tokenJWT returned');
 
-    // 2. Fetch existing terms from Solucionare
-    console.log('Step 2: Fetching existing terms from Solucionare...');
+    // 2. Get entitled clients for auto-linking imported terms
+    const { data: entitledClients } = await supabase
+      .from('client_system_services')
+      .select('client_system_id')
+      .eq('partner_service_id', serviceId)
+      .eq('is_active', true);
+    const entitledClientIds = (entitledClients || []).map((c: any) => c.client_system_id);
+    console.log(`Found ${entitledClientIds.length} entitled clients for service ${serviceId}`);
+
+    // 3. Fetch existing terms from Solucionare
+    console.log('Step 3: Fetching existing terms from Solucionare...');
     let termsImported = 0;
     let codUltimoNome = 1;
     let hasMore = true;
@@ -166,7 +175,7 @@ Deno.serve(async (req) => {
 
           if (!existing) {
             // Import term locally
-            await supabase.from('search_terms').insert({
+            const { data: insertedTerm } = await supabase.from('search_terms').insert({
               term: nome,
               term_type: 'name',
               partner_id: service.partner_id,
@@ -175,8 +184,19 @@ Deno.serve(async (req) => {
               solucionare_code: codNome || null,
               solucionare_status: 'synced',
               metadata: codNome ? { cod_nome: codNome, abrangencias: ['TODAS'] } : {},
-            });
+            }).select('id').single();
             termsImported++;
+            console.log(`Imported term: ${nome} (codNome: ${codNome})`);
+
+            // Auto-link to all entitled clients
+            if (insertedTerm) {
+              for (const clientId of entitledClientIds) {
+                await supabase.from('client_search_terms').upsert(
+                  { search_term_id: insertedTerm.id, client_system_id: clientId },
+                  { onConflict: 'client_system_id,search_term_id' }
+                );
+              }
+            }
             console.log(`Imported term: ${nome} (codNome: ${codNome})`);
           } else {
             // Update solucionare_code if we have it and it's missing locally
@@ -186,6 +206,13 @@ Deno.serve(async (req) => {
                 solucionare_status: 'synced',
                 updated_at: new Date().toISOString(),
               }).eq('id', existing.id);
+            }
+            // Auto-link existing term to entitled clients too
+            for (const clientId of entitledClientIds) {
+              await supabase.from('client_search_terms').upsert(
+                { search_term_id: existing.id, client_system_id: clientId },
+                { onConflict: 'client_system_id,search_term_id' }
+              );
             }
           }
 
