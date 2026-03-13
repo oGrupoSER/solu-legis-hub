@@ -543,8 +543,6 @@ export default function ProcessMovements() {
                     paginatedProcesses.map((proc) => (
                       <TableRow key={proc.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/processes/${proc.id}`)}>
                         <TableCell className="font-mono text-sm">{proc.process_number}</TableCell>
-                        <TableCell>{proc.cod_escritorio || "-"}</TableCell>
-                        <TableCell>{proc.tribunal || "-"}</TableCell>
                         <TableCell>{proc.uf || "-"}</TableCell>
                         <TableCell>
                           <Badge variant="outline">{getStatusLabel(proc)}</Badge>
