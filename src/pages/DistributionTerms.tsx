@@ -509,8 +509,15 @@ function DistributionTermDialog({
     : "Adicione um nome para monitorar novas distribuições. Preencha os dados em cada aba.";
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+    <Dialog open={open} onOpenChange={(o) => { if (!registerMutation.isPending) handleOpenChange(o); }}>
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col" onPointerDownOutside={(e) => { if (registerMutation.isPending) e.preventDefault(); }} onEscapeKeyDown={(e) => { if (registerMutation.isPending) e.preventDefault(); }}>
+        {registerMutation.isPending && (
+          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/80 backdrop-blur-sm rounded-lg">
+            <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+            <p className="text-lg font-medium text-foreground">{isEditing ? "Atualizando nome..." : "Cadastrando nome..."}</p>
+            <p className="text-sm text-muted-foreground mt-1">Aguarde, estamos processando no parceiro</p>
+          </div>
+        )}
         <DialogHeader>
           <DialogTitle>{dialogTitle}</DialogTitle>
           <DialogDescription>{dialogDesc}</DialogDescription>
@@ -545,7 +552,7 @@ function DistributionTermDialog({
         </Tabs>
 
         <DialogFooter className="pt-2 border-t">
-          <Button variant="outline" onClick={() => handleOpenChange(false)}>Cancelar</Button>
+          <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={registerMutation.isPending}>Cancelar</Button>
           <Button onClick={() => registerMutation.mutate()} disabled={registerMutation.isPending}>
             {registerMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {isEditing ? "Atualizar" : "Cadastrar"}
