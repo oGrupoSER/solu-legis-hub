@@ -166,11 +166,18 @@ serve(async (req) => {
           console.log(`Total synced ${totalDocs} documents in ${batchCount} batches`);
         }
 
-        // 4.1 Link orphan documents to processes
-        if (syncType === 'full' || syncType === 'documents') {
+        // 4.1 Sync ALL Documents per Process - BuscaTodosDocumentosPorProcesso
+        if (syncType === 'full' || syncType === 'all-documents') {
+          const allDocsSynced = await syncAllDocumentsByProcess(client, supabase, service);
+          totalSynced += allDocsSynced;
+          console.log(`Synced ${allDocsSynced} documents via BuscaTodosDocumentosPorProcesso`);
+        }
+
+        // 4.2 Link orphan documents to processes
+        if (syncType === 'full' || syncType === 'documents' || syncType === 'all-documents') {
           const linkedDocs = await linkOrphanDocuments(supabase);
 
-          // 4.2 Trigger document download to Storage
+          // 4.3 Trigger document download to Storage
           try {
             console.log('Triggering document download to Storage...');
             const downloadResponse = await fetch(`${supabaseUrl}/functions/v1/download-process-documents`, {

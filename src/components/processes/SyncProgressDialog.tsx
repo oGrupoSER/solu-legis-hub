@@ -21,6 +21,7 @@ const INITIAL_STAGES: Omit<SyncStage, "status">[] = [
   { id: "movements", label: "Buscando novos andamentos" },
   { id: "all-movements", label: "Buscando todos andamentos por processo" },
   { id: "documents", label: "Buscando documentos" },
+  { id: "all-documents", label: "Buscando todos documentos por processo" },
   { id: "covers", label: "Atualizando capas dos processos" },
   { id: "dependencies", label: "Buscando dependências" },
 ];
