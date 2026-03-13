@@ -16,6 +16,7 @@ import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { useNavigate } from "react-router-dom";
 import { DateRangePicker } from "@/components/publications/DateRangePicker";
 import { ConfirmationBadge } from "@/components/shared/ConfirmationBadge";
+import { SyncProgressDialog } from "@/components/processes/SyncProgressDialog";
 import { cn } from "@/lib/utils";
 import {
   Pagination,
