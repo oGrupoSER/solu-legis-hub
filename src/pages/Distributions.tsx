@@ -268,8 +268,6 @@ export default function Distributions() {
                       <TableCell>
                         {dist.distribution_date ? format(new Date(dist.distribution_date), "dd/MM/yyyy", { locale: ptBR }) : "-"}
                       </TableCell>
-                      <TableCell className="text-sm">{(dist as any).partners?.name || "-"}</TableCell>
-                      <TableCell className="text-muted-foreground">{(dist.partner_services as any)?.service_name || "-"}</TableCell>
                       <TableCell className="text-muted-foreground">
                         {dist.created_at ? format(new Date(dist.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR }) : "-"}
                       </TableCell>

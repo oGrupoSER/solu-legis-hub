@@ -322,12 +322,6 @@ export function PublicationsTable() {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="text-sm">
-                    <div>
-                      <div className="font-medium">{publication.partners?.name || "-"}</div>
-                      <div className="text-muted-foreground text-xs">{publication.partner_services?.service_name || "-"}</div>
-                    </div>
-                  </TableCell>
                   <TableCell className="max-w-xs">
                     <div className="text-sm text-muted-foreground line-clamp-2">
                       <HighlightedContent content={publication.content || ""} terms={publication.matched_terms || []} maxLength={150} />
