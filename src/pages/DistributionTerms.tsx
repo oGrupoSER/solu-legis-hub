@@ -405,6 +405,13 @@ function DistributionTermDialog({
     setActiveTab("basics");
   };
 
+  // Populate form when editTerm changes
+  useEffect(() => {
+    if (editTerm && open) {
+      populateEdit();
+    }
+  }, [editTerm, open]);
+
   // Reset on open/close
   const handleOpenChange = (o: boolean) => {
     if (o && editTerm) {
