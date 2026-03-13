@@ -92,7 +92,6 @@ export default function Distributions() {
         .limit(200);
 
       if (searchTerm) query = query.or(`process_number.ilike.%${searchTerm}%,term.ilike.%${searchTerm}%`);
-      if (filterPartner !== "all") query = query.eq("partner_id", filterPartner);
       if (clientTermFilter) query = query.in("term", clientTermFilter);
       if (dateRange.from) query = query.gte("distribution_date", format(dateRange.from, "yyyy-MM-dd"));
       if (dateRange.to) query = query.lte("distribution_date", format(dateRange.to, "yyyy-MM-dd"));
