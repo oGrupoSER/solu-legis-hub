@@ -7,7 +7,11 @@ import { Button } from "@/components/ui/button";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock, MoreHorizontal, Pencil, Trash2, RefreshCw, Info } from "lucide-react";
+import { ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock, MoreHorizontal, Pencil, Trash2, RefreshCw, Info, AlertTriangle } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { ClientBadges } from "@/components/shared/ClientBadges";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -54,6 +58,8 @@ export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: Proce
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [editProcess, setEditProcess] = useState<Process | null>(null);
+  const [deleteProcess, setDeleteProcess] = useState<Process | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const pageSize = 10;
 
   useEffect(() => {
@@ -102,17 +108,21 @@ export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: Proce
       .filter(Boolean) || [];
   };
 
-  const handleDelete = async (process: Process) => {
-    if (!confirm(`Excluir o processo ${process.process_number} do monitoramento?`)) return;
+  const confirmDelete = async () => {
+    if (!deleteProcess) return;
     try {
+      setDeleting(true);
       const { error } = await supabase.functions.invoke("sync-process-management", {
-        body: { action: "delete", processNumber: process.process_number },
+        body: { action: "delete", processNumber: deleteProcess.process_number },
       });
       if (error) throw error;
-      toast.success("Processo excluído");
+      toast.success("Processo excluído com sucesso");
       fetchProcesses();
     } catch (error) {
       toast.error("Erro ao excluir processo");
+    } finally {
+      setDeleting(false);
+      setDeleteProcess(null);
     }
   };
 
@@ -237,7 +247,7 @@ export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: Proce
                           <RefreshCw className="h-4 w-4 mr-2" /> Verificar Status
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          onClick={() => handleDelete(process)}
+                          onClick={() => setDeleteProcess(process)}
                           className="text-destructive focus:text-destructive"
                         >
                           <Trash2 className="h-4 w-4 mr-2" /> Excluir
@@ -274,6 +284,39 @@ export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: Proce
         onSuccess={() => { setEditProcess(null); fetchProcesses(); }}
         process={editProcess}
       />
+
+      <AlertDialog open={!!deleteProcess} onOpenChange={(open) => { if (!open) setDeleteProcess(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              <AlertDialogTitle>Excluir Processo</AlertDialogTitle>
+            </div>
+            <AlertDialogDescription className="space-y-2">
+              <p>
+                Tem certeza que deseja excluir o processo{" "}
+                <span className="font-mono font-semibold">{deleteProcess?.process_number}</span>?
+              </p>
+              <p>
+                Esta ação irá remover o processo do parceiro (Solucionare) e excluir
+                todos os dados locais associados, incluindo agrupadores, andamentos,
+                documentos, capas, partes e dependências.
+              </p>
+              <p className="text-destructive font-medium">Esta ação não pode ser desfeita.</p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? "Excluindo..." : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
