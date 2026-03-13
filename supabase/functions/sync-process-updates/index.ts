@@ -528,6 +528,13 @@ async function syncAllMovementsByProcess(client: RestClient, supabase: any, serv
       } catch (err) {
         console.error(`Error fetching movements for process ${process.cod_processo}:`, err);
       }
+    }
+
+    return totalSynced;
+  } catch (error) {
+    console.error('Error in syncAllMovementsByProcess:', error);
+    return 0;
+  }
 }
 
 /**
@@ -604,13 +611,6 @@ async function syncAllDocumentsByProcess(client: RestClient, supabase: any, serv
     return totalSynced;
   } catch (error) {
     console.error('Error in syncAllDocumentsByProcess:', error);
-    return 0;
-  }
-}
-
-    return totalSynced;
-  } catch (error) {
-    console.error('Error in syncAllMovementsByProcess:', error);
     return 0;
   }
 }
