@@ -39,51 +39,7 @@ export function TermActionsDropdown({
   const [isLoading, setIsLoading] = useState(false);
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
 
-  const handleAction = async (action: string) => {
-    if (!term.partner_service_id) {
-      toast.error("Termo sem serviço associado");
-      return;
-    }
-
-    setIsLoading(true);
-    setLoadingAction(action);
-
-    try {
-      const { data, error } = await supabase.functions.invoke("manage-search-terms", {
-        body: {
-          service_id: term.partner_service_id,
-          action,
-          data: {
-            nome: term.term_type === "name" ? term.term : undefined,
-            escritorio: term.term_type === "office" ? term.term : undefined,
-          },
-        },
-      });
-
-      if (error) throw error;
-
-      if (!data.success) {
-        throw new Error(data.error);
-      }
-
-      const actionLabels: Record<string, string> = {
-        ativar_nome: "Nome ativado",
-        desativar_nome: "Nome desativado",
-        excluir_nome: "Nome excluído",
-        ativar_escritorio: "Escritório ativado",
-        desativar_escritorio: "Escritório desativado",
-      };
-
-      toast.success(actionLabels[action] || "Ação realizada com sucesso");
-      onRefresh();
-    } catch (error: any) {
-      console.error("Error:", error);
-      toast.error(error.message || "Erro ao executar ação");
-    } finally {
-      setIsLoading(false);
-      setLoadingAction(null);
-    }
-  };
+  // Removed handleAction - no longer needed (activate/deactivate removed)
 
   const handleDelete = async () => {
     if (!confirm("Tem certeza que deseja excluir este termo? Esta ação não pode ser desfeita.")) {
