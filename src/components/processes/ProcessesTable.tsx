@@ -54,7 +54,7 @@ export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: Proce
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [editProcess, setEditProcess] = useState<Process | null>(null);
-  const pageSize = 20;
+  const pageSize = 10;
 
   useEffect(() => {
     setPage(0);
