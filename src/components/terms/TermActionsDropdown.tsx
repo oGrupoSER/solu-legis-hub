@@ -25,6 +25,7 @@ interface TermActionsDropdownProps {
     term_type: string;
     is_active: boolean;
     partner_service_id: string | null;
+    solucionare_code: number | null;
   };
   onEdit: () => void;
   onRefresh: () => void;
