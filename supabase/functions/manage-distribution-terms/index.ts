@@ -250,12 +250,17 @@ serve(async (req) => {
           console.log(`[listNames] Retrying ${pendingTerms.length} pending terms`);
           for (const pt of pendingTerms) {
             try {
+              // Use metadata from the term if available, otherwise use defaults
+              const { data: termData } = await supabase.from('search_terms')
+                .select('metadata').eq('id', pt.id).single();
+              const meta = (termData?.metadata || {}) as Record<string, any>;
+
               await apiRequest(service.service_url, '/CadastrarNome', jwtToken, 'POST', {
                 codEscritorio: officeCode,
                 nome: pt.term,
-                codTipoConsulta: 3,
-                listInstancias: [1],
-                listAbrangencias: [] as string[],
+                codTipoConsulta: meta.codTipoConsulta || 3,
+                listInstancias: meta.listInstancias?.length ? meta.listInstancias : [1],
+                listAbrangencias: meta.listAbrangencias || [],
               });
               await supabase.from('search_terms').update({ solucionare_status: 'synced', updated_at: new Date().toISOString() }).eq('id', pt.id);
               retriedCount++;
