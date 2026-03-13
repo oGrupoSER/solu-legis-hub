@@ -17,41 +17,9 @@ const Processes = () => {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [bulkLinkOpen, setBulkLinkOpen] = useState(false);
-  const [syncing, setSyncing] = useState(false);
+  const [syncDialogOpen, setSyncDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
-
-  const handleSync = async () => {
-    try {
-      setSyncing(true);
-      
-      // Step 1: Send pending processes to Solucionare
-      toast.info("Enviando processos pendentes e sincronizando...");
-      const { data: sendData } = await supabase.functions.invoke("sync-process-management", {
-        body: { action: "send-pending" },
-      });
-      const sent = sendData?.sent || 0;
-
-      // Step 2: Fetch/update from Solucionare
-      const { data, error } = await supabase.functions.invoke("sync-process-management", {
-        body: { action: "sync" },
-      });
-
-      if (error) throw error;
-      
-      const synced = data?.synced || 0;
-      const parts = [];
-      if (sent > 0) parts.push(`${sent} enviados`);
-      if (synced > 0) parts.push(`${synced} atualizados`);
-      toast.success(`Sincronização concluída${parts.length > 0 ? ': ' + parts.join(', ') : ''}`);
-      setRefreshTrigger(prev => prev + 1);
-    } catch (error) {
-      console.error("Sync error:", error);
-      toast.error("Erro ao sincronizar processos");
-    } finally {
-      setSyncing(false);
-    }
-  };
 
   const handleProcessCreated = () => {
     setDialogOpen(false);
