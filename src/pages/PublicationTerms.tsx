@@ -108,7 +108,10 @@ const PublicationTerms = () => {
       setSyncStats(data);
 
       if (data.success) {
-        toast.success(`Sincronização concluída: ${data.records_synced} novas publicações de ${data.total_received} recebidas`);
+        const parts = [];
+        if (data.terms_imported > 0) parts.push(`${data.terms_imported} termos importados`);
+        parts.push(`${data.records_synced} novas publicações de ${data.total_received} recebidas`);
+        toast.success(`Sincronização concluída: ${parts.join(', ')}`);
       } else {
         toast.error(data.error || "Erro na sincronização");
       }
