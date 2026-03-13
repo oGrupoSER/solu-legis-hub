@@ -125,12 +125,10 @@ const PublicationTerms = () => {
 
   const handleExport = () => {
     const csv = [
-      ["Termo", "Tipo", "Parceiro", "Serviço", "Status", "Clientes"],
+      ["Termo", "Tipo", "Status", "Clientes"],
       ...filteredTerms.map((t) => [
         t.term,
         t.term_type === "office" ? "Escritório" : "Nome",
-        t.partners?.name || "-",
-        t.partner_services?.service_name || "-",
         t.is_active ? "Ativo" : "Inativo",
         getClientNames(t).join("; ") || "-",
       ]),
