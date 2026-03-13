@@ -16,6 +16,7 @@ import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { useNavigate } from "react-router-dom";
 import { DateRangePicker } from "@/components/publications/DateRangePicker";
 import { ConfirmationBadge } from "@/components/shared/ConfirmationBadge";
+import { SyncProgressDialog } from "@/components/processes/SyncProgressDialog";
 import { cn } from "@/lib/utils";
 import {
   Pagination,
@@ -109,7 +110,7 @@ export default function ProcessMovements() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
-  const [syncing, setSyncing] = useState(false);
+  const [syncDialogOpen, setSyncDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("processes");
   const [filterPartner, setFilterPartner] = useState<string>("all");
   const [filterClient, setFilterClient] = useState<string>("all");
@@ -162,23 +163,9 @@ export default function ProcessMovements() {
     },
   });
 
-  const handleSync = async () => {
-    try {
-      setSyncing(true);
-      toast.info("Sincronizando andamentos, documentos, capas...");
-      const { data, error } = await supabase.functions.invoke("sync-process-updates", { body: { syncType: "full" } });
-      if (error) throw error;
-      const results = data?.results || [];
-      const totalSynced = results.reduce((acc: number, r: any) => acc + (r.recordsSynced || 0), 0);
-      toast.success(`Sincronização concluída: ${totalSynced} registros sincronizados`);
-      queryClient.invalidateQueries({ queryKey: ["registered-processes"] });
-      queryClient.invalidateQueries({ queryKey: ["all-movements"] });
-    } catch (error) {
-      console.error("Sync error:", error);
-      toast.error("Erro ao sincronizar andamentos");
-    } finally {
-      setSyncing(false);
-    }
+  const handleSyncComplete = () => {
+    queryClient.invalidateQueries({ queryKey: ["registered-processes"] });
+    queryClient.invalidateQueries({ queryKey: ["all-movements"] });
   };
 
   // Fetch client process IDs for filtering
@@ -387,8 +374,8 @@ export default function ProcessMovements() {
           <p className="text-muted-foreground mt-1">Dados completos dos processos cadastrados (capas, andamentos, documentos, agrupadores, dependências)</p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={handleSync} variant="outline" size="sm" className="gap-2" disabled={syncing}>
-            <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
+          <Button onClick={() => setSyncDialogOpen(true)} variant="outline" size="sm" className="gap-2">
+            <RefreshCw className="h-4 w-4" />
             Sincronizar
           </Button>
           <Button variant="outline" size="sm" onClick={handleExport} className="gap-2">
@@ -617,6 +604,12 @@ export default function ProcessMovements() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <SyncProgressDialog
+        open={syncDialogOpen}
+        onOpenChange={setSyncDialogOpen}
+        onComplete={handleSyncComplete}
+      />
     </div>
   );
 }
