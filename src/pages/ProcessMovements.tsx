@@ -243,7 +243,7 @@ export default function ProcessMovements() {
         .order("data_andamento", { ascending: false, nullsFirst: false })
         .limit(500);
 
-      if (searchQuery) query = query.or(`description.ilike.%${searchQuery}%,tipo_andamento.ilike.%${searchQuery}%`);
+      // Search is handled client-side for movements (to match process_number/cod_processo)
       if (filterClient !== "all" && clientProcessIds && clientProcessIds.length > 0) {
         query = query.in("process_id", clientProcessIds);
       }
