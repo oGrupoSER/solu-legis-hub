@@ -125,12 +125,10 @@ const PublicationTerms = () => {
 
   const handleExport = () => {
     const csv = [
-      ["Termo", "Tipo", "Parceiro", "Serviço", "Status", "Clientes"],
+      ["Termo", "Tipo", "Status", "Clientes"],
       ...filteredTerms.map((t) => [
         t.term,
         t.term_type === "office" ? "Escritório" : "Nome",
-        t.partners?.name || "-",
-        t.partner_services?.service_name || "-",
         t.is_active ? "Ativo" : "Inativo",
         getClientNames(t).join("; ") || "-",
       ]),
@@ -258,8 +256,6 @@ const PublicationTerms = () => {
                 <TableRow>
                    <TableHead>Termo</TableHead>
                    <TableHead>Tipo</TableHead>
-                   <TableHead>Parceiro</TableHead>
-                   <TableHead>Serviço</TableHead>
                    <TableHead>Clientes</TableHead>
                    <TableHead>Solucionare</TableHead>
                    <TableHead>Status</TableHead>
@@ -269,7 +265,7 @@ const PublicationTerms = () => {
               <TableBody>
                 {filteredTerms.length === 0 ? (
                    <TableRow>
-                     <TableCell colSpan={8} className="text-center text-muted-foreground py-8">Nenhum termo encontrado</TableCell>
+                     <TableCell colSpan={6} className="text-center text-muted-foreground py-8">Nenhum termo encontrado</TableCell>
                    </TableRow>
                 ) : (
                   filteredTerms.map((term) => {
@@ -280,8 +276,6 @@ const PublicationTerms = () => {
                         <TableCell>
                           <Badge variant="outline">{term.term_type === "office" ? "Escritório" : "Nome"}</Badge>
                         </TableCell>
-                        <TableCell className="text-sm">{term.partners?.name || "-"}</TableCell>
-                        <TableCell className="text-sm">{term.partner_services?.service_name || "-"}</TableCell>
                          <TableCell>
                            <ClientBadges clients={clients} />
                          </TableCell>
