@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -13,6 +13,29 @@ import { BulkClientLinkDialog } from "@/components/shared/BulkClientLinkDialog";
 import { SyncProgressDialog } from "@/components/processes/SyncProgressDialog";
 import { supabase } from "@/integrations/supabase/client";
 
+async function fetchAllStatusOptions() {
+  const PAGE_SIZE = 1000;
+  const map = new Map<string, { code: number | null; description: string }>();
+  let from = 0;
+
+  while (true) {
+    const { data } = await supabase
+      .from("processes")
+      .select("status_code, status_description")
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (!data || data.length === 0) break;
+    data.forEach((p) => {
+      const desc = p.status_description || "Sem status";
+      if (!map.has(desc)) map.set(desc, { code: p.status_code, description: desc });
+    });
+    if (data.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+
+  return Array.from(map.values());
+}
+
 const Processes = () => {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -23,26 +46,17 @@ const Processes = () => {
   const [statusOptions, setStatusOptions] = useState<{ code: number | null; description: string }[]>([]);
 
   useEffect(() => {
-    const fetchStatusOptions = async () => {
-      const { data } = await supabase
-        .from("processes")
-        .select("status_code, status_description");
-      if (data) {
-        const map = new Map<string, { code: number | null; description: string }>();
-        data.forEach((p) => {
-          const desc = p.status_description || "Sem status";
-          if (!map.has(desc)) map.set(desc, { code: p.status_code, description: desc });
-        });
-        setStatusOptions(Array.from(map.values()));
-      }
-    };
-    fetchStatusOptions();
+    fetchAllStatusOptions().then(setStatusOptions);
   }, [refreshTrigger]);
 
   const handleProcessCreated = () => {
     setDialogOpen(false);
     setRefreshTrigger(prev => prev + 1);
     toast.success("Processo cadastrado com sucesso");
+  };
+
+  const handleStatusClick = (status: string) => {
+    setFilterStatus(status);
   };
 
   const handleExport = async () => {
@@ -130,7 +144,11 @@ const Processes = () => {
         </div>
       </div>
 
-      <ProcessesStats refreshTrigger={refreshTrigger} />
+      <ProcessesStats
+        refreshTrigger={refreshTrigger}
+        onStatusClick={handleStatusClick}
+        activeStatus={filterStatus}
+      />
 
       {/* Filters */}
       <Card>
