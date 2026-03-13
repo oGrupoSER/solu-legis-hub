@@ -18,9 +18,10 @@ interface ProcessesStatsProps {
 
 const STATUS_CONFIG: Record<number, { icon: LucideIcon; colorClass: string }> = {
   1: { icon: Clock, colorClass: "text-warning" },
+  2: { icon: Clock, colorClass: "text-warning" },
   4: { icon: CheckCircle, colorClass: "text-success" },
   5: { icon: Archive, colorClass: "text-muted-foreground" },
-  6: { icon: ShieldAlert, colorClass: "text-destructive" },
+  6: { icon: ShieldAlert, colorClass: "text-purple-600" },
   7: { icon: AlertCircle, colorClass: "text-destructive" },
 };
 
@@ -78,7 +79,7 @@ export const ProcessesStats = ({ refreshTrigger, onStatusClick, activeStatus }: 
   const isActive = (status: string) => activeStatus === status;
 
   return (
-    <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+    <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
       <Card
         className={cn(
           "cursor-pointer transition-all hover:shadow-md",
