@@ -138,6 +138,13 @@ serve(async (req) => {
           console.log(`Total synced ${totalMovements} movements in ${batchCount} batches`);
         }
 
+        // 3.1 Sync ALL Movements per Process - BuscaTodosAndamentosPorProcesso
+        if (syncType === 'full' || syncType === 'all-movements') {
+          const allMovementsSynced = await syncAllMovementsByProcess(client, supabase, service);
+          totalSynced += allMovementsSynced;
+          console.log(`Synced ${allMovementsSynced} movements via BuscaTodosAndamentosPorProcesso`);
+        }
+
         // 4. Sync Documents - BuscaNovosDocumentosPorEscritorio - Loop until no more data
         if (syncType === 'full' || syncType === 'documents') {
           let totalDocs = 0;
