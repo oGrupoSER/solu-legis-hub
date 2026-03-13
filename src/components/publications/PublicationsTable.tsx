@@ -285,7 +285,6 @@ export function PublicationsTable() {
               </TableHead>
               <TableHead>Gazeta</TableHead>
               <TableHead>Termos</TableHead>
-              <TableHead>Parceiro/Serviço</TableHead>
               <TableHead>Preview</TableHead>
               <TableHead className="w-[80px]">Confirm.</TableHead>
               <TableHead className="w-[100px]">Ações</TableHead>
