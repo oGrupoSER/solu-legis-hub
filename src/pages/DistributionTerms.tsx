@@ -806,11 +806,13 @@ export default function DistributionTerms() {
                             <Button size="sm" variant="ghost" onClick={() => { setEditTerm(term); }}>
                               <Edit className="h-3.5 w-3.5 mr-1" /> Editar
                             </Button>
-                            <Button size="sm" variant="ghost" className="text-destructive" onClick={() => {
-                              if (confirm("Tem certeza que deseja excluir este nome? Ele será removido também do parceiro.")) deleteMutation.mutate(term);
-                            }}>
-                              Excluir
-                            </Button>
+                            {term.is_active && (
+                              <Button size="sm" variant="ghost" className="text-amber-600" onClick={() => {
+                                if (confirm("Tem certeza que deseja desativar este nome? Ele será desativado no parceiro.")) deactivateMutation.mutate(term);
+                              }}>
+                                Desativar
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
