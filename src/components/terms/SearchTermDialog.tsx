@@ -264,40 +264,70 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
 
   const handleSubmit = async () => {
     if (!validateStep(0)) { setCurrentStep(0); return; }
+
+    // Validate OAB if partially filled
+    if (oabNumero || oabUf) {
+      if (!oabNumero || oabNumero.length !== 6 || !/^\d{6}$/.test(oabNumero)) {
+        toast.error("Número da OAB deve ter exatamente 6 dígitos");
+        setCurrentStep(0);
+        return;
+      }
+      if (!oabUf || oabUf.length !== 2) {
+        toast.error("Selecione a UF da OAB");
+        setCurrentStep(0);
+        return;
+      }
+    }
+
     setIsLoading(true);
     try {
-      const metadata: any = {};
-      if (variacoes.length > 0) metadata.variacoes = variacoes;
-      if (termosBloqueio.length > 0) metadata.termos_bloqueio = termosBloqueio;
-      if (abrangencias.length > 0) metadata.abrangencias = abrangencias;
-      if (oab) metadata.oab = oab;
+      if (!term) {
+        // NEW TERM: call register-publication-term edge function (REST V2 flow)
+        const serviceId = formData.partner_service_id || await resolveServiceId();
+        if (!serviceId) { toast.error("Nenhum serviço ativo encontrado"); setIsLoading(false); return; }
 
-      const dataToSave: any = {
-        ...formData,
-        partner_id: formData.partner_id || null,
-        partner_service_id: formData.partner_service_id || null,
-        metadata,
-      };
+        const body: any = {
+          service_id: serviceId,
+          nome: formData.term.trim(),
+          client_ids: selectedClients,
+        };
+        if (oabNumero && oabUf) {
+          body.oab = { numero: oabNumero.padStart(6, '0'), uf: oabUf.toUpperCase() };
+        }
 
-      let termId: string;
-      if (term) {
+        const { data: result, error } = await supabase.functions.invoke('register-publication-term', { body });
+        if (error) throw error;
+        if (!result?.success) throw new Error(result?.error || 'Erro ao registrar termo');
+
+        toast.success(`Termo cadastrado com sucesso (código: ${result.codNome})`);
+      } else {
+        // EDIT: keep existing local update flow
+        const oabStr = oabNumero && oabUf ? `${oabNumero.padStart(6, '0')}|${oabUf.toUpperCase()}` : "";
+        const metadata: any = {};
+        if (variacoes.length > 0) metadata.variacoes = variacoes;
+        if (termosBloqueio.length > 0) metadata.termos_bloqueio = termosBloqueio;
+        if (abrangencias.length > 0) metadata.abrangencias = abrangencias;
+        if (oabStr) metadata.oab = oabStr;
+
+        const dataToSave: any = {
+          ...formData,
+          partner_id: formData.partner_id || null,
+          partner_service_id: formData.partner_service_id || null,
+          metadata,
+        };
+
         const { error } = await supabase.from("search_terms").update(dataToSave).eq("id", term.id);
         if (error) throw error;
-        termId = term.id;
-      } else {
-        const { data: inserted, error } = await supabase.from("search_terms").insert(dataToSave).select("id").single();
-        if (error) throw error;
-        termId = inserted.id;
-      }
 
-      await supabase.from("client_search_terms").delete().eq("search_term_id", termId);
-      if (selectedClients.length > 0) {
-        const links = selectedClients.map((clientId) => ({ search_term_id: termId, client_system_id: clientId }));
-        const { error: linkError } = await supabase.from("client_search_terms").insert(links);
-        if (linkError) throw linkError;
-      }
+        await supabase.from("client_search_terms").delete().eq("search_term_id", term.id);
+        if (selectedClients.length > 0) {
+          const links = selectedClients.map((clientId) => ({ search_term_id: term.id, client_system_id: clientId }));
+          const { error: linkError } = await supabase.from("client_search_terms").insert(links);
+          if (linkError) throw linkError;
+        }
 
-      toast.success(term ? "Termo atualizado com sucesso" : "Termo criado com sucesso");
+        toast.success("Termo atualizado com sucesso");
+      }
       onOpenChange(false);
     } catch (error: any) { toast.error(error.message || "Erro ao salvar termo"); }
     finally { setIsLoading(false); }
