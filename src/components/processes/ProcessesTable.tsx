@@ -21,6 +21,7 @@ import { toast } from "sonner";
 interface Process {
   id: string;
   process_number: string;
+  cod_processo: number | null;
   tribunal: string | null;
   status: string | null;
   status_code: number | null;
