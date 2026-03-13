@@ -572,6 +572,129 @@ async function excluirNome(
   return { removedFromSolucionare };
 }
 
+// ========== REST V2 DELETION ==========
+
+const REST_V2_BASE = 'https://atacadoinformacaojudicial.com.br/WebApiPublicacoesV2/api';
+
+async function excluirNomeRest(service: any, data: any): Promise<any> {
+  if (!data.cod_nome) throw new Error('cod_nome is required');
+
+  const { nome_relacional, token: serviceToken } = service;
+  if (!nome_relacional || !serviceToken) throw new Error('Service missing nomeRelacional or token');
+
+  // Create sync_log for tracking
+  const { data: syncLog } = await supabase
+    .from('sync_logs')
+    .insert({
+      partner_service_id: service.id,
+      partner_id: service.partner_id,
+      sync_type: 'excluir-nome-rest',
+      status: 'in_progress',
+      started_at: new Date().toISOString(),
+      records_synced: 0,
+    })
+    .select('id')
+    .single();
+
+  const syncLogId = syncLog?.id || null;
+
+  try {
+    // Step 1: Authenticate
+    console.log('Authenticating for REST V2 deletion...');
+    const authUrl = `${REST_V2_BASE}/Autenticacao/AutenticaAPI`;
+    const authStart = Date.now();
+    const authResponse = await fetch(authUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nomeRelacional: nome_relacional, token: serviceToken }),
+    });
+    const authDuration = Date.now() - authStart;
+    const authText = await authResponse.text();
+
+    // Log auth call
+    await supabase.from('api_call_logs').insert({
+      sync_log_id: syncLogId,
+      partner_service_id: service.id,
+      call_type: 'REST',
+      method: 'POST',
+      url: authUrl,
+      request_body: JSON.stringify({ nomeRelacional: nome_relacional, token: '***' }),
+      response_status: authResponse.status,
+      response_status_text: authResponse.statusText,
+      response_summary: authText.substring(0, 2000),
+      duration_ms: authDuration,
+    });
+
+    if (!authResponse.ok) throw new Error(`Auth failed: ${authText.substring(0, 300)}`);
+
+    const authResult = JSON.parse(authText);
+    const tokenJWT = authResult?.tokenJWT;
+    if (!tokenJWT) throw new Error('Authentication failed: no tokenJWT returned');
+
+    // Step 2: Call nome_excluir
+    console.log(`Deleting codNome ${data.cod_nome} via REST V2...`);
+    const deleteUrl = `${REST_V2_BASE}/Nome/nome_excluir`;
+    const deleteBody = [data.cod_nome];
+    const deleteStart = Date.now();
+    const deleteResponse = await fetch(deleteUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${tokenJWT}`,
+      },
+      body: JSON.stringify(deleteBody),
+    });
+    const deleteDuration = Date.now() - deleteStart;
+    const deleteText = await deleteResponse.text();
+
+    // Log delete call
+    await supabase.from('api_call_logs').insert({
+      sync_log_id: syncLogId,
+      partner_service_id: service.id,
+      call_type: 'REST',
+      method: 'POST',
+      url: deleteUrl,
+      request_body: JSON.stringify(deleteBody),
+      response_status: deleteResponse.status,
+      response_status_text: deleteResponse.statusText,
+      response_summary: deleteText.substring(0, 2000),
+      duration_ms: deleteDuration,
+    });
+
+    if (!deleteResponse.ok) throw new Error(`Delete failed: ${deleteText.substring(0, 300)}`);
+
+    // Step 3: Delete local record
+    const deleteFilter = data.term_id
+      ? supabase.from('search_terms').delete().eq('id', data.term_id)
+      : supabase.from('search_terms').delete().eq('solucionare_code', data.cod_nome).eq('partner_service_id', service.id);
+
+    const { error: dbError } = await deleteFilter;
+    if (dbError) console.error('Error deleting local record:', dbError);
+
+    // Update sync log
+    if (syncLogId) {
+      await supabase.from('sync_logs').update({
+        status: 'success',
+        records_synced: 1,
+        completed_at: new Date().toISOString(),
+      }).eq('id', syncLogId);
+    }
+
+    console.log(`Successfully deleted codNome ${data.cod_nome}`);
+    return { deleted: true, cod_nome: data.cod_nome };
+
+  } catch (error) {
+    if (syncLogId) {
+      await supabase.from('sync_logs').update({
+        status: 'error',
+        error_message: error instanceof Error ? error.message : 'Unknown error',
+        completed_at: new Date().toISOString(),
+      }).eq('id', syncLogId);
+    }
+    throw error;
+  }
+}
+
 async function listarNomes(soapClient: SoapClient, officeCode: number): Promise<any> {
   return await soapClient.call('getNomesPesquisa', { codEscritorio: officeCode });
 }
