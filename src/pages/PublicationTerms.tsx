@@ -277,9 +277,6 @@ const PublicationTerms = () => {
                           <Badge variant="outline">{term.term_type === "office" ? "Escritório" : "Nome"}</Badge>
                         </TableCell>
                          <TableCell>
-                           <ClientBadges clients={clients} />
-                         </TableCell>
-                         <TableCell>
                            {term.solucionare_status === 'synced' ? (
                              <Badge variant="outline" className="bg-green-500/10 text-green-700 border-green-500/30 gap-1">
                                <CheckCircle2 className="h-3 w-3" /> Sincronizado
