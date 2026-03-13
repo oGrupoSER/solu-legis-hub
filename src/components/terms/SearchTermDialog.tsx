@@ -36,7 +36,7 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
   const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState({
     term: "",
-    term_type: "office",
+    term_type: "name",
     partner_id: "",
     partner_service_id: "",
     is_active: true,
@@ -84,8 +84,16 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
         setOab(meta.oab || "");
       } else {
         resetNewFields();
-        setSelectedClients([]);
+        setFormData({
+          term: "",
+          term_type: "name",
+          partner_id: "",
+          partner_service_id: "",
+          is_active: true,
+        });
         setClientError(false);
+        // Pre-select "infojudiciais" client
+        preSelectDefaultClient();
       }
     }
   }, [open, term]);
@@ -97,17 +105,37 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
     setTermosBloqueio([]);
     setNovoTermoBloqueio("");
     setNovoTermoContido(false);
-    setAbrangencias([]);
+    setAbrangencias(["TODAS"]);
     setAbrangenciaSearch("");
     setAbrangenciasDisponiveis([]);
+  };
+
+  const preSelectDefaultClient = async () => {
+    const { data } = await supabase
+      .from("client_systems")
+      .select("id, name")
+      .eq("is_active", true)
+      .ilike("name", "%infojudiciais%")
+      .limit(1);
+    if (data && data.length > 0) {
+      setSelectedClients([data[0].id]);
+    } else {
+      setSelectedClients([]);
+    }
   };
 
   const fetchPartners = async () => {
     const { data } = await supabase.from("partners").select("id, name").eq("is_active", true);
     setPartners(data || []);
+    // Auto-select first partner for new terms
+    if (!term && data && data.length > 0) {
+      const firstPartnerId = data[0].id;
+      setFormData(prev => ({ ...prev, partner_id: firstPartnerId }));
+      fetchServices(firstPartnerId, true);
+    }
   };
 
-  const fetchServices = async (partnerId: string) => {
+  const fetchServices = async (partnerId: string, autoSelect = false) => {
     if (!partnerId) { setServices([]); return; }
     const { data } = await supabase
       .from("partner_services")
@@ -116,6 +144,10 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
       .eq("service_type", "terms")
       .eq("is_active", true);
     setServices(data || []);
+    // Auto-select first service for new terms
+    if (autoSelect && !term && data && data.length > 0) {
+      setFormData(prev => ({ ...prev, partner_service_id: data[0].id }));
+    }
   };
 
   const fetchTermClients = async (termId: string) => {
@@ -261,12 +293,7 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
     finally { setIsLoading(false); }
   };
 
-  // Auto-load abrangencias when entering step 3
-  useEffect(() => {
-    if (currentStep === 2 && abrangenciasDisponiveis.length === 0 && !isLoadingAbrangencias) {
-      handleFetchAbrangencias();
-    }
-  }, [currentStep]);
+  // Abrangências is now always "TODAS" - no need to auto-load
 
   const isLastStep = currentStep === totalSteps - 1;
 
@@ -334,7 +361,7 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="type">Tipo</Label>
-                  <Select value={formData.term_type} onValueChange={(value) => setFormData({ ...formData, term_type: value })}>
+                  <Select value={formData.term_type} onValueChange={(value) => setFormData({ ...formData, term_type: value })} disabled>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="office">Escritório</SelectItem>
@@ -365,7 +392,7 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
                     onValueChange={(value) => {
                       const partnerId = value === "none" ? "" : value;
                       setFormData({ ...formData, partner_id: partnerId, partner_service_id: "" });
-                      fetchServices(partnerId);
+                      fetchServices(partnerId, true);
                     }}
                   >
                     <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
@@ -538,73 +565,18 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
           {/* STEP 3: Scopes (Abrangências) */}
           {currentStep === 2 && isNameType && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-sm font-semibold">Abrangências (Diários)</h4>
-                  <p className="text-xs text-muted-foreground">Selecione os diários oficiais que serão monitorados</p>
-                </div>
-                {abrangencias.length > 0 && (
-                  <Badge variant="secondary">{abrangencias.length} selecionados</Badge>
-                )}
+              <div>
+                <h4 className="text-sm font-semibold">Abrangências (Diários)</h4>
+                <p className="text-xs text-muted-foreground">Define quais diários oficiais serão monitorados</p>
               </div>
 
-              {isLoadingAbrangencias ? (
-                <div className="flex items-center justify-center py-12 gap-3 text-muted-foreground">
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  <span className="text-sm">Carregando abrangências...</span>
+              <div className="flex items-center gap-3 p-4 rounded-md border bg-muted/30">
+                <Checkbox checked={true} disabled />
+                <div>
+                  <span className="text-sm font-medium">Todas</span>
+                  <p className="text-xs text-muted-foreground">Todos os diários disponíveis serão monitorados</p>
                 </div>
-              ) : abrangenciasDisponiveis.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 gap-3">
-                  <p className="text-sm text-muted-foreground">Nenhuma abrangência carregada</p>
-                  <Button type="button" variant="outline" className="gap-2" onClick={handleFetchAbrangencias}>
-                    <Search className="h-4 w-4" />
-                    Tentar novamente
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      value={abrangenciaSearch}
-                      onChange={(e) => setAbrangenciaSearch(e.target.value)}
-                      placeholder="Filtrar diários..."
-                      className="pl-10"
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button type="button" variant="outline" size="sm" onClick={() => setAbrangencias([...abrangenciasDisponiveis])}>
-                      Selecionar Todos
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" onClick={() => setAbrangencias([])}>
-                      Limpar
-                    </Button>
-                    <span className="text-xs text-muted-foreground self-center ml-auto">
-                      {filteredAbrangencias.length} diários
-                    </span>
-                  </div>
-                  <ScrollArea className="h-[250px] rounded-md border">
-                    <div className="p-2 space-y-0.5">
-                      {filteredAbrangencias.map((sigla) => (
-                        <div
-                          key={sigla}
-                          className={cn(
-                            "flex items-center gap-2.5 px-3 py-1.5 rounded-md cursor-pointer transition-colors text-sm",
-                            abrangencias.includes(sigla) ? "bg-primary/10 text-primary" : "hover:bg-muted/50"
-                          )}
-                          onClick={() => toggleAbrangencia(sigla)}
-                        >
-                          <Checkbox checked={abrangencias.includes(sigla)} onCheckedChange={() => toggleAbrangencia(sigla)} />
-                          <span className="font-medium">{sigla}</span>
-                        </div>
-                      ))}
-                      {filteredAbrangencias.length === 0 && (
-                        <p className="text-sm text-muted-foreground text-center py-8">Nenhum diário encontrado</p>
-                      )}
-                    </div>
-                  </ScrollArea>
-                </>
-              )}
+              </div>
             </div>
           )}
         </div>
