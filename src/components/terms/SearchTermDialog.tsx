@@ -48,7 +48,8 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
   const [isLoading, setIsLoading] = useState(false);
 
   // Advanced fields
-  const [oab, setOab] = useState("");
+  const [oabNumero, setOabNumero] = useState("");
+  const [oabUf, setOabUf] = useState("");
   const [variacoes, setVariacoes] = useState<string[]>([]);
   const [novaVariacao, setNovaVariacao] = useState("");
   const [termosBloqueio, setTermosBloqueio] = useState<TermoBloqueio[]>([]);
