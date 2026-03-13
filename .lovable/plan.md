@@ -1,86 +1,129 @@
 
 
-## Plano: Refatorar /distributions/terms — UI simplificada, novos campos de distribuição e sincronização completa
+# Plano: Filtros Avancados e Indicador de Confirmacao por Registro
 
-### 1. Migração: Adicionar colunas à tabela `distributions`
+## Contexto
 
-Adicionar ~20 colunas para armazenar todos os campos do retorno de `BuscaNovasDistribuicoes`:
+As telas de Publicacoes, Distribuicoes e Andamentos precisam de:
+1. Filtros por **cliente**, **parceiro** e **periodo** (algumas telas ja tem parceiro/periodo parcialmente)
+2. Indicador visual por registro mostrando se o cliente ja **confirmou o recebimento**
+3. Ao clicar no indicador, exibir **data/hora** e **IP de origem** da confirmacao
+4. Filtro por status de confirmacao (confirmado / nao confirmado)
 
-| Coluna | Tipo |
-|--------|------|
-| cod_processo | integer |
-| cod_escritorio | integer |
-| instancia | integer |
-| sigla_sistema | text |
-| comarca | text |
-| orgao_julgador | text |
-| tipo_do_processo | text |
-| data_audiencia | timestamptz |
-| tipo_audiencia | text |
-| valor_da_causa | text |
-| assuntos | jsonb |
-| magistrado | text |
-| autor | jsonb |
-| reu | jsonb |
-| outros_envolvidos | jsonb |
-| advogados | jsonb |
-| movimentos | jsonb |
-| documentos_iniciais | jsonb |
-| lista_documentos | jsonb |
-| cidade | text |
-| uf | varchar(2) |
-| cod_pre_cadastro_termo | integer |
-| nome_pesquisado | text |
-| processo_originario | text |
+## Analise do Estado Atual
 
-### 2. UI — `DistributionTerms.tsx`
+| Tela | Filtro Cliente | Filtro Parceiro | Filtro Periodo | Confirmacao |
+|------|---------------|-----------------|----------------|-------------|
+| Publicacoes (PublicationsTable) | Nao tem | Tem | Tem | Nao tem |
+| Distribuicoes (Distributions) | Nao tem | Nao tem | Nao tem | Nao tem |
+| Andamentos (ProcessMovements) | Nao tem | Nao tem | Nao tem | Nao tem |
 
-**Dialog de cadastro:**
-- Instâncias: mostrar apenas "Todas as Instâncias" (4), marcada e bloqueada (disabled)
-- Clientes: pré-selecionar todos os clientes disponíveis ao abrir o dialog
-- Abrangências: mostrar badge "Todos os diários selecionados" com lista fixa hardcoded, sem interação (checkbox global marcado e disabled)
-- Default form: `listInstancias: [4]`, `qtdDiasCapturaRetroativa: "90"`
-- No envio: sempre enviar `listInstancias: [4]` e a lista fixa completa de abrangências
+O modelo de confirmacao atual e por **lote** (tabela `api_delivery_cursors`), sem rastreamento por registro individual. Nao ha dados de IP nem timestamp por registro.
 
-**Tabela de ações:**
-- Remover botão "Ativar/Desativar"
-- Manter apenas Editar e Excluir
-- Excluir deve chamar edge function `manage-distribution-terms` com action `deleteName` passando `codNome`
+## O Que Sera Feito
 
-### 3. Sincronização — Botão "Sincronizar"
+### 1. Nova Tabela: `record_confirmations`
 
-Ao clicar, executar em sequência:
-1. Chamar `listNames` (já existente) — sincroniza termos da API para tabela local, remove locais que não existem na API
-2. Chamar `sync-distributions` — busca novas distribuições e salva com todos os novos campos
+Rastreia confirmacoes individuais por registro e por cliente:
 
-A mutation `syncMutation` será atualizada para chamar ambas as edge functions.
+| Coluna | Tipo | Descricao |
+|--------|------|-----------|
+| id | uuid PK | Identificador |
+| record_id | uuid NOT NULL | ID do registro (publicacao, distribuicao ou movimento) |
+| record_type | text NOT NULL | "publications", "distributions" ou "movements" |
+| client_system_id | uuid NOT NULL | Cliente que confirmou |
+| confirmed_at | timestamptz | Data/hora da confirmacao |
+| ip_address | text | IP de origem da requisicao |
+| created_at | timestamptz | Timestamp de criacao |
 
-### 4. Edge function `sync-distributions/index.ts`
+Indice unico em (record_id, record_type, client_system_id) para evitar duplicatas.
+RLS: SELECT para authenticated, INSERT para service role.
 
-Atualizar o upsert para mapear todos os novos campos:
-```
-cod_processo: dist.codProcesso
-instancia: dist.instancia
-sigla_sistema: dist.siglaSistema
-comarca: dist.comarca
-orgao_julgador: dist.orgaoJulgador
-...
-autor: dist.autor (jsonb)
-reu: dist.reu (jsonb)
-advogados: dist.advogados (jsonb)
-movimentos: dist.movimentos (jsonb)
-```
+### 2. Atualizar Endpoints de Confirmacao (api-processes, api-distributions, api-publications)
 
-### 5. Limpar registros existentes
+Quando o cliente chama `POST ?action=confirm`:
+- Alem de atualizar o `api_delivery_cursors`, inserir registros na tabela `record_confirmations` para cada item do lote entregue
+- Capturar o IP da requisicao via headers (`x-forwarded-for` ou `x-real-ip`)
+- Gravar o timestamp da confirmacao
 
-Antes de sincronizar termos, remover da tabela `search_terms` (type=distribution) os que não existem mais na API. O `listNames` já faz upsert; adicionarei lógica para deletar locais que não vieram da API.
+### 3. Adicionar Filtros nas 3 Telas
 
-### Arquivos
+**Publicacoes (PublicationsTable.tsx):**
+- Adicionar filtro por **Cliente** (Select com client_systems)
+- Filtro de confirmacao ja e viavel apos a nova tabela
 
-| Arquivo | Ação |
+**Distribuicoes (Distributions.tsx):**
+- Adicionar filtro por **Parceiro** (Select com partners)
+- Adicionar filtro por **Cliente** (Select com client_systems)
+- Adicionar filtro por **Periodo** (DateRangePicker reutilizado)
+
+**Andamentos (ProcessMovements.tsx):**
+- Adicionar filtro por **Parceiro** (via processes.partner_id)
+- Adicionar filtro por **Cliente** (via client_processes)
+- Adicionar filtro por **Periodo** (DateRangePicker)
+
+### 4. Indicador Visual de Confirmacao
+
+Em cada linha da tabela, adicionar uma coluna "Confirmacao" com:
+- Icone verde (CheckCircle) se pelo menos um cliente confirmou
+- Icone cinza (Circle) se nenhum cliente confirmou ainda
+- Ao clicar, abrir um **Popover/Dialog** com a lista de clientes que confirmaram, mostrando:
+  - Nome do cliente
+  - Data e hora da confirmacao
+  - IP de origem
+
+### 5. Filtro por Status de Confirmacao
+
+Adicionar Select com 3 opcoes em cada tela:
+- "Todos" (sem filtro)
+- "Confirmados" (registros com pelo menos 1 entrada em record_confirmations)
+- "Nao confirmados" (registros sem entrada)
+
+Para filtrar, utilizar subquery ou left join com record_confirmations.
+
+---
+
+## Detalhes Tecnicos
+
+### Arquivos a Modificar
+
+| Arquivo | Acao |
 |---------|------|
-| Migração SQL | ~20 colunas em `distributions` |
-| `src/pages/DistributionTerms.tsx` | Simplificar dialog, remover ativar/desativar, sync completo |
-| `supabase/functions/sync-distributions/index.ts` | Mapear todos os novos campos no upsert |
-| `supabase/functions/manage-distribution-terms/index.ts` | Adicionar limpeza de termos órfãos no `listNames` |
+| Migracao SQL | Criar tabela `record_confirmations` com indices e RLS |
+| `src/components/publications/PublicationsTable.tsx` | Adicionar filtro por cliente e confirmacao, coluna de status |
+| `src/pages/Distributions.tsx` | Adicionar filtros por parceiro, cliente, periodo e confirmacao |
+| `src/pages/ProcessMovements.tsx` | Adicionar filtros por parceiro, cliente, periodo e confirmacao |
+| `supabase/functions/api-publications/index.ts` | Gravar record_confirmations no confirm |
+| `supabase/functions/api-distributions/index.ts` | Gravar record_confirmations no confirm |
+| `supabase/functions/api-processes/index.ts` | Gravar record_confirmations no confirm |
+
+### Componente Reutilizavel: ConfirmationBadge
+
+Criar componente `src/components/shared/ConfirmationBadge.tsx` que:
+- Recebe `recordId` e `recordType`
+- Consulta `record_confirmations` para esse registro
+- Exibe icone verde/cinza
+- Ao clicar, abre Popover com detalhes (cliente, data/hora, IP)
+
+### Logica de Filtragem por Confirmacao
+
+Para filtrar registros confirmados/nao confirmados sem degradar performance:
+- Buscar IDs confirmados via query separada em `record_confirmations` filtrada por `record_type`
+- Aplicar filtro `.in('id', confirmedIds)` ou `.not.in('id', confirmedIds)` na query principal
+- Limitar a subquery ao tipo de registro da tela atual
+
+### Captura de IP nos Endpoints
+
+```text
+const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+  || req.headers.get('x-real-ip')
+  || 'unknown';
+```
+
+### Filtro por Cliente nas Publicacoes/Distribuicoes
+
+Como publicacoes e distribuicoes nao tem link direto com `client_systems`, o filtro por cliente funcionara via:
+- Publicacoes: `client_search_terms` -> `search_terms` -> `publications.matched_terms` (pelo termo)
+- Distribuicoes: `client_search_terms` -> `search_terms` -> `distributions.term` (pelo termo)
+- Andamentos: `client_processes` -> `processes` -> `process_movements.process_id` (direto)
 

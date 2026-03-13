@@ -590,37 +590,109 @@ export type Database = {
       }
       distributions: {
         Row: {
+          advogados: Json | null
+          assuntos: Json | null
+          autor: Json | null
+          cidade: string | null
+          cod_escritorio: number | null
+          cod_pre_cadastro_termo: number | null
+          cod_processo: number | null
+          comarca: string | null
           created_at: string | null
+          data_audiencia: string | null
           distribution_date: string | null
+          documentos_iniciais: Json | null
           id: string
+          instancia: number | null
+          lista_documentos: Json | null
+          magistrado: string | null
+          movimentos: Json | null
+          nome_pesquisado: string | null
+          orgao_julgador: string | null
+          outros_envolvidos: Json | null
           partner_id: string | null
           partner_service_id: string | null
           process_number: string
+          processo_originario: string | null
           raw_data: Json
+          reu: Json | null
+          sigla_sistema: string | null
           term: string | null
+          tipo_audiencia: string | null
+          tipo_do_processo: string | null
           tribunal: string | null
+          uf: string | null
+          valor_da_causa: string | null
         }
         Insert: {
+          advogados?: Json | null
+          assuntos?: Json | null
+          autor?: Json | null
+          cidade?: string | null
+          cod_escritorio?: number | null
+          cod_pre_cadastro_termo?: number | null
+          cod_processo?: number | null
+          comarca?: string | null
           created_at?: string | null
+          data_audiencia?: string | null
           distribution_date?: string | null
+          documentos_iniciais?: Json | null
           id?: string
+          instancia?: number | null
+          lista_documentos?: Json | null
+          magistrado?: string | null
+          movimentos?: Json | null
+          nome_pesquisado?: string | null
+          orgao_julgador?: string | null
+          outros_envolvidos?: Json | null
           partner_id?: string | null
           partner_service_id?: string | null
           process_number: string
+          processo_originario?: string | null
           raw_data: Json
+          reu?: Json | null
+          sigla_sistema?: string | null
           term?: string | null
+          tipo_audiencia?: string | null
+          tipo_do_processo?: string | null
           tribunal?: string | null
+          uf?: string | null
+          valor_da_causa?: string | null
         }
         Update: {
+          advogados?: Json | null
+          assuntos?: Json | null
+          autor?: Json | null
+          cidade?: string | null
+          cod_escritorio?: number | null
+          cod_pre_cadastro_termo?: number | null
+          cod_processo?: number | null
+          comarca?: string | null
           created_at?: string | null
+          data_audiencia?: string | null
           distribution_date?: string | null
+          documentos_iniciais?: Json | null
           id?: string
+          instancia?: number | null
+          lista_documentos?: Json | null
+          magistrado?: string | null
+          movimentos?: Json | null
+          nome_pesquisado?: string | null
+          orgao_julgador?: string | null
+          outros_envolvidos?: Json | null
           partner_id?: string | null
           partner_service_id?: string | null
           process_number?: string
+          processo_originario?: string | null
           raw_data?: Json
+          reu?: Json | null
+          sigla_sistema?: string | null
           term?: string | null
+          tipo_audiencia?: string | null
+          tipo_do_processo?: string | null
           tribunal?: string | null
+          uf?: string | null
+          valor_da_causa?: string | null
         }
         Relationships: [
           {

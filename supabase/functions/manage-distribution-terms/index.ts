@@ -170,6 +170,24 @@ serve(async (req) => {
           }
         }
 
+        // Clean up orphan local terms not present in API
+        if (apiNames.length > 0) {
+          const apiTermNames = apiNames.map((n: any) => n.nome || n.Nome || n.term).filter(Boolean);
+          const { data: localTerms } = await supabase.from('search_terms')
+            .select('id, term')
+            .eq('term_type', 'distribution')
+            .eq('partner_service_id', serviceId);
+
+          const orphans = (localTerms || []).filter((lt: any) => !apiTermNames.includes(lt.term));
+          if (orphans.length > 0) {
+            console.log(`[listNames] Removing ${orphans.length} orphan local terms not found in API`);
+            for (const orphan of orphans) {
+              await supabase.from('client_search_terms').delete().eq('search_term_id', orphan.id);
+              await supabase.from('search_terms').delete().eq('id', orphan.id);
+            }
+          }
+        }
+
         // Also populate from synced distributions (terms already returned by API but registered via legacy)
         if (apiNames.length === 0) {
           console.log('[listNames] API empty, populating from distributions table');

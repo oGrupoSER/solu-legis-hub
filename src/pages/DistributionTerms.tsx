@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -38,7 +38,7 @@ interface DistributionTerm {
 
 interface DocumentoEntry {
   dadoDocumento: string;
-  tipoDocumento: number; // 1=CNPJ, 2=CPF
+  tipoDocumento: number;
 }
 
 interface OabEntry {
@@ -64,124 +64,37 @@ const TIPO_CONSULTA_OPTIONS = [
   { value: "6", label: "OAB de Advogado" },
 ];
 
-const INSTANCIA_OPTIONS = [
-  { value: 1, label: "1ª Instância" },
-  { value: 2, label: "2ª Instância" },
-  { value: 3, label: "Instâncias Superiores" },
-  { value: 4, label: "Todas as Instâncias" },
-];
-
 const UF_OPTIONS = [
   "AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT",
   "PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO",
 ];
 
+const FIXED_ABRANGENCIAS = [
+  "CJM-1","CJM-10","CJM-11","CJM-12","CJM-2","CJM-3","CJM-4","CJM-5","CJM-6","CJM-7","CJM-8","CJM-9",
+  "JF-AC","JF-AL","JF-AM","JF-AP","JF-BA","JF-CE","JF-DF","JF-ES","JF-GO","JF-MA","JF-MG","JF-MS","JF-MT",
+  "JF-PA","JF-PB","JF-PE","JF-PI","JF-PR","JF-RJ","JF-RN","JF-RO","JF-RR","JF-RS","JF-SC","JF-SE","JF-SP","JF-TO",
+  "STF","STJ",
+  "TJ-AC","TJ-AL","TJ-AM","TJ-AP","TJ-BA","TJ-CE","TJ-DF","TJ-DFT","TJ-ES","TJ-GO","TJ-MA","TJ-MG",
+  "TJM-MG","TJM-RS","TJ-MS","TJM-SP","TJ-MT","TJ-PA","TJ-PB","TJ-PE","TJ-PI","TJ-PR","TJ-RJ","TJ-RN","TJ-RO","TJ-RR",
+  "TJ-RS","TJ-SC","TJ-SE","TJ-SP","TJ-TO",
+  "TRE-AC","TRE-AL","TRE-AM","TRE-AP","TRE-BA","TRE-CE","TRE-DF","TRE-DFT","TRE-ES","TRE-GO","TRE-MA","TRE-MG",
+  "TRE-MS","TRE-MT","TRE-PA","TRE-PB","TRE-PE","TRE-PI","TRE-PR","TRE-RJ","TRE-RN","TRE-RO","TRE-RR","TRE-RS",
+  "TRE-SC","TRE-SE","TRE-SP","TRE-TO",
+  "TRF-1","TRF-2","TRF-3","TRF-4","TRF-5","TRF-6",
+  "TRT-1","TRT-10","TRT-11","TRT-12","TRT-13","TRT-14","TRT-15","TRT-16","TRT-17","TRT-18","TRT-19",
+  "TRT-2","TRT-20","TRT-21","TRT-22","TRT-23","TRT-24",
+  "TRT-3","TRT-4","TRT-5","TRT-6","TRT-7","TRT-8","TRT-9",
+  "TSE","TST",
+];
+
 const DEFAULT_FORM: TermFormData = {
   nome: "",
   codTipoConsulta: "1",
-  qtdDiasCapturaRetroativa: "",
-  listInstancias: [1],
+  qtdDiasCapturaRetroativa: "90",
+  listInstancias: [4],
   listDocumentos: [],
   listOab: [],
 };
-
-// ──────────────────────────────────────────────
-// Abrangências Selector (reused)
-// ──────────────────────────────────────────────
-function AbrangenciasSelector({
-  serviceId,
-  selectedSiglas,
-  onChange,
-}: {
-  serviceId: string;
-  selectedSiglas: string[];
-  onChange: (siglas: string[]) => void;
-}) {
-  const [searchFilter, setSearchFilter] = useState("");
-
-  const { data: abrangenciasData, isLoading } = useQuery({
-    queryKey: ["abrangencias-siglas", serviceId],
-    queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke("manage-distribution-terms", {
-        body: { action: "listAbrangencias", serviceId },
-      });
-      if (error) throw error;
-      return data?.data as { siglas: string[]; source: string };
-    },
-    enabled: !!serviceId,
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const allSiglas = abrangenciasData?.siglas || [];
-
-  const filtered = useMemo(() => {
-    if (!searchFilter) return allSiglas;
-    const q = searchFilter.toLowerCase();
-    return allSiglas.filter((s) => s.toLowerCase().includes(q));
-  }, [allSiglas, searchFilter]);
-
-  const toggleSigla = (sigla: string) => {
-    onChange(
-      selectedSiglas.includes(sigla)
-        ? selectedSiglas.filter((s) => s !== sigla)
-        : [...selectedSiglas, sigla]
-    );
-  };
-
-  const selectAll = () => onChange([...allSiglas]);
-  const clearAll = () => onChange([]);
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center gap-2 p-4 text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" /> Carregando abrangências...
-      </div>
-    );
-  }
-
-  if (allSiglas.length === 0) {
-    return (
-      <div className="text-sm text-muted-foreground p-4">
-        Nenhuma abrangência disponível para este serviço.
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <Label>Abrangências (Diários)</Label>
-        <Badge variant="secondary">{selectedSiglas.length} de {allSiglas.length}</Badge>
-      </div>
-
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Buscar diário..."
-          value={searchFilter}
-          onChange={(e) => setSearchFilter(e.target.value)}
-          className="pl-10"
-        />
-      </div>
-
-      <div className="flex gap-2">
-        <Button type="button" variant="outline" size="sm" onClick={selectAll}>Selecionar Todos</Button>
-        <Button type="button" variant="outline" size="sm" onClick={clearAll}>Limpar</Button>
-      </div>
-
-      <ScrollArea className="h-[280px] border rounded-md p-2">
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1">
-          {filtered.map((sigla) => (
-            <label key={sigla} className="flex items-center gap-2 py-1 px-2 text-sm cursor-pointer hover:bg-accent/50 rounded">
-              <Checkbox checked={selectedSiglas.includes(sigla)} onCheckedChange={() => toggleSigla(sigla)} />
-              <span className="font-mono text-xs">{sigla}</span>
-            </label>
-          ))}
-        </div>
-      </ScrollArea>
-    </div>
-  );
-}
 
 // ──────────────────────────────────────────────
 // Tab 1: Dados Básicos
@@ -196,18 +109,6 @@ function DadosBasicosTab({
   selectedClients: string[]; setSelectedClients: (ids: string[]) => void;
   clientError: boolean; setClientError: (b: boolean) => void;
 }) {
-  const toggleInstancia = (val: number) => {
-    if (val === 4) {
-      setForm({ ...form, listInstancias: form.listInstancias.includes(4) ? [] : [4] });
-      return;
-    }
-    const filtered = form.listInstancias.filter(i => i !== 4);
-    setForm({
-      ...form,
-      listInstancias: filtered.includes(val) ? filtered.filter(i => i !== val) : [...filtered, val],
-    });
-  };
-
   return (
     <div className="space-y-4 py-2">
       <div className="space-y-2">
@@ -247,23 +148,19 @@ function DadosBasicosTab({
             min="0"
             value={form.qtdDiasCapturaRetroativa}
             onChange={(e) => setForm({ ...form, qtdDiasCapturaRetroativa: e.target.value })}
-            placeholder="Opcional (ex: 30)"
+            placeholder="90"
           />
         </div>
       </div>
 
+      {/* Instâncias - locked to "Todas as Instâncias" */}
       <div className="space-y-2">
-        <Label>Instâncias *</Label>
-        <div className="grid grid-cols-2 gap-2">
-          {INSTANCIA_OPTIONS.map((opt) => (
-            <label key={opt.value} className="flex items-center gap-2 p-2 border rounded-md cursor-pointer hover:bg-accent/50">
-              <Checkbox
-                checked={form.listInstancias.includes(opt.value)}
-                onCheckedChange={() => toggleInstancia(opt.value)}
-              />
-              <span className="text-sm">{opt.label}</span>
-            </label>
-          ))}
+        <Label>Instâncias</Label>
+        <div className="p-2 border rounded-md bg-muted/30">
+          <label className="flex items-center gap-2 cursor-not-allowed opacity-80">
+            <Checkbox checked={true} disabled />
+            <span className="text-sm">Todas as Instâncias</span>
+          </label>
         </div>
       </div>
 
@@ -409,6 +306,41 @@ function DocumentosOabTab({
 }
 
 // ──────────────────────────────────────────────
+// Tab 3: Abrangências (locked)
+// ──────────────────────────────────────────────
+function AbrangenciasTab() {
+  return (
+    <div className="space-y-3 py-2">
+      <div className="flex items-center justify-between">
+        <Label>Abrangências (Diários)</Label>
+        <Badge variant="secondary">{FIXED_ABRANGENCIAS.length} diários selecionados</Badge>
+      </div>
+
+      <div className="p-3 border rounded-md bg-muted/30">
+        <label className="flex items-center gap-2 cursor-not-allowed opacity-80">
+          <Checkbox checked={true} disabled />
+          <span className="text-sm font-medium">Todos os diários selecionados</span>
+        </label>
+        <p className="text-xs text-muted-foreground mt-1 ml-6">
+          Todas as {FIXED_ABRANGENCIAS.length} abrangências serão enviadas automaticamente.
+        </p>
+      </div>
+
+      <ScrollArea className="h-[240px] border rounded-md p-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1">
+          {FIXED_ABRANGENCIAS.map((sigla) => (
+            <label key={sigla} className="flex items-center gap-2 py-1 px-2 text-sm cursor-not-allowed opacity-70 rounded">
+              <Checkbox checked={true} disabled />
+              <span className="font-mono text-xs">{sigla}</span>
+            </label>
+          ))}
+        </div>
+      </ScrollArea>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────
 // Main Distribution Term Dialog (Wizard with Tabs)
 // ──────────────────────────────────────────────
 function DistributionTermDialog({
@@ -425,9 +357,35 @@ function DistributionTermDialog({
   const [selectedService, setSelectedService] = useState<string>("");
   const [form, setForm] = useState<TermFormData>({ ...DEFAULT_FORM });
   const [selectedClients, setSelectedClients] = useState<string[]>([]);
-  const [selectedAbrangencias, setSelectedAbrangencias] = useState<string[]>([]);
   const [clientError, setClientError] = useState(false);
   const [activeTab, setActiveTab] = useState("basics");
+
+  // Auto-select first service
+  useEffect(() => {
+    if (!selectedService && services && services.length > 0 && !isEditing) {
+      setSelectedService(services[0].id);
+    }
+  }, [services, selectedService, isEditing]);
+
+  // Auto-select all clients when service changes (for new terms)
+  const { data: entitledClients } = useQuery({
+    queryKey: ["entitled-clients-for-service", selectedService],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("client_system_services")
+        .select("client_systems(id, name)")
+        .eq("partner_service_id", selectedService)
+        .eq("is_active", true);
+      return (data || []).map((item: any) => item.client_systems).filter(Boolean);
+    },
+    enabled: !!selectedService,
+  });
+
+  useEffect(() => {
+    if (!isEditing && entitledClients && entitledClients.length > 0 && selectedClients.length === 0) {
+      setSelectedClients(entitledClients.map((c: any) => c.id));
+    }
+  }, [entitledClients, isEditing]);
 
   // Populate form when editing
   const populateEdit = () => {
@@ -436,12 +394,11 @@ function DistributionTermDialog({
     setForm({
       nome: editTerm.term,
       codTipoConsulta: String(meta.codTipoConsulta || "1"),
-      qtdDiasCapturaRetroativa: meta.qtdDiasCapturaRetroativa ? String(meta.qtdDiasCapturaRetroativa) : "",
-      listInstancias: meta.listInstancias || [1],
+      qtdDiasCapturaRetroativa: meta.qtdDiasCapturaRetroativa ? String(meta.qtdDiasCapturaRetroativa) : "90",
+      listInstancias: [4],
       listDocumentos: meta.listDocumentos || [],
       listOab: meta.listOab || [],
     });
-    setSelectedAbrangencias(meta.listAbrangencias || []);
     setSelectedService(editTerm.partner_services?.id || "");
     const clientIds = editTerm.client_search_terms?.map((c: any) => c.client_systems?.id).filter(Boolean) || [];
     setSelectedClients(clientIds);
@@ -455,8 +412,7 @@ function DistributionTermDialog({
     } else if (o) {
       setForm({ ...DEFAULT_FORM });
       setSelectedClients([]);
-      setSelectedAbrangencias([]);
-      setSelectedService("");
+      setSelectedService(services && services.length > 0 ? services[0].id : "");
       setClientError(false);
       setActiveTab("basics");
     }
@@ -468,22 +424,15 @@ function DistributionTermDialog({
     mutationFn: async () => {
       if (!selectedService) throw new Error("Selecione um serviço");
       if (!form.nome.trim()) throw new Error("Digite um nome");
-      if (form.listInstancias.length === 0) throw new Error("Selecione ao menos uma instância");
-      if (selectedAbrangencias.length === 0) throw new Error("Selecione ao menos uma abrangência");
       if (selectedClients.length === 0) throw new Error("Selecione ao menos um cliente");
-
-      // Convert "Todas" (4) to [1, 2, 3] since API only accepts 1, 2, or 3
-      const resolvedInstancias = form.listInstancias.includes(4) ? [1, 2, 3] : form.listInstancias;
-      // Deduplicate abrangencias
-      const uniqueAbrangencias = [...new Set(selectedAbrangencias)];
 
       const body: any = {
         action: isEditing ? "editName" : "registerName",
         serviceId: selectedService,
         nome: form.nome,
         codTipoConsulta: parseInt(form.codTipoConsulta),
-        listInstancias: resolvedInstancias,
-        abrangencias: uniqueAbrangencias,
+        listInstancias: [4],
+        abrangencias: FIXED_ABRANGENCIAS,
         clientIds: selectedClients,
       };
 
@@ -504,7 +453,6 @@ function DistributionTermDialog({
 
       const { data, error } = await supabase.functions.invoke("manage-distribution-terms", { body });
       if (error) {
-        // Try to extract the JSON error message from the edge function response
         const errStr = error.message || String(error);
         const jsonMatch = errStr.match(/\{.*"error"\s*:\s*"([^"]+)".*\}/);
         if (jsonMatch?.[1]) {
@@ -584,17 +532,7 @@ function DistributionTermDialog({
             </TabsContent>
 
             <TabsContent value="scope" className="mt-0 px-1">
-              <div className="py-2">
-                {selectedService ? (
-                  <AbrangenciasSelector
-                    serviceId={selectedService}
-                    selectedSiglas={selectedAbrangencias}
-                    onChange={setSelectedAbrangencias}
-                  />
-                ) : (
-                  <p className="text-sm text-muted-foreground p-4">Selecione um serviço na aba "Dados Básicos" primeiro.</p>
-                )}
-              </div>
+              <AbrangenciasTab />
             </TabsContent>
           </ScrollArea>
         </Tabs>
@@ -650,48 +588,67 @@ export default function DistributionTerms() {
     },
   });
 
-  // Sync mutation
+  // Sync mutation — sync terms then distributions
   const syncMutation = useMutation({
     mutationFn: async () => {
       if (!services || services.length === 0) throw new Error("Nenhum serviço de distribuições ativo.");
-      const { data, error } = await supabase.functions.invoke("manage-distribution-terms", {
-        body: { action: "listNames", serviceId: services[0].id },
+      const serviceId = services[0].id;
+
+      // Step 1: Sync terms from API
+      const { data: termsData, error: termsError } = await supabase.functions.invoke("manage-distribution-terms", {
+        body: { action: "listNames", serviceId },
       });
-      if (error) throw error;
-      return data;
+      if (termsError) throw termsError;
+
+      // Step 2: Sync distributions
+      const { data: distData, error: distError } = await supabase.functions.invoke("sync-distributions", {});
+      if (distError) throw distError;
+
+      return { termsData, distData };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["distribution-terms"] });
-      const count = data?.names?.length || data?.length || 0;
-      toast.success(`Sincronização concluída: ${count} nomes encontrados`);
+      const termsCount = data?.termsData?.data?.length || 0;
+      const distResults = data?.distData?.results || [];
+      const distSynced = distResults.reduce((sum: number, r: any) => sum + (r.recordsSynced || 0), 0);
+      toast.success(`Sincronização concluída: ${termsCount} nomes, ${distSynced} distribuições`);
     },
     onError: (error) => toast.error(`Erro ao sincronizar: ${error.message}`),
   });
 
-  // Toggle active mutation
-  const toggleMutation = useMutation({
-    mutationFn: async ({ id, activate }: { id: string; activate: boolean }) => {
-      const { error } = await supabase.from("search_terms").update({ is_active: activate }).eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["distribution-terms"] });
-      toast.success("Status atualizado");
-    },
-    onError: () => toast.error("Erro ao atualizar status"),
-  });
-
-  // Delete mutation
+  // Delete mutation — call edge function to delete from API + local
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("search_terms").delete().eq("id", id);
+    mutationFn: async (term: DistributionTerm) => {
+      if (!term.solucionare_code) {
+        // No solucionare_code, just delete locally
+        const { error } = await supabase.from("search_terms").delete().eq("id", term.id);
+        if (error) throw error;
+        return;
+      }
+
+      const serviceId = term.partner_services?.id;
+      if (!serviceId) throw new Error("Serviço não encontrado para este termo");
+
+      const { data, error } = await supabase.functions.invoke("manage-distribution-terms", {
+        body: {
+          action: "deleteName",
+          serviceId,
+          codNome: term.solucionare_code,
+          termo: term.term,
+        },
+      });
       if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Erro ao excluir");
+
+      // Also delete the local record
+      await supabase.from("client_search_terms").delete().eq("search_term_id", term.id);
+      await supabase.from("search_terms").delete().eq("id", term.id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["distribution-terms"] });
-      toast.success("Nome removido");
+      toast.success("Nome removido com sucesso");
     },
-    onError: () => toast.error("Erro ao remover"),
+    onError: (error) => toast.error(`Erro ao remover: ${error.message}`),
   });
 
   const filteredTerms = terms.filter((t) => {
@@ -854,11 +811,8 @@ export default function DistributionTerms() {
                             <Button size="sm" variant="ghost" onClick={() => { setEditTerm(term); }}>
                               <Edit className="h-3.5 w-3.5 mr-1" /> Editar
                             </Button>
-                            <Button size="sm" variant="ghost" onClick={() => toggleMutation.mutate({ id: term.id, activate: !term.is_active })}>
-                              {term.is_active ? "Desativar" : "Ativar"}
-                            </Button>
                             <Button size="sm" variant="ghost" className="text-destructive" onClick={() => {
-                              if (confirm("Tem certeza que deseja excluir este nome?")) deleteMutation.mutate(term.id);
+                              if (confirm("Tem certeza que deseja excluir este nome? Ele será removido também do parceiro.")) deleteMutation.mutate(term);
                             }}>
                               Excluir
                             </Button>
