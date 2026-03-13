@@ -40,6 +40,7 @@ export function ProcessDocumentsTab({ processId }: ProcessDocumentsTabProps) {
         .from("process_documents")
         .select("*")
         .eq("process_id", processId)
+        .is("cod_andamento", null)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
