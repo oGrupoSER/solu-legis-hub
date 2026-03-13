@@ -48,9 +48,6 @@ interface ProcessesTableProps {
   filterStatus?: string;
 }
 
-const STATUS_FILTER_MAP: Record<string, number> = {
-  pending: 1, registered: 4, archived: 5, error: 7,
-};
 
 export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: ProcessesTableProps) {
   const [processes, setProcesses] = useState<Process[]>([]);
@@ -84,8 +81,8 @@ export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: Proce
         query = query.or(`process_number.ilike.%${searchQuery}%,tribunal.ilike.%${searchQuery}%`);
       }
 
-      if (filterStatus !== "all" && STATUS_FILTER_MAP[filterStatus]) {
-        query = query.eq("status_code", STATUS_FILTER_MAP[filterStatus]);
+      if (filterStatus !== "all") {
+        query = query.eq("status_description", filterStatus);
       }
 
       const { data, error, count } = await query;

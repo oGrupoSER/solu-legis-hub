@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +20,24 @@ const Processes = () => {
   const [syncDialogOpen, setSyncDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [statusOptions, setStatusOptions] = useState<{ code: number | null; description: string }[]>([]);
+
+  useEffect(() => {
+    const fetchStatusOptions = async () => {
+      const { data } = await supabase
+        .from("processes")
+        .select("status_code, status_description");
+      if (data) {
+        const map = new Map<string, { code: number | null; description: string }>();
+        data.forEach((p) => {
+          const desc = p.status_description || "Sem status";
+          if (!map.has(desc)) map.set(desc, { code: p.status_code, description: desc });
+        });
+        setStatusOptions(Array.from(map.values()));
+      }
+    };
+    fetchStatusOptions();
+  }, [refreshTrigger]);
 
   const handleProcessCreated = () => {
     setDialogOpen(false);
@@ -127,13 +145,14 @@ const Processes = () => {
             />
           </div>
           <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectTrigger className="w-[200px]"><SelectValue placeholder="Status" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos os Status</SelectItem>
-              <SelectItem value="pending">Pendente</SelectItem>
-              <SelectItem value="registered">Cadastrado</SelectItem>
-              <SelectItem value="error">Erro na Validação</SelectItem>
-              <SelectItem value="archived">Arquivado</SelectItem>
+              {statusOptions.map((opt) => (
+                <SelectItem key={opt.description} value={opt.description}>
+                  {opt.description}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </CardContent>
