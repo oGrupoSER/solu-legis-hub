@@ -267,11 +267,25 @@ export default function ProcessMovements() {
       const { data, error } = await query;
       if (error) throw error;
 
+      let result = data as unknown as Movement[];
+
       if (filterPartner !== "all") {
-        return (data || []).filter((m: any) => m.processes?.partner_id === filterPartner) as unknown as Movement[];
+        result = result.filter((m: any) => m.processes?.partner_id === filterPartner);
       }
 
-      return data as unknown as Movement[];
+      // Client-side search: match process_number, cod_andamento, or description
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        result = result.filter((m: any) => {
+          const processNumber = m.processes?.process_number?.toLowerCase() || "";
+          const description = m.description?.toLowerCase() || "";
+          const tipoAndamento = m.tipo_andamento?.toLowerCase() || "";
+          const codAndamento = String(m.cod_andamento || "");
+          return processNumber.includes(q) || description.includes(q) || tipoAndamento.includes(q) || codAndamento.includes(q);
+        });
+      }
+
+      return result;
     },
   });
 
