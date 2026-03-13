@@ -142,28 +142,25 @@ export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: Proce
       <Table>
         <TableHeader>
           <TableRow>
-             <TableHead>Número do Processo</TableHead>
-             <TableHead>Escritório</TableHead>
-             <TableHead>Tribunal</TableHead>
-             <TableHead>UF</TableHead>
-             <TableHead>Instância</TableHead>
-             <TableHead>Status</TableHead>
-             <TableHead>Solucionare</TableHead>
-             <TableHead>Clientes</TableHead>
-             <TableHead>Última Sincronização</TableHead>
+              <TableHead>Número do Processo</TableHead>
+              <TableHead>UF</TableHead>
+              <TableHead>Instância</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Solucionare</TableHead>
+              <TableHead>Última Sincronização</TableHead>
              <TableHead className="w-[60px]">Ações</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {loading ? (
              <TableRow>
-               <TableCell colSpan={10} className="text-center py-8">
+               <TableCell colSpan={7} className="text-center py-8">
                  <div className="animate-pulse">Carregando...</div>
               </TableCell>
             </TableRow>
           ) : processes.length === 0 ? (
              <TableRow>
-               <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+               <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                  Nenhum processo encontrado
               </TableCell>
             </TableRow>
@@ -173,8 +170,6 @@ export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: Proce
               return (
                 <TableRow key={process.id}>
                   <TableCell className="font-mono text-sm">{process.process_number}</TableCell>
-                  <TableCell className="text-sm font-medium">{(process as any).cod_escritorio || "-"}</TableCell>
-                  <TableCell>{process.tribunal || "-"}</TableCell>
                   <TableCell>{process.uf || "-"}</TableCell>
                   <TableCell>{process.instance || "-"}</TableCell>
                   <TableCell>
@@ -218,9 +213,6 @@ export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: Proce
                          <Clock className="h-3 w-3" /> Pendente
                        </Badge>
                      )}
-                   </TableCell>
-                   <TableCell>
-                     <ClientBadges clients={clients} />
                    </TableCell>
                    <TableCell className="text-sm text-muted-foreground">
                     {process.last_sync_at
