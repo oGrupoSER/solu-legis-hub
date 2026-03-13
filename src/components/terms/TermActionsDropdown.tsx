@@ -13,8 +13,6 @@ import {
   MoreHorizontal,
   Edit,
   Trash2,
-  Power,
-  PowerOff,
   Loader2,
 } from "lucide-react";
 
