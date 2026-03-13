@@ -10,6 +10,7 @@ import { ProcessesTable } from "@/components/processes/ProcessesTable";
 import { ProcessDialog } from "@/components/processes/ProcessDialog";
 import { ProcessesStats } from "@/components/processes/ProcessesStats";
 import { BulkClientLinkDialog } from "@/components/shared/BulkClientLinkDialog";
+import { SyncProgressDialog } from "@/components/processes/SyncProgressDialog";
 import { supabase } from "@/integrations/supabase/client";
 
 const Processes = () => {

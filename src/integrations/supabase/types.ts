@@ -846,16 +846,21 @@ export type Database = {
           classe: string | null
           cod_agrupador: number | null
           cod_processo: number | null
+          cod_sistema: number | null
           comarca: string | null
           created_at: string | null
           data_atualizacao: string | null
           data_distribuicao: string | null
+          digital: boolean | null
           grouper_id: string | null
           id: string
           juiz: string | null
+          link_consulta_processo: string | null
           natureza: string | null
+          nome_sistema: string | null
           process_id: string | null
           raw_data: Json
+          sigla_sistema: string | null
           situacao: string | null
           tipo_acao: string | null
           tribunal: string | null
@@ -869,16 +874,21 @@ export type Database = {
           classe?: string | null
           cod_agrupador?: number | null
           cod_processo?: number | null
+          cod_sistema?: number | null
           comarca?: string | null
           created_at?: string | null
           data_atualizacao?: string | null
           data_distribuicao?: string | null
+          digital?: boolean | null
           grouper_id?: string | null
           id?: string
           juiz?: string | null
+          link_consulta_processo?: string | null
           natureza?: string | null
+          nome_sistema?: string | null
           process_id?: string | null
           raw_data?: Json
+          sigla_sistema?: string | null
           situacao?: string | null
           tipo_acao?: string | null
           tribunal?: string | null
@@ -892,16 +902,21 @@ export type Database = {
           classe?: string | null
           cod_agrupador?: number | null
           cod_processo?: number | null
+          cod_sistema?: number | null
           comarca?: string | null
           created_at?: string | null
           data_atualizacao?: string | null
           data_distribuicao?: string | null
+          digital?: boolean | null
           grouper_id?: string | null
           id?: string
           juiz?: string | null
+          link_consulta_processo?: string | null
           natureza?: string | null
+          nome_sistema?: string | null
           process_id?: string | null
           raw_data?: Json
+          sigla_sistema?: string | null
           situacao?: string | null
           tipo_acao?: string | null
           tribunal?: string | null
