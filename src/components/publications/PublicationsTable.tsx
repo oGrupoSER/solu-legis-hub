@@ -51,7 +51,7 @@ export function PublicationsTable() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [gazetteOptions, setGazetteOptions] = useState<string[]>([]);
-  const [partnerOptions, setPartnerOptions] = useState<{ id: string; name: string }[]>([]);
+  
   const [clientOptions, setClientOptions] = useState<{ id: string; name: string }[]>([]);
   const [confirmedIds, setConfirmedIds] = useState<Set<string>>(new Set());
   const itemsPerPage = 10;
