@@ -70,9 +70,7 @@ export function SyncProgressDialog({ open, onOpenChange, onComplete }: SyncProgr
     // Stages 3-7: sync-process-updates individual types
     const updateStages: { id: string; syncType: string }[] = [
       { id: "groupers", syncType: "groupers" },
-      { id: "movements", syncType: "movements" },
       { id: "all-movements", syncType: "all-movements" },
-      { id: "documents", syncType: "documents" },
       { id: "all-documents", syncType: "all-documents" },
       { id: "covers", syncType: "covers" },
       { id: "dependencies", syncType: "dependencies" },
