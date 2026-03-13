@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,12 +10,13 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Search, Loader2, Download, FileText, RefreshCw, Eye, Clock, FolderOpen, Users, X } from "lucide-react";
+import { Search, Loader2, Download, FileText, RefreshCw, Eye, Clock, FolderOpen, Users, X, Gavel, CircleDot, CheckCircle, Archive, ShieldAlert, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { useNavigate } from "react-router-dom";
 import { DateRangePicker } from "@/components/publications/DateRangePicker";
 import { ConfirmationBadge } from "@/components/shared/ConfirmationBadge";
+import { cn } from "@/lib/utils";
 import {
   Pagination,
   PaginationContent,
@@ -36,6 +37,9 @@ interface RegisteredProcess {
   last_sync_at: string | null;
   last_cover_sync_at: string | null;
   partner_id: string | null;
+  status_code: number | null;
+  status_description: string | null;
+  status: string | null;
 }
 
 interface Movement {
@@ -50,6 +54,57 @@ interface Movement {
   processes?: { process_number: string; tribunal: string | null; partner_id: string | null } | null;
 }
 
+interface StatusGroup {
+  label: string;
+  count: number;
+  statusCode: number | null;
+}
+
+const STATUS_ICON_MAP: Record<number, { icon: typeof CircleDot; colorClass: string }> = {
+  1: { icon: Clock, colorClass: "text-warning" },
+  2: { icon: Clock, colorClass: "text-warning" },
+  4: { icon: CheckCircle, colorClass: "text-success" },
+  5: { icon: Archive, colorClass: "text-muted-foreground" },
+  6: { icon: ShieldAlert, colorClass: "text-destructive" },
+  7: { icon: AlertCircle, colorClass: "text-destructive" },
+};
+const DEFAULT_ICON = { icon: CircleDot, colorClass: "text-primary" };
+
+async function fetchAllProcesses(searchQuery: string, filterPartner: string, filterClient: string, clientProcessIds: string[] | undefined) {
+  if (filterClient !== "all" && clientProcessIds && clientProcessIds.length === 0) return [];
+
+  const PAGE_SIZE = 1000;
+  let allData: RegisteredProcess[] = [];
+  let from = 0;
+
+  while (true) {
+    let query = supabase
+      .from("processes")
+      .select("id, process_number, tribunal, uf, instance, cod_processo, cod_escritorio, last_sync_at, last_cover_sync_at, partner_id, status_code, status_description, status")
+      .order("process_number")
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (searchQuery) query = query.or(`process_number.ilike.%${searchQuery}%,tribunal.ilike.%${searchQuery}%`);
+    if (filterPartner !== "all") query = query.eq("partner_id", filterPartner);
+    if (filterClient !== "all" && clientProcessIds && clientProcessIds.length > 0) {
+      query = query.in("id", clientProcessIds);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    allData = allData.concat(data as RegisteredProcess[]);
+    if (data.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+
+  return allData;
+}
+
+function getStatusLabel(p: RegisteredProcess): string {
+  return p.status_description || p.status || "Sem status";
+}
+
 export default function ProcessMovements() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -59,6 +114,7 @@ export default function ProcessMovements() {
   const [filterPartner, setFilterPartner] = useState<string>("all");
   const [filterClient, setFilterClient] = useState<string>("all");
   const [filterConfirmation, setFilterConfirmation] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
   const [confirmedIds, setConfirmedIds] = useState<Set<string>>(new Set());
   const [processesPage, setProcessesPage] = useState(1);
@@ -69,7 +125,7 @@ export default function ProcessMovements() {
   useEffect(() => {
     setProcessesPage(1);
     setMovementsPage(1);
-  }, [searchQuery, filterPartner, filterClient, filterConfirmation, dateRange]);
+  }, [searchQuery, filterPartner, filterClient, filterConfirmation, dateRange, filterStatus]);
 
   // Reset pages when tab changes
   useEffect(() => {
@@ -139,28 +195,29 @@ export default function ProcessMovements() {
     },
   });
 
-  const { data: processes = [], isLoading: loadingProcesses } = useQuery({
+  const { data: allProcesses = [], isLoading: loadingProcesses } = useQuery({
     queryKey: ["registered-processes", searchQuery, filterPartner, filterClient, clientProcessIds],
-    queryFn: async () => {
-      if (filterClient !== "all" && clientProcessIds && clientProcessIds.length === 0) return [];
-
-      let query = supabase
-        .from("processes")
-        .select("id, process_number, tribunal, uf, instance, cod_processo, cod_escritorio, last_sync_at, last_cover_sync_at, partner_id")
-        .eq("status_code", 4)
-        .order("process_number");
-
-      if (searchQuery) query = query.or(`process_number.ilike.%${searchQuery}%,tribunal.ilike.%${searchQuery}%`);
-      if (filterPartner !== "all") query = query.eq("partner_id", filterPartner);
-      if (filterClient !== "all" && clientProcessIds && clientProcessIds.length > 0) {
-        query = query.in("id", clientProcessIds);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return data as RegisteredProcess[];
-    },
+    queryFn: () => fetchAllProcesses(searchQuery, filterPartner, filterClient, clientProcessIds),
   });
+
+  // Compute status groups from all processes
+  const statusGroups = useMemo(() => {
+    const map = new Map<string, StatusGroup>();
+    allProcesses.forEach((p) => {
+      const label = getStatusLabel(p);
+      if (!map.has(label)) {
+        map.set(label, { label, count: 0, statusCode: p.status_code });
+      }
+      map.get(label)!.count++;
+    });
+    return Array.from(map.values()).sort((a, b) => b.count - a.count);
+  }, [allProcesses]);
+
+  // Filter processes by selected status
+  const processes = useMemo(() => {
+    if (filterStatus === "all") return allProcesses;
+    return allProcesses.filter((p) => getStatusLabel(p) === filterStatus);
+  }, [allProcesses, filterStatus]);
 
   const processIds = processes.map((p) => p.id);
 
@@ -189,7 +246,7 @@ export default function ProcessMovements() {
   });
 
   const { data: movements = [], isLoading: loadingMovements } = useQuery({
-    queryKey: ["all-movements", searchQuery, filterPartner, filterClient, filterConfirmation, dateRange, clientProcessIds, confirmedIds.size],
+    queryKey: ["all-movements", searchQuery, filterPartner, filterClient, filterConfirmation, dateRange, clientProcessIds, confirmedIds.size, filterStatus, processIds],
     queryFn: async () => {
       if (filterClient !== "all" && clientProcessIds && clientProcessIds.length === 0) return [];
 
@@ -197,11 +254,17 @@ export default function ProcessMovements() {
         .from("process_movements")
         .select("*, processes(process_number, tribunal, partner_id)")
         .order("data_andamento", { ascending: false, nullsFirst: false })
-        .limit(200);
+        .limit(500);
 
       if (searchQuery) query = query.or(`description.ilike.%${searchQuery}%,tipo_andamento.ilike.%${searchQuery}%`);
       if (filterClient !== "all" && clientProcessIds && clientProcessIds.length > 0) {
         query = query.in("process_id", clientProcessIds);
+      }
+      // Filter movements by status-filtered process IDs
+      if (filterStatus !== "all" && processIds.length > 0) {
+        query = query.in("process_id", processIds);
+      } else if (filterStatus !== "all" && processIds.length === 0) {
+        return [];
       }
       if (dateRange.from) query = query.gte("data_andamento", format(dateRange.from, "yyyy-MM-dd"));
       if (dateRange.to) query = query.lte("data_andamento", format(dateRange.to, "yyyy-MM-dd"));
@@ -217,7 +280,6 @@ export default function ProcessMovements() {
       const { data, error } = await query;
       if (error) throw error;
 
-      // Filter by partner on the client side (partner_id is on processes, not movements)
       if (filterPartner !== "all") {
         return (data || []).filter((m: any) => m.processes?.partner_id === filterPartner) as unknown as Movement[];
       }
@@ -257,7 +319,7 @@ export default function ProcessMovements() {
     toast.success("Exportado com sucesso");
   };
 
-  const hasActiveFilters = searchQuery || filterPartner !== "all" || filterClient !== "all" || filterConfirmation !== "all" || dateRange.from;
+  const hasActiveFilters = searchQuery || filterPartner !== "all" || filterClient !== "all" || filterConfirmation !== "all" || dateRange.from || filterStatus !== "all";
 
   // Pagination for processes tab
   const totalProcesses = processes.length;
@@ -268,6 +330,10 @@ export default function ProcessMovements() {
   const totalMovements = movements.length;
   const totalMovementPages = Math.ceil(totalMovements / itemsPerPage);
   const paginatedMovements = movements.slice((movementsPage - 1) * itemsPerPage, movementsPage * itemsPerPage);
+
+  const handleStatusClick = (status: string) => {
+    setFilterStatus(status === filterStatus ? "all" : status);
+  };
 
   const renderPagination = (currentPage: number, totalPages: number, totalItems: number, setPage: (p: number) => void, label: string) => {
     if (totalPages <= 1) return null;
@@ -331,12 +397,54 @@ export default function ProcessMovements() {
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Processos Cadastrados</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{processes.length}</div></CardContent>
+      {/* Status indicator cards */}
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+        <Card
+          className={cn(
+            "cursor-pointer transition-all hover:shadow-md",
+            filterStatus === "all" && "ring-2 ring-primary"
+          )}
+          onClick={() => setFilterStatus("all")}
+        >
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total</CardTitle>
+            <Gavel className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{allProcesses.length}</div>
+            <p className="text-xs text-muted-foreground">Processos cadastrados</p>
+          </CardContent>
         </Card>
+
+        {statusGroups.map((g) => {
+          const config = (g.statusCode != null && STATUS_ICON_MAP[g.statusCode]) || DEFAULT_ICON;
+          const Icon = config.icon;
+          return (
+            <Card
+              key={g.label}
+              className={cn(
+                "cursor-pointer transition-all hover:shadow-md",
+                filterStatus === g.label && "ring-2 ring-primary"
+              )}
+              onClick={() => handleStatusClick(g.label)}
+            >
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium truncate">{g.label}</CardTitle>
+                <Icon className={`h-4 w-4 shrink-0 ${config.colorClass}`} />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{g.count}</div>
+                <p className="text-xs text-muted-foreground">
+                  {allProcesses.length > 0 ? `${((g.count / allProcesses.length) * 100).toFixed(0)}% do total` : "—"}
+                </p>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Summary stats */}
+      <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Total de Andamentos</CardTitle></CardHeader>
           <CardContent><div className="text-2xl font-bold">{movements.length}</div></CardContent>
@@ -397,6 +505,7 @@ export default function ProcessMovements() {
             setFilterPartner("all");
             setFilterClient("all");
             setFilterConfirmation("all");
+            setFilterStatus("all");
             setDateRange({ from: undefined, to: undefined });
           }} title="Limpar filtros">
             <X className="h-4 w-4" />
@@ -420,6 +529,7 @@ export default function ProcessMovements() {
                     <TableHead>Escritório</TableHead>
                     <TableHead>Tribunal</TableHead>
                     <TableHead>UF</TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead>Andamentos</TableHead>
                     <TableHead>Documentos</TableHead>
                     <TableHead>Última Sincronização</TableHead>
@@ -428,9 +538,9 @@ export default function ProcessMovements() {
                 </TableHeader>
                 <TableBody>
                   {loadingProcesses ? (
-                    <TableRow><TableCell colSpan={8} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+                    <TableRow><TableCell colSpan={9} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
                   ) : processes.length === 0 ? (
-                    <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8"><FileText className="h-10 w-10 mx-auto mb-2 text-muted-foreground/50" />Nenhum processo com status Cadastrado</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8"><FileText className="h-10 w-10 mx-auto mb-2 text-muted-foreground/50" />Nenhum processo encontrado</TableCell></TableRow>
                   ) : (
                     paginatedProcesses.map((proc) => (
                       <TableRow key={proc.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/processes/${proc.id}`)}>
@@ -438,6 +548,9 @@ export default function ProcessMovements() {
                         <TableCell>{proc.cod_escritorio || "-"}</TableCell>
                         <TableCell>{proc.tribunal || "-"}</TableCell>
                         <TableCell>{proc.uf || "-"}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{getStatusLabel(proc)}</Badge>
+                        </TableCell>
                         <TableCell><Badge variant="outline" className="gap-1"><Clock className="h-3 w-3" /> {movementCounts[proc.id] || 0}</Badge></TableCell>
                         <TableCell><Badge variant="outline" className="gap-1"><FolderOpen className="h-3 w-3" /> {documentCounts[proc.id] || 0}</Badge></TableCell>
                         <TableCell className="text-sm text-muted-foreground">{proc.last_sync_at ? new Date(proc.last_sync_at).toLocaleString("pt-BR") : "-"}</TableCell>
