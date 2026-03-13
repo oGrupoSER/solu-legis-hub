@@ -21,11 +21,11 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 const STATUS_CODES: Record<number, string> = {
-  2: 'Validando',
-  4: 'Cadastrado',
-  5: 'Arquivado',
-  6: 'Segredo de Justiça',
-  7: 'Erro na Validação',
+  2: 'VALIDANDO',
+  4: 'CADASTRADO',
+  5: 'ARQUIVADO',
+  6: 'SEGREDO',
+  7: 'ERRO',
 };
 
 const STATUS_STRING_TO_CODE: Record<string, number> = {
@@ -36,9 +36,33 @@ const STATUS_STRING_TO_CODE: Record<string, number> = {
   'SEGREDO DE JUSTICA': 6,
   'SEGREDO DE JUSTIÇA': 6,
   'ERRO': 7,
+  'ERRO NA VALIDACAO': 7,
+  'ERRO NA VALIDAÇÃO': 7,
 };
 
 const INSTANCES = [1, 2, 3];
+
+function normalizeStatusPayload(payload: any): any {
+  if (Array.isArray(payload)) return payload[0] ?? null;
+  if (payload && typeof payload === 'object' && payload[0]) return payload[0];
+  return payload;
+}
+
+function resolveStatus(payload: any) {
+  const statusString = String(payload?.status || '').trim().toUpperCase();
+  const mappedCode = statusString ? STATUS_STRING_TO_CODE[statusString] : undefined;
+  const statusCode = mappedCode || payload?.codStatus || payload?.statusCode || 2;
+  const statusLabel = String(
+    payload?.status || STATUS_CODES[statusCode] || payload?.descricaoStatus || 'DESCONHECIDO'
+  ).trim();
+
+  return {
+    statusCode,
+    statusLabel,
+    codClassificacaoStatus: payload?.codClassificacaoStatus ?? null,
+    descricaoClassificacaoStatus: payload?.descricaoClassificacaoStatus ?? null,
+  };
+}
 
 async function getOfficeCode(supabase: any, serviceId: string): Promise<number> {
   const { data, error } = await supabase
@@ -258,16 +282,27 @@ serve(async (req) => {
         for (const proc of allInstances) {
           if (!proc.cod_processo) continue;
           try {
-            const statusData = await client.get('/BuscaStatusProcesso', { codProcesso: proc.cod_processo });
-            if (statusData?.codStatus) {
+            const rawStatusData = await client.get('/BuscaStatusProcesso', { codProcesso: proc.cod_processo });
+            const statusPayload = normalizeStatusPayload(rawStatusData);
+            const resolved = statusPayload ? resolveStatus(statusPayload) : null;
+
+            if (resolved) {
               await supabase.from('processes').update({
-                status_code: statusData.codStatus,
-                status_description: STATUS_CODES[statusData.codStatus] || statusData.descricaoStatus,
-                cod_classificacao_status: statusData.codClassificacaoStatus || null,
-                descricao_classificacao_status: statusData.descricaoClassificacaoStatus || null,
+                status: resolved.statusLabel,
+                status_code: resolved.statusCode,
+                status_description: resolved.statusLabel,
+                cod_classificacao_status: resolved.codClassificacaoStatus,
+                descricao_classificacao_status: resolved.descricaoClassificacaoStatus,
+                updated_at: new Date().toISOString(),
               }).eq('id', proc.id);
             }
-            statuses.push({ instance: proc.instance, ...statusData });
+
+            statuses.push({
+              instance: proc.instance,
+              ...(statusPayload || {}),
+              statusCode: resolved?.statusCode ?? null,
+              statusDescription: resolved?.statusLabel ?? null,
+            });
           } catch (err) {
             console.error(`Error checking status for instance ${proc.instance}:`, err);
           }
@@ -350,15 +385,17 @@ serve(async (req) => {
           console.log(`Checking status for ${localProcesses.length} local processes`);
           for (const proc of localProcesses) {
             try {
-              const statusData = await client.get('/BuscaStatusProcesso', { codProcesso: proc.cod_processo });
-              if (statusData) {
-                const statusString = (statusData.status || '').toUpperCase();
-                const statusCode = statusData.codStatus || STATUS_STRING_TO_CODE[statusString] || 2;
+              const rawStatusData = await client.get('/BuscaStatusProcesso', { codProcesso: proc.cod_processo });
+              const statusPayload = normalizeStatusPayload(rawStatusData);
+
+              if (statusPayload) {
+                const resolved = resolveStatus(statusPayload);
                 await supabase.from('processes').update({
-                  status_code: statusCode,
-                  status_description: STATUS_CODES[statusCode] || statusData.descricaoStatus || statusData.status || 'Desconhecido',
-                  cod_classificacao_status: statusData.codClassificacaoStatus || null,
-                  descricao_classificacao_status: statusData.descricaoClassificacaoStatus || null,
+                  status: resolved.statusLabel,
+                  status_code: resolved.statusCode,
+                  status_description: resolved.statusLabel,
+                  cod_classificacao_status: resolved.codClassificacaoStatus,
+                  descricao_classificacao_status: resolved.descricaoClassificacaoStatus,
                   updated_at: new Date().toISOString(),
                 }).eq('id', proc.id);
                 statusUpdated++;
@@ -383,8 +420,7 @@ serve(async (req) => {
             if (!pn) continue;
 
             const inst = proc.instancia ? String(proc.instancia) : '1';
-            const statusString = (proc.status || '').toUpperCase();
-            const statusCode = proc.codStatus || proc.statusCode || STATUS_STRING_TO_CODE[statusString] || 2;
+            const resolved = resolveStatus(proc);
 
             const upsertData: any = {
               process_number: pn,
@@ -393,15 +429,16 @@ serve(async (req) => {
               partner_id: service.partner_id,
               cod_escritorio: officeCode,
               cod_processo: proc.codProcesso || null,
-              status_code: statusCode,
-              status_description: STATUS_CODES[statusCode] || proc.descricaoStatus || proc.status || 'Desconhecido',
+              status: resolved.statusLabel,
+              status_code: resolved.statusCode,
+              status_description: resolved.statusLabel,
               solucionare_status: 'synced',
               raw_data: proc,
               updated_at: new Date().toISOString(),
               uf: proc.UF || proc.uf || null,
               data_cadastro: proc.dataCadastro || null,
-              cod_classificacao_status: proc.codClassificacaoStatus || null,
-              descricao_classificacao_status: proc.descricaoClassificacaoStatus || null,
+              cod_classificacao_status: resolved.codClassificacaoStatus,
+              descricao_classificacao_status: resolved.descricaoClassificacaoStatus,
             };
 
             const { error } = await supabase
