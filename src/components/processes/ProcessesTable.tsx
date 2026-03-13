@@ -247,7 +247,7 @@ export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: Proce
                           <RefreshCw className="h-4 w-4 mr-2" /> Verificar Status
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          onClick={() => handleDelete(process)}
+                          onClick={() => setDeleteProcess(process)}
                           className="text-destructive focus:text-destructive"
                         >
                           <Trash2 className="h-4 w-4 mr-2" /> Excluir
