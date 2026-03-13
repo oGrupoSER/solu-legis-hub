@@ -21,6 +21,7 @@ import { toast } from "sonner";
 interface Process {
   id: string;
   process_number: string;
+  cod_processo: number | null;
   tribunal: string | null;
   status: string | null;
   status_code: number | null;
@@ -78,7 +79,7 @@ export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: Proce
         .range(page * pageSize, (page + 1) * pageSize - 1);
 
       if (searchQuery) {
-        query = query.or(`process_number.ilike.%${searchQuery}%,tribunal.ilike.%${searchQuery}%`);
+        query = query.or(`process_number.ilike.%${searchQuery}%,tribunal.ilike.%${searchQuery}%,cod_processo::text.ilike.%${searchQuery}%`);
       }
 
       if (filterStatus !== "all") {
@@ -143,6 +144,7 @@ export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: Proce
         <TableHeader>
           <TableRow>
               <TableHead>Número do Processo</TableHead>
+              <TableHead>Código</TableHead>
               <TableHead>UF</TableHead>
               <TableHead>Instância</TableHead>
               <TableHead>Status</TableHead>
@@ -154,14 +156,14 @@ export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: Proce
         <TableBody>
           {loading ? (
              <TableRow>
-               <TableCell colSpan={7} className="text-center py-8">
-                 <div className="animate-pulse">Carregando...</div>
+                <TableCell colSpan={8} className="text-center py-8">
+                  <div className="animate-pulse">Carregando...</div>
               </TableCell>
             </TableRow>
           ) : processes.length === 0 ? (
              <TableRow>
-               <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                 Nenhum processo encontrado
+                <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                  Nenhum processo encontrado
               </TableCell>
             </TableRow>
           ) : (
@@ -170,7 +172,8 @@ export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: Proce
               return (
                 <TableRow key={process.id}>
                   <TableCell className="font-mono text-sm">{process.process_number}</TableCell>
-                  <TableCell>{process.uf || "-"}</TableCell>
+                  <TableCell className="text-sm">{process.raw_data?.codProcesso || process.cod_processo || "-"}</TableCell>
+                   <TableCell>{process.uf || "-"}</TableCell>
                   <TableCell>{process.instance || "-"}</TableCell>
                   <TableCell>
                   {(() => {

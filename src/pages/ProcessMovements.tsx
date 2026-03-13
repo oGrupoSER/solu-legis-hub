@@ -84,7 +84,7 @@ async function fetchAllProcesses(searchQuery: string, filterPartner: string, fil
       .order("process_number")
       .range(from, from + PAGE_SIZE - 1);
 
-    if (searchQuery) query = query.or(`process_number.ilike.%${searchQuery}%,tribunal.ilike.%${searchQuery}%`);
+    if (searchQuery) query = query.or(`process_number.ilike.%${searchQuery}%,tribunal.ilike.%${searchQuery}%,cod_processo::text.ilike.%${searchQuery}%`);
     if (filterPartner !== "all") query = query.eq("partner_id", filterPartner);
     if (filterClient !== "all" && clientProcessIds && clientProcessIds.length > 0) {
       query = query.in("id", clientProcessIds);
@@ -526,7 +526,8 @@ export default function ProcessMovements() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Número do Processo</TableHead>
-                    <TableHead>UF</TableHead>
+                    <TableHead>Código</TableHead>
+                     <TableHead>UF</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Andamentos</TableHead>
                     <TableHead>Documentos</TableHead>
@@ -536,14 +537,15 @@ export default function ProcessMovements() {
                 </TableHeader>
                 <TableBody>
                   {loadingProcesses ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
                   ) : processes.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8"><FileText className="h-10 w-10 mx-auto mb-2 text-muted-foreground/50" />Nenhum processo encontrado</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8"><FileText className="h-10 w-10 mx-auto mb-2 text-muted-foreground/50" />Nenhum processo encontrado</TableCell></TableRow>
                   ) : (
                     paginatedProcesses.map((proc) => (
                       <TableRow key={proc.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/processes/${proc.id}`)}>
                         <TableCell className="font-mono text-sm">{proc.process_number}</TableCell>
-                        <TableCell>{proc.uf || "-"}</TableCell>
+                        <TableCell className="text-sm">{proc.cod_processo || "-"}</TableCell>
+                         <TableCell>{proc.uf || "-"}</TableCell>
                         <TableCell>
                           <Badge variant="outline">{getStatusLabel(proc)}</Badge>
                         </TableCell>
