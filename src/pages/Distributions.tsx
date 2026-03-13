@@ -51,15 +51,6 @@ export default function Distributions() {
     fetchConfirmed();
   }, []);
 
-  const { data: partners } = useQuery({
-    queryKey: ["partners-filter"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("partners").select("id, name").eq("is_active", true);
-      if (error) throw error;
-      return data;
-    },
-  });
-
   const { data: clients } = useQuery({
     queryKey: ["clients-filter"],
     queryFn: async () => {
