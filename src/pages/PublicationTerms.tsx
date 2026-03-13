@@ -278,8 +278,6 @@ const PublicationTerms = () => {
                         <TableCell>
                           <Badge variant="outline">{term.term_type === "office" ? "Escritório" : "Nome"}</Badge>
                         </TableCell>
-                        <TableCell className="text-sm">{term.partners?.name || "-"}</TableCell>
-                        <TableCell className="text-sm">{term.partner_services?.service_name || "-"}</TableCell>
                          <TableCell>
                            <ClientBadges clients={clients} />
                          </TableCell>
