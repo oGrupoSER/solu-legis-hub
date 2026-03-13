@@ -213,7 +213,8 @@ const PublicationTerms = () => {
         <Card>
           <CardHeader><CardTitle className="text-sm">Última Sincronização</CardTitle></CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div><span className="text-muted-foreground">Termos Importados:</span> <strong>{syncStats.terms_imported ?? 0}</strong></div>
               <div><span className="text-muted-foreground">Publicações Recebidas:</span> <strong>{syncStats.total_received ?? 0}</strong></div>
               <div><span className="text-muted-foreground">Novas Inseridas:</span> <strong>{syncStats.records_synced ?? 0}</strong></div>
               <div><span className="text-muted-foreground">Status:</span> <strong>{syncStats.success ? 'Sucesso' : 'Erro'}</strong></div>
