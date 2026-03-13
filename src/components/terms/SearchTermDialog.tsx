@@ -36,7 +36,7 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
   const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState({
     term: "",
-    term_type: "office",
+    term_type: "name",
     partner_id: "",
     partner_service_id: "",
     is_active: true,
