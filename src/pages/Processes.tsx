@@ -145,13 +145,14 @@ const Processes = () => {
             />
           </div>
           <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-[180px]"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectTrigger className="w-[200px]"><SelectValue placeholder="Status" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos os Status</SelectItem>
-              <SelectItem value="pending">Pendente</SelectItem>
-              <SelectItem value="registered">Cadastrado</SelectItem>
-              <SelectItem value="error">Erro na Validação</SelectItem>
-              <SelectItem value="archived">Arquivado</SelectItem>
+              {statusOptions.map((opt) => (
+                <SelectItem key={opt.description} value={opt.description}>
+                  {opt.description}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </CardContent>
