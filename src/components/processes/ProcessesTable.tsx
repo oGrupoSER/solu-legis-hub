@@ -99,6 +99,8 @@ export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: Proce
       setTotalCount(count || 0);
     } catch (error) {
       console.error("Error fetching processes:", error);
+      setProcesses([]);
+      setTotalCount(0);
     } finally {
       setLoading(false);
     }
