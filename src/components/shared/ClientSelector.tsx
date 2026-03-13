@@ -13,6 +13,8 @@ interface ClientSelectorProps {
   onChange: (ids: string[]) => void;
   /** Show validation error state */
   error?: boolean;
+  /** Auto-select client names matching these (case-insensitive) */
+  autoSelectNames?: string[];
 }
 
 interface ClientOption {
@@ -20,19 +22,34 @@ interface ClientOption {
   name: string;
 }
 
-export function ClientSelector({ serviceId, selectedIds, onChange, error }: ClientSelectorProps) {
+export function ClientSelector({ serviceId, selectedIds, onChange, error, autoSelectNames = ["infojudiciais"] }: ClientSelectorProps) {
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [loading, setLoading] = useState(false);
+  const [autoSelected, setAutoSelected] = useState(false);
 
   useEffect(() => {
     fetchClients();
+    setAutoSelected(false);
   }, [serviceId]);
+
+  // Auto-select after clients are loaded (only once)
+  useEffect(() => {
+    if (!autoSelected && clients.length > 0 && selectedIds.length === 0 && autoSelectNames.length > 0) {
+      const lowerNames = autoSelectNames.map(n => n.toLowerCase());
+      const matchIds = clients
+        .filter(c => lowerNames.some(n => c.name.toLowerCase().includes(n)))
+        .map(c => c.id);
+      if (matchIds.length > 0) {
+        onChange(matchIds);
+      }
+      setAutoSelected(true);
+    }
+  }, [clients, autoSelected]);
 
   const fetchClients = async () => {
     setLoading(true);
     try {
       if (serviceId) {
-        // Fetch only clients entitled to this service
         const { data } = await supabase
           .from("client_system_services")
           .select("client_systems(id, name)")
@@ -42,22 +59,31 @@ export function ClientSelector({ serviceId, selectedIds, onChange, error }: Clie
         const result = (data || [])
           .map((item: any) => item.client_systems)
           .filter(Boolean)
-          .sort((a: ClientOption, b: ClientOption) => a.name.localeCompare(b.name));
+          .sort((a: ClientOption, b: ClientOption) => prioritySort(a.name, b.name));
         setClients(result);
       } else {
-        // Fetch all active clients
         const { data } = await supabase
           .from("client_systems")
           .select("id, name")
           .eq("is_active", true)
           .order("name");
-        setClients(data || []);
+        const sorted = (data || []).sort((a, b) => prioritySort(a.name, b.name));
+        setClients(sorted);
       }
     } catch (e) {
       console.error("Error fetching clients:", e);
     } finally {
       setLoading(false);
     }
+  };
+
+  /** Sort with "Infojudiciais" always first */
+  const prioritySort = (a: string, b: string): number => {
+    const aIsInfo = a.toLowerCase().includes("infojudiciais");
+    const bIsInfo = b.toLowerCase().includes("infojudiciais");
+    if (aIsInfo && !bIsInfo) return -1;
+    if (!aIsInfo && bIsInfo) return 1;
+    return a.localeCompare(b);
   };
 
   const handleToggle = (clientId: string) => {

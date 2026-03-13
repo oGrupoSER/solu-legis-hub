@@ -1276,9 +1276,12 @@ export type Database = {
       }
       processes: {
         Row: {
+          cod_classificacao_status: number | null
           cod_escritorio: number | null
           cod_processo: number | null
           created_at: string | null
+          data_cadastro: string | null
+          descricao_classificacao_status: string | null
           id: string
           instance: string | null
           last_cover_sync_at: string | null
@@ -1296,9 +1299,12 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          cod_classificacao_status?: number | null
           cod_escritorio?: number | null
           cod_processo?: number | null
           created_at?: string | null
+          data_cadastro?: string | null
+          descricao_classificacao_status?: string | null
           id?: string
           instance?: string | null
           last_cover_sync_at?: string | null
@@ -1316,9 +1322,12 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          cod_classificacao_status?: number | null
           cod_escritorio?: number | null
           cod_processo?: number | null
           created_at?: string | null
+          data_cadastro?: string | null
+          descricao_classificacao_status?: string | null
           id?: string
           instance?: string | null
           last_cover_sync_at?: string | null
