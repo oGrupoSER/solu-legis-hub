@@ -72,6 +72,7 @@ export function SyncProgressDialog({ open, onOpenChange, onComplete }: SyncProgr
     const updateStages: { id: string; syncType: string }[] = [
       { id: "groupers", syncType: "groupers" },
       { id: "movements", syncType: "movements" },
+      { id: "all-movements", syncType: "all-movements" },
       { id: "documents", syncType: "documents" },
       { id: "covers", syncType: "covers" },
       { id: "dependencies", syncType: "dependencies" },
