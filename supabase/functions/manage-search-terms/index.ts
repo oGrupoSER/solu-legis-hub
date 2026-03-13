@@ -151,6 +151,9 @@ Deno.serve(async (req) => {
       case 'excluir_nome':
         result.data = await excluirNome(soapClient, service, officeCode, data!, client_system_id);
         break;
+      case 'excluir_nome_rest':
+        result.data = await excluirNomeRest(service, data!);
+        break;
       case 'listar_nomes':
         result.data = await listarNomes(soapClient, officeCode);
         break;
