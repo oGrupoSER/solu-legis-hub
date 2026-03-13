@@ -413,14 +413,30 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
 
               {isNameType && (
                 <div className="space-y-2">
-                  <Label htmlFor="oab">OAB (opcional)</Label>
-                  <Input
-                    id="oab"
-                    value={oab}
-                    onChange={(e) => setOab(e.target.value)}
-                    placeholder="Ex: 123456|MG"
-                  />
-                  <p className="text-xs text-muted-foreground">Formato: CÓDIGO|UF</p>
+                  <Label>OAB (opcional)</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="col-span-2">
+                      <Input
+                        id="oab-numero"
+                        value={oabNumero}
+                        onChange={(e) => {
+                          const v = e.target.value.replace(/\D/g, '').slice(0, 6);
+                          setOabNumero(v);
+                        }}
+                        placeholder="000000"
+                        maxLength={6}
+                      />
+                    </div>
+                    <Select value={oabUf} onValueChange={setOabUf}>
+                      <SelectTrigger><SelectValue placeholder="UF" /></SelectTrigger>
+                      <SelectContent>
+                        {["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"].map(uf => (
+                          <SelectItem key={uf} value={uf}>{uf}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Número com 6 dígitos e UF</p>
                 </div>
               )}
 
