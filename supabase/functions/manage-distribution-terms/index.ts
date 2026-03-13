@@ -129,8 +129,9 @@ serve(async (req) => {
           console.log(`[listNames] API returned ${Array.isArray(rawResponse) ? rawResponse.length : 0} names`);
           apiNames = Array.isArray(rawResponse) ? rawResponse : [];
         } catch (e: any) {
-          if (e.message?.includes('400')) {
-            console.log('[listNames] No names found via API (400)');
+          console.log(`[listNames] API error: ${e.message}, apiStatus: ${e.apiStatus}, apiBody: ${e.apiBody}`);
+          if (e.apiStatus === 400 || e.message?.includes('400')) {
+            console.log('[listNames] Treating 400 as empty result');
             apiNames = [];
           } else {
             throw e;
