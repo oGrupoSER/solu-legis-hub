@@ -225,7 +225,6 @@ export default function Distributions() {
             {hasActiveFilters && (
               <Button variant="ghost" size="icon" onClick={() => {
                 setSearchTerm("");
-                setFilterPartner("all");
                 setFilterClient("all");
                 setFilterConfirmation("all");
                 setDateRange({ from: undefined, to: undefined });
