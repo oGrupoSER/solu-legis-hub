@@ -374,8 +374,8 @@ export default function ProcessMovements() {
           <p className="text-muted-foreground mt-1">Dados completos dos processos cadastrados (capas, andamentos, documentos, agrupadores, dependências)</p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={handleSync} variant="outline" size="sm" className="gap-2" disabled={syncing}>
-            <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
+          <Button onClick={() => setSyncDialogOpen(true)} variant="outline" size="sm" className="gap-2">
+            <RefreshCw className="h-4 w-4" />
             Sincronizar
           </Button>
           <Button variant="outline" size="sm" onClick={handleExport} className="gap-2">
