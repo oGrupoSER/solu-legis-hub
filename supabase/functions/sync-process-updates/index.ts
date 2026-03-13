@@ -434,7 +434,7 @@ async function syncMovements(client: RestClient, supabase: any, service: any, of
       tipo_andamento: mov.tipoAndamento || null,
       movement_date: mov.dataAndamento || null,
       data_andamento: mov.dataAndamento || null,
-      description: mov.descricao || null,
+      description: mov.textoAndamento || null,
       raw_data: mov,
     }));
 
