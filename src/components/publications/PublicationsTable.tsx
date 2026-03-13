@@ -80,11 +80,7 @@ export function PublicationsTable() {
     const gazettes = [...new Set(gazetteData?.map(g => g.gazette_name).filter(Boolean))];
     setGazetteOptions(gazettes as string[]);
 
-    const { data: partnerData } = await supabase
-      .from("partners")
-      .select("id, name")
-      .eq("is_active", true);
-    setPartnerOptions(partnerData || []);
+    const { data: clientData } = await supabase
 
     const { data: clientData } = await supabase
       .from("client_systems")
