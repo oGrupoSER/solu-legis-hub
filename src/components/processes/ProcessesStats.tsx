@@ -79,7 +79,7 @@ export const ProcessesStats = ({ refreshTrigger, onStatusClick, activeStatus }: 
   const isActive = (status: string) => activeStatus === status;
 
   return (
-    <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+    <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
       <Card
         className={cn(
           "cursor-pointer transition-all hover:shadow-md",

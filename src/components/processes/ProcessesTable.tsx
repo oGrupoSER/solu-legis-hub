@@ -40,7 +40,7 @@ const statusColors: Record<number, string> = {
   2: "bg-yellow-500/20 text-yellow-700 border-yellow-500/30",
   4: "bg-green-500/20 text-green-700 border-green-500/30",
   5: "bg-gray-500/20 text-gray-700 border-gray-500/30",
-  6: "bg-red-500/20 text-red-700 border-red-500/30",
+  6: "bg-purple-500/20 text-purple-700 border-purple-500/30",
   7: "bg-destructive/20 text-destructive border-destructive/30",
 };
 
