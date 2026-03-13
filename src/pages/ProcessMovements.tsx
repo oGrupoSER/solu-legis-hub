@@ -85,7 +85,14 @@ async function fetchAllProcesses(searchQuery: string, filterPartner: string, fil
       .order("process_number")
       .range(from, from + PAGE_SIZE - 1);
 
-    if (searchQuery) query = query.or(`process_number.ilike.%${searchQuery}%,tribunal.ilike.%${searchQuery}%,cod_processo::text.ilike.%${searchQuery}%`);
+    if (searchQuery) {
+      const trimmed = searchQuery.trim();
+      if (/^\d+$/.test(trimmed)) {
+        query = query.eq("cod_processo", parseInt(trimmed, 10));
+      } else {
+        query = query.ilike("process_number", `%${trimmed}%`);
+      }
+    }
     if (filterPartner !== "all") query = query.eq("partner_id", filterPartner);
     if (filterClient !== "all" && clientProcessIds && clientProcessIds.length > 0) {
       query = query.in("id", clientProcessIds);
@@ -273,16 +280,20 @@ export default function ProcessMovements() {
         result = result.filter((m: any) => m.processes?.partner_id === filterPartner);
       }
 
-      // Client-side search: match process_number, cod_andamento, or description
+      // Client-side search: match only process_number or cod_processo
       if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        result = result.filter((m: any) => {
-          const processNumber = m.processes?.process_number?.toLowerCase() || "";
-          const description = m.description?.toLowerCase() || "";
-          const tipoAndamento = m.tipo_andamento?.toLowerCase() || "";
-          const codAndamento = String(m.cod_andamento || "");
-          return processNumber.includes(q) || description.includes(q) || tipoAndamento.includes(q) || codAndamento.includes(q);
-        });
+        const q = searchQuery.trim().toLowerCase();
+        const isNumeric = /^\d+$/.test(q);
+        // Get matching process IDs from already loaded processes
+        const matchingProcessIds = new Set(
+          allProcesses
+            .filter((p) => {
+              if (isNumeric) return String(p.cod_processo) === q;
+              return p.process_number.toLowerCase().includes(q);
+            })
+            .map((p) => p.id)
+        );
+        result = result.filter((m) => m.process_id && matchingProcessIds.has(m.process_id));
       }
 
       return result;

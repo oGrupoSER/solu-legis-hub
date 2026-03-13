@@ -79,7 +79,13 @@ export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: Proce
         .range(page * pageSize, (page + 1) * pageSize - 1);
 
       if (searchQuery) {
-        query = query.or(`process_number.ilike.%${searchQuery}%,tribunal.ilike.%${searchQuery}%,cod_processo::text.ilike.%${searchQuery}%`);
+        const trimmed = searchQuery.trim();
+        // Check if search is numeric (cod_processo) or process number
+        if (/^\d+$/.test(trimmed)) {
+          query = query.eq("cod_processo", parseInt(trimmed, 10));
+        } else {
+          query = query.ilike("process_number", `%${trimmed}%`);
+        }
       }
 
       if (filterStatus !== "all") {
@@ -93,6 +99,8 @@ export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: Proce
       setTotalCount(count || 0);
     } catch (error) {
       console.error("Error fetching processes:", error);
+      setProcesses([]);
+      setTotalCount(0);
     } finally {
       setLoading(false);
     }
