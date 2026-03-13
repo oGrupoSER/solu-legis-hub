@@ -297,8 +297,8 @@ export function ProcessCoverTab({ processId }: ProcessCoverTabProps) {
               </div>
             )}
 
-            {/* Partes */}
-            {(autores.length > 0 || reus.length > 0 || advogados.length > 0 || outros.length > 0) && (
+            {/* Partes - ocultas pois já existe aba dedicada */}
+            {/* {(autores.length > 0 || reus.length > 0 || advogados.length > 0 || outros.length > 0) && (
               <div className="space-y-4 border-t pt-4">
                 <h3 className="text-base font-semibold flex items-center gap-2">
                   <Users className="h-5 w-5" />
@@ -311,7 +311,7 @@ export function ProcessCoverTab({ processId }: ProcessCoverTabProps) {
                   <PersonList title="Outros Envolvidos" icon={<Users className="h-4 w-4 text-muted-foreground" />} people={outros} />
                 </div>
               </div>
-            )}
+            )} */}
           </div>
         )}
       </CardContent>
