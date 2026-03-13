@@ -110,7 +110,7 @@ export default function ProcessMovements() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
-  const [syncing, setSyncing] = useState(false);
+  const [syncDialogOpen, setSyncDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("processes");
   const [filterPartner, setFilterPartner] = useState<string>("all");
   const [filterClient, setFilterClient] = useState<string>("all");
