@@ -84,8 +84,16 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
         setOab(meta.oab || "");
       } else {
         resetNewFields();
-        setSelectedClients([]);
+        setFormData({
+          term: "",
+          term_type: "name",
+          partner_id: "",
+          partner_service_id: "",
+          is_active: true,
+        });
         setClientError(false);
+        // Pre-select "infojudiciais" client
+        preSelectDefaultClient();
       }
     }
   }, [open, term]);
