@@ -37,7 +37,7 @@ export default function Distributions() {
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterPartner, filterClient, filterConfirmation, dateRange]);
+  }, [searchTerm, filterClient, filterConfirmation, dateRange]);
 
   // Fetch confirmed IDs
   useEffect(() => {
