@@ -142,7 +142,6 @@ export function PublicationsTable() {
         query = query.or(`content.ilike.%${searchTerm}%,matched_terms.cs.{${searchTerm}}`);
       }
       if (filterGazette !== "all") query = query.eq("gazette_name", filterGazette);
-      if (filterPartner !== "all") query = query.eq("partner_id", filterPartner);
       if (clientTermFilter) query = query.overlaps("matched_terms", clientTermFilter);
       if (dateRange.from) query = query.gte("publication_date", format(dateRange.from, "yyyy-MM-dd"));
       if (dateRange.to) query = query.lte("publication_date", format(dateRange.to, "yyyy-MM-dd"));
