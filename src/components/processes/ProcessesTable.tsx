@@ -160,7 +160,7 @@ export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: Proce
             </TableRow>
           ) : processes.length === 0 ? (
              <TableRow>
-               <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+               <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                  Nenhum processo encontrado
               </TableCell>
             </TableRow>
