@@ -46,19 +46,37 @@ export function TermActionsDropdown({
       return;
     }
 
-    if (term.partner_service_id) {
-      const action = term.term_type === "name" ? "excluir_nome" : "desativar_escritorio";
-      await handleAction(action);
-    } else {
-      // Local delete only
-      try {
+    setIsLoading(true);
+
+    try {
+      if (term.partner_service_id && term.solucionare_code) {
+        // Delete via REST V2 API (nome_excluir)
+        const { data, error } = await supabase.functions.invoke("manage-search-terms", {
+          body: {
+            service_id: term.partner_service_id,
+            action: "excluir_nome_rest",
+            data: {
+              cod_nome: term.solucionare_code,
+              term_id: term.id,
+            },
+          },
+        });
+
+        if (error) throw error;
+        if (!data.success) throw new Error(data.error);
+      } else {
+        // Local delete only
         const { error } = await supabase.from("search_terms").delete().eq("id", term.id);
         if (error) throw error;
-        toast.success("Termo excluído com sucesso");
-        onRefresh();
-      } catch (error) {
-        toast.error("Erro ao excluir termo");
       }
+
+      toast.success("Termo excluído com sucesso");
+      onRefresh();
+    } catch (error: any) {
+      console.error("Error:", error);
+      toast.error(error.message || "Erro ao excluir termo");
+    } finally {
+      setIsLoading(false);
     }
   };
 
