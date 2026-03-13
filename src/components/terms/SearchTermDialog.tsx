@@ -105,9 +105,15 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
   const fetchPartners = async () => {
     const { data } = await supabase.from("partners").select("id, name").eq("is_active", true);
     setPartners(data || []);
+    // Auto-select first partner for new terms
+    if (!term && data && data.length > 0) {
+      const firstPartnerId = data[0].id;
+      setFormData(prev => ({ ...prev, partner_id: firstPartnerId }));
+      fetchServices(firstPartnerId, true);
+    }
   };
 
-  const fetchServices = async (partnerId: string) => {
+  const fetchServices = async (partnerId: string, autoSelect = false) => {
     if (!partnerId) { setServices([]); return; }
     const { data } = await supabase
       .from("partner_services")
@@ -116,6 +122,10 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
       .eq("service_type", "terms")
       .eq("is_active", true);
     setServices(data || []);
+    // Auto-select first service for new terms
+    if (autoSelect && !term && data && data.length > 0) {
+      setFormData(prev => ({ ...prev, partner_service_id: data[0].id }));
+    }
   };
 
   const fetchTermClients = async (termId: string) => {
