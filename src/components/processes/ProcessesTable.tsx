@@ -170,8 +170,6 @@ export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: Proce
               return (
                 <TableRow key={process.id}>
                   <TableCell className="font-mono text-sm">{process.process_number}</TableCell>
-                  <TableCell className="text-sm font-medium">{(process as any).cod_escritorio || "-"}</TableCell>
-                  <TableCell>{process.tribunal || "-"}</TableCell>
                   <TableCell>{process.uf || "-"}</TableCell>
                   <TableCell>{process.instance || "-"}</TableCell>
                   <TableCell>
