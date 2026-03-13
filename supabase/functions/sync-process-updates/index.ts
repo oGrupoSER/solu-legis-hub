@@ -138,6 +138,13 @@ serve(async (req) => {
           console.log(`Total synced ${totalMovements} movements in ${batchCount} batches`);
         }
 
+        // 3.1 Sync ALL Movements per Process - BuscaTodosAndamentosPorProcesso
+        if (syncType === 'full' || syncType === 'all-movements') {
+          const allMovementsSynced = await syncAllMovementsByProcess(client, supabase, service);
+          totalSynced += allMovementsSynced;
+          console.log(`Synced ${allMovementsSynced} movements via BuscaTodosAndamentosPorProcesso`);
+        }
+
         // 4. Sync Documents - BuscaNovosDocumentosPorEscritorio - Loop until no more data
         if (syncType === 'full' || syncType === 'documents') {
           let totalDocs = 0;
@@ -434,7 +441,7 @@ async function syncMovements(client: RestClient, supabase: any, service: any, of
       tipo_andamento: mov.tipoAndamento || null,
       movement_date: mov.dataAndamento || null,
       data_andamento: mov.dataAndamento || null,
-      description: mov.descricao || null,
+      description: mov.textoAndamento || null,
       raw_data: mov,
     }));
 
@@ -453,6 +460,72 @@ async function syncMovements(client: RestClient, supabase: any, service: any, of
     return data.length;
   } catch (error) {
     console.error('Error syncing movements:', error);
+    return 0;
+  }
+}
+
+/**
+ * Sync ALL Movements by Process
+ * GET /BuscaTodosAndamentosPorProcesso?codProcesso={code} - returns ALL movements for a specific process
+ * Iterates over all processes with cod_processo and fetches their complete movement history
+ */
+async function syncAllMovementsByProcess(client: RestClient, supabase: any, service: any): Promise<number> {
+  try {
+    // Get all processes with cod_processo
+    const { data: processes, error: procError } = await supabase
+      .from('processes')
+      .select('id, cod_processo')
+      .not('cod_processo', 'is', null)
+      .eq('partner_service_id', service.id);
+
+    if (procError || !processes?.length) {
+      console.log('No processes found for all-movements sync');
+      return 0;
+    }
+
+    console.log(`Fetching all movements for ${processes.length} processes`);
+    let totalSynced = 0;
+
+    for (const process of processes) {
+      try {
+        const data = await client.get('/BuscaTodosAndamentosPorProcesso', {
+          codProcesso: process.cod_processo,
+        });
+
+        if (!Array.isArray(data) || data.length === 0) {
+          continue;
+        }
+
+        const movementInserts = data.map((mov: any) => ({
+          cod_andamento: mov.codAndamento,
+          cod_agrupador: mov.codAgrupador || null,
+          process_id: process.id,
+          movement_type: mov.tipoAndamento || null,
+          tipo_andamento: mov.tipoAndamento || null,
+          movement_date: mov.dataAndamento || null,
+          data_andamento: mov.dataAndamento || null,
+          description: mov.textoAndamento || null,
+          raw_data: mov,
+        }));
+
+        const { error: movError } = await supabase
+          .from('process_movements')
+          .upsert(movementInserts, { onConflict: 'cod_andamento' });
+
+        if (movError) {
+          console.error(`Error upserting movements for process ${process.cod_processo}:`, movError);
+        } else {
+          totalSynced += data.length;
+          console.log(`Process ${process.cod_processo}: ${data.length} movements`);
+        }
+      } catch (err) {
+        console.error(`Error fetching movements for process ${process.cod_processo}:`, err);
+      }
+    }
+
+    return totalSynced;
+  } catch (error) {
+    console.error('Error in syncAllMovementsByProcess:', error);
     return 0;
   }
 }
