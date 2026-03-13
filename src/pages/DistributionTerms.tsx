@@ -672,13 +672,13 @@ export default function DistributionTerms() {
 
   const handleExport = () => {
     const csv = [
-      ["Nome", "Tipo Consulta", "Parceiro", "Serviço", "Status", "Clientes", "Cadastrado em"],
+      ["Nome", "Tipo Consulta", "Status", "Cadastrado em"],
       ...filteredTerms.map((t) => {
         const meta = t.metadata as any;
         const tipoConsulta = TIPO_CONSULTA_OPTIONS.find(o => o.value === String(meta?.codTipoConsulta))?.label || "-";
         return [
-          t.term, tipoConsulta, t.partners?.name || "-", t.partner_services?.service_name || "-",
-          t.is_active ? "Ativo" : "Inativo", getClientNames(t).join("; ") || "-",
+          t.term, tipoConsulta,
+          t.is_active ? "Ativo" : "Inativo",
           t.created_at ? format(new Date(t.created_at), "dd/MM/yyyy", { locale: ptBR }) : "-",
         ];
       }),
