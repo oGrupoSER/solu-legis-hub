@@ -58,7 +58,7 @@ export function PublicationsTable() {
 
   useEffect(() => {
     fetchPublications();
-  }, [currentPage, searchTerm, filterGazette, filterPartner, filterClient, filterConfirmation, dateRange]);
+  }, [currentPage, searchTerm, filterGazette, filterClient, filterConfirmation, dateRange]);
 
   useEffect(() => {
     fetchFilterOptions();
