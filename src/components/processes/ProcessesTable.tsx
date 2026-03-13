@@ -7,7 +7,11 @@ import { Button } from "@/components/ui/button";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock, MoreHorizontal, Pencil, Trash2, RefreshCw, Info } from "lucide-react";
+import { ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Clock, MoreHorizontal, Pencil, Trash2, RefreshCw, Info, AlertTriangle } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { ClientBadges } from "@/components/shared/ClientBadges";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";

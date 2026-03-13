@@ -218,7 +218,14 @@ serve(async (req) => {
               });
             }
 
-            // Delete linked client_processes
+            // Delete all dependent records in order
+            await supabase.from('process_documents').delete().eq('process_id', proc.id);
+            await supabase.from('process_movements').delete().eq('process_id', proc.id);
+            await supabase.from('process_lawyers').delete().eq('process_id', proc.id);
+            await supabase.from('process_parties').delete().eq('process_id', proc.id);
+            await supabase.from('process_covers').delete().eq('process_id', proc.id);
+            await supabase.from('process_groupers').delete().eq('process_id', proc.id);
+            await supabase.from('process_dependencies').delete().eq('process_id', proc.id);
             await supabase.from('client_processes').delete().eq('process_id', proc.id);
 
             // Delete the process record
