@@ -93,10 +93,10 @@ const PublicationTerms = () => {
     try {
       const { data: services } = await supabase
         .from("partner_services").select("id")
-        .eq("service_type", "terms").eq("is_active", true).limit(1);
+        .eq("service_type", "publications").eq("is_active", true).limit(1);
 
       if (!services || services.length === 0) {
-        toast.error("Nenhum serviço de termos ativo encontrado.");
+        toast.error("Nenhum serviço de publicações ativo encontrado.");
         return;
       }
 
@@ -106,13 +106,11 @@ const PublicationTerms = () => {
       if (error) throw error;
 
       setSyncStats(data);
-      const totalImported = data.officesImported + data.namesImported;
-      const totalUpdated = data.officesUpdated + data.namesUpdated;
 
-      if (data.errors?.length > 0) {
-        toast.warning(`Sincronização com avisos: ${totalImported} importados, ${totalUpdated} atualizados`);
+      if (data.success) {
+        toast.success(`Sincronização concluída: ${data.records_synced} novas publicações de ${data.total_received} recebidas`);
       } else {
-        toast.success(`Sincronização concluída: ${totalImported} novos, ${totalUpdated} atualizados`);
+        toast.error(data.error || "Erro na sincronização");
       }
       fetchTerms();
     } catch (error: any) {

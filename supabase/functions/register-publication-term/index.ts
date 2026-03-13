@@ -25,38 +25,46 @@ interface RegisterRequest {
   client_ids?: string[];
 }
 
-async function apiCall(endpoint: string, method: string, tokenJWT: string, body?: any, serviceId?: string): Promise<any> {
+async function apiCall(
+  endpoint: string,
+  method: string,
+  tokenJWT: string,
+  body: any | undefined,
+  serviceId: string,
+  syncLogId: string,
+): Promise<any> {
   const url = `${API_BASE}${endpoint}`;
   const startTime = Date.now();
-  
+
   console.log(`[API] ${method} ${url}`);
   if (body) console.log(`[API] Body: ${JSON.stringify(body).substring(0, 500)}`);
-  
+
   const options: RequestInit = {
     method,
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${tokenJWT}`,
+      ...(tokenJWT ? { 'Authorization': `Bearer ${tokenJWT}` } : {}),
     },
   };
   if (body && method !== 'GET') {
     options.body = JSON.stringify(body);
   }
-  
+
   const response = await fetch(url, options);
   const durationMs = Date.now() - startTime;
   const responseText = await response.text();
-  
+
   console.log(`[API] Response ${response.status} (${durationMs}ms): ${responseText.substring(0, 500)}`);
 
-  // Log the API call
+  // Log the API call with sync_log_id
   try {
     await supabase.from('api_call_logs').insert({
+      sync_log_id: syncLogId,
       method,
       url,
       call_type: 'REST',
-      partner_service_id: serviceId || null,
-      request_body: body ? JSON.stringify(body) : null,
+      partner_service_id: serviceId,
+      request_body: body ? JSON.stringify(body).substring(0, 10000) : null,
       response_status: response.status,
       response_status_text: response.statusText,
       response_summary: responseText.substring(0, 2000),
@@ -70,7 +78,7 @@ async function apiCall(endpoint: string, method: string, tokenJWT: string, body?
   if (!response.ok) {
     throw new Error(`API error ${response.status}: ${responseText.substring(0, 300)}`);
   }
-  
+
   try {
     return JSON.parse(responseText);
   } catch {
@@ -83,6 +91,8 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let syncLogId: string | null = null;
+
   try {
     const request: RegisterRequest = await req.json();
     const { service_id, nome, oab, client_ids } = request;
@@ -93,44 +103,59 @@ Deno.serve(async (req) => {
     console.log(`=== Register Publication Term ===`);
     console.log(`Nome: ${nome}, OAB: ${oab ? `${oab.numero}/${oab.uf}` : 'none'}`);
 
-    // 1. Get service config (nomeRelacional + token)
+    // 1. Get service config
     const { data: service, error: svcErr } = await supabase
       .from('partner_services')
       .select('*')
       .eq('id', service_id)
       .single();
-    
+
     if (svcErr || !service) throw new Error('Service not found');
     if (!service.is_active) throw new Error('Service is not active');
 
     const { nome_relacional, token: serviceToken } = service;
     if (!nome_relacional || !serviceToken) throw new Error('Service missing nomeRelacional or token');
 
+    // Create sync_log entry
+    const { data: syncLog, error: syncLogErr } = await supabase
+      .from('sync_logs')
+      .insert({
+        partner_service_id: service_id,
+        partner_id: service.partner_id,
+        sync_type: 'register-publication-term',
+        status: 'in_progress',
+        started_at: new Date().toISOString(),
+        records_synced: 0,
+      })
+      .select('id')
+      .single();
+
+    if (syncLogErr || !syncLog) {
+      console.warn('Failed to create sync_log:', syncLogErr);
+      syncLogId = 'unknown';
+    } else {
+      syncLogId = syncLog.id;
+    }
+
     // 2. Authenticate → get JWT
     console.log('Step 1: Authenticating...');
     const authResult = await apiCall(
-      '/Autenticacao/AutenticaAPI',
-      'POST',
-      '', // no JWT yet, but endpoint may not require it for auth
+      '/Autenticacao/AutenticaAPI', 'POST', '',
       { nomeRelacional: nome_relacional, token: serviceToken },
-      service_id
+      service_id, syncLogId!,
     );
-    
+
     const tokenJWT = authResult?.tokenJWT;
     if (!tokenJWT) throw new Error('Authentication failed: no tokenJWT returned');
-    console.log('Authentication successful, got JWT');
 
     // 3. Register name → get codNome
     console.log('Step 2: Registering name...');
     const nomeResult = await apiCall(
-      '/Nome/nome_cadastrar',
-      'POST',
-      tokenJWT,
+      '/Nome/nome_cadastrar', 'POST', tokenJWT,
       [{ codEscritorio: COD_ESCRITORIO, nome: nome.trim() }],
-      service_id
+      service_id, syncLogId!,
     );
-    
-    // The API may return the codNome in various formats
+
     let codNome: number | null = null;
     if (Array.isArray(nomeResult) && nomeResult.length > 0) {
       codNome = nomeResult[0]?.codNome || nomeResult[0];
@@ -139,7 +164,7 @@ Deno.serve(async (req) => {
     } else if (nomeResult?.codNome) {
       codNome = nomeResult.codNome;
     }
-    
+
     if (!codNome) throw new Error(`Failed to get codNome from response: ${JSON.stringify(nomeResult)}`);
     console.log(`Name registered with codNome: ${codNome}`);
 
@@ -149,52 +174,40 @@ Deno.serve(async (req) => {
       console.log('Step 3: Registering OAB...');
       const paddedNumero = oab.numero.padStart(6, '0');
       await apiCall(
-        '/Oab/oab_Cadastrar',
-        'POST',
-        tokenJWT,
+        '/Oab/oab_Cadastrar', 'POST', tokenJWT,
         [{ codNome, uf: oab.uf.toUpperCase(), numero: paddedNumero, letra: 's' }],
-        service_id
+        service_id, syncLogId!,
       );
       oabRegistered = true;
-      console.log(`OAB registered: ${paddedNumero}/${oab.uf.toUpperCase()}`);
     }
 
     // 5. Fetch catalog → get all codDiario
     console.log('Step 4: Fetching diary catalog...');
     const catalogResult = await apiCall(
-      '/Abrangencia/abrangencia_buscarCatalogo',
-      'GET',
-      tokenJWT,
-      undefined,
-      service_id
+      '/Abrangencia/abrangencia_buscarCatalogo', 'GET', tokenJWT,
+      undefined, service_id, syncLogId!,
     );
-    
+
     let listCodDiarios: number[] = [];
     if (Array.isArray(catalogResult)) {
       listCodDiarios = catalogResult
         .map((item: any) => item?.codDiario || item?.cod_diario || (typeof item === 'number' ? item : null))
         .filter((v: any) => v !== null);
     }
-    
-    console.log(`Catalog fetched: ${listCodDiarios.length} diaries found`);
 
-    // 6. Register coverage with all diaries
+    // 6. Register coverage
     let abrangenciaCount = 0;
     if (listCodDiarios.length > 0) {
       console.log('Step 5: Registering coverage...');
       await apiCall(
-        '/Abrangencia/abrangencia_cadastrar',
-        'POST',
-        tokenJWT,
+        '/Abrangencia/abrangencia_cadastrar', 'POST', tokenJWT,
         { codNome, listCodDiarios },
-        service_id
+        service_id, syncLogId!,
       );
       abrangenciaCount = listCodDiarios.length;
-      console.log(`Coverage registered with ${abrangenciaCount} diaries`);
     }
 
     // 7. Save locally in search_terms
-    console.log('Step 6: Saving locally...');
     const metadata: Record<string, any> = {
       cod_nome: codNome,
       abrangencias: ['TODAS'],
@@ -231,6 +244,15 @@ Deno.serve(async (req) => {
       if (linkErr) console.error('Error linking clients:', linkErr);
     }
 
+    // Update sync_log → success
+    if (syncLogId && syncLogId !== 'unknown') {
+      await supabase.from('sync_logs').update({
+        status: 'success',
+        records_synced: 1,
+        completed_at: new Date().toISOString(),
+      }).eq('id', syncLogId);
+    }
+
     console.log('=== Registration complete ===');
 
     return new Response(JSON.stringify({
@@ -246,6 +268,16 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Error:', error);
     const message = error instanceof Error ? error.message : 'Unknown error';
+
+    // Update sync_log → error
+    if (syncLogId && syncLogId !== 'unknown') {
+      await supabase.from('sync_logs').update({
+        status: 'error',
+        error_message: message,
+        completed_at: new Date().toISOString(),
+      }).eq('id', syncLogId);
+    }
+
     return new Response(
       JSON.stringify({ success: false, error: message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
