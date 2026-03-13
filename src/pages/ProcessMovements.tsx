@@ -219,10 +219,22 @@ export default function ProcessMovements() {
     queryKey: ["movement-counts", processIds],
     enabled: processIds.length > 0,
     queryFn: async () => {
-      const { data, error } = await supabase.from("process_movements").select("process_id");
-      if (error) throw error;
       const counts: Record<string, number> = {};
-      data?.forEach((d) => { if (d.process_id) counts[d.process_id] = (counts[d.process_id] || 0) + 1; });
+      // Paginate to get ALL movement counts (avoid 1000-row limit)
+      let from = 0;
+      const pageSize = 1000;
+      while (true) {
+        const { data, error } = await supabase
+          .from("process_movements")
+          .select("process_id")
+          .in("process_id", processIds)
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        data.forEach((d) => { if (d.process_id) counts[d.process_id] = (counts[d.process_id] || 0) + 1; });
+        if (data.length < pageSize) break;
+        from += pageSize;
+      }
       return counts;
     },
   });
@@ -231,7 +243,12 @@ export default function ProcessMovements() {
     queryKey: ["document-counts", processIds],
     enabled: processIds.length > 0,
     queryFn: async () => {
-      const { data, error } = await supabase.from("process_documents").select("process_id");
+      // Only count documents NOT linked to a movement (process-level docs only)
+      const { data, error } = await supabase
+        .from("process_documents")
+        .select("process_id")
+        .in("process_id", processIds)
+        .is("cod_andamento", null);
       if (error) throw error;
       const counts: Record<string, number> = {};
       data?.forEach((d) => { if (d.process_id) counts[d.process_id] = (counts[d.process_id] || 0) + 1; });
