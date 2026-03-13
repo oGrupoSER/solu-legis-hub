@@ -133,7 +133,7 @@ export default function Distributions() {
     onError: (error) => toast.error(`Erro na sincronização: ${error.message}`),
   });
 
-  const hasActiveFilters = searchTerm || filterPartner !== "all" || filterClient !== "all" || filterConfirmation !== "all" || dateRange.from;
+  const hasActiveFilters = searchTerm || filterClient !== "all" || filterConfirmation !== "all" || dateRange.from;
 
   const totalItems = distributions?.length || 0;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
