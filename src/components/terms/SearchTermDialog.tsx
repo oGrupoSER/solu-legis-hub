@@ -105,9 +105,23 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
     setTermosBloqueio([]);
     setNovoTermoBloqueio("");
     setNovoTermoContido(false);
-    setAbrangencias([]);
+    setAbrangencias(["TODAS"]);
     setAbrangenciaSearch("");
     setAbrangenciasDisponiveis([]);
+  };
+
+  const preSelectDefaultClient = async () => {
+    const { data } = await supabase
+      .from("client_systems")
+      .select("id, name")
+      .eq("is_active", true)
+      .ilike("name", "%infojudiciais%")
+      .limit(1);
+    if (data && data.length > 0) {
+      setSelectedClients([data[0].id]);
+    } else {
+      setSelectedClients([]);
+    }
   };
 
   const fetchPartners = async () => {
