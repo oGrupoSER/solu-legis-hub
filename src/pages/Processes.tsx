@@ -158,6 +158,12 @@ const Processes = () => {
         entityType="processes"
         onSuccess={() => setRefreshTrigger(prev => prev + 1)}
       />
+
+      <SyncProgressDialog
+        open={syncDialogOpen}
+        onOpenChange={setSyncDialogOpen}
+        onComplete={() => setRefreshTrigger(prev => prev + 1)}
+      />
     </div>
   );
 };
