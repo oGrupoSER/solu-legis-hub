@@ -261,7 +261,7 @@ Deno.serve(async (req) => {
     if (syncLogId) {
       await supabase.from('sync_logs').update({
         status: 'success',
-        records_synced: recordsSynced,
+        records_synced: recordsSynced + termsImported,
         completed_at: new Date().toISOString(),
       }).eq('id', syncLogId);
     }
@@ -271,10 +271,11 @@ Deno.serve(async (req) => {
       .update({ last_sync_at: new Date().toISOString() })
       .eq('id', serviceId);
 
-    console.log(`=== Sync complete: ${recordsSynced} new publications ===`);
+    console.log(`=== Sync complete: ${termsImported} terms imported, ${recordsSynced} new publications ===`);
 
     return new Response(JSON.stringify({
       success: true,
+      terms_imported: termsImported,
       records_synced: recordsSynced,
       total_received: publications.length,
     }), {
