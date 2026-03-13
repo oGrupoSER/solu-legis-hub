@@ -35,9 +35,7 @@ export function TermActionsDropdown({
   onRefresh,
 }: TermActionsDropdownProps) {
   const [isLoading, setIsLoading] = useState(false);
-  const [loadingAction, setLoadingAction] = useState<string | null>(null);
 
-  // Removed handleAction - no longer needed (activate/deactivate removed)
 
   const handleDelete = async () => {
     if (!confirm("Tem certeza que deseja excluir este termo? Esta ação não pode ser desfeita.")) {
