@@ -108,17 +108,21 @@ export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: Proce
       .filter(Boolean) || [];
   };
 
-  const handleDelete = async (process: Process) => {
-    if (!confirm(`Excluir o processo ${process.process_number} do monitoramento?`)) return;
+  const confirmDelete = async () => {
+    if (!deleteProcess) return;
     try {
+      setDeleting(true);
       const { error } = await supabase.functions.invoke("sync-process-management", {
-        body: { action: "delete", processNumber: process.process_number },
+        body: { action: "delete", processNumber: deleteProcess.process_number },
       });
       if (error) throw error;
-      toast.success("Processo excluído");
+      toast.success("Processo excluído com sucesso");
       fetchProcesses();
     } catch (error) {
       toast.error("Erro ao excluir processo");
+    } finally {
+      setDeleting(false);
+      setDeleteProcess(null);
     }
   };
 
