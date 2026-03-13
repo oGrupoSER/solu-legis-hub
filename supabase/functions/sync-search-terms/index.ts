@@ -166,7 +166,7 @@ Deno.serve(async (req) => {
 
           if (!existing) {
             // Import term locally
-            await supabase.from('search_terms').insert({
+            const { data: insertedTerm } = await supabase.from('search_terms').insert({
               term: nome,
               term_type: 'name',
               partner_id: service.partner_id,
@@ -175,8 +175,19 @@ Deno.serve(async (req) => {
               solucionare_code: codNome || null,
               solucionare_status: 'synced',
               metadata: codNome ? { cod_nome: codNome, abrangencias: ['TODAS'] } : {},
-            });
+            }).select('id').single();
             termsImported++;
+            console.log(`Imported term: ${nome} (codNome: ${codNome})`);
+
+            // Auto-link to all entitled clients
+            if (insertedTerm) {
+              for (const clientId of entitledClientIds) {
+                await supabase.from('client_search_terms').upsert(
+                  { search_term_id: insertedTerm.id, client_system_id: clientId },
+                  { onConflict: 'client_system_id,search_term_id' }
+                );
+              }
+            }
             console.log(`Imported term: ${nome} (codNome: ${codNome})`);
           } else {
             // Update solucionare_code if we have it and it's missing locally
