@@ -182,7 +182,7 @@ export function PublicationsTable() {
 
   const totalPages = Math.ceil(totalCount / itemsPerPage);
 
-  const hasActiveFilters = searchTerm || filterGazette !== "all" || filterPartner !== "all" || filterClient !== "all" || filterConfirmation !== "all" || dateRange.from;
+  const hasActiveFilters = searchTerm || filterGazette !== "all" || filterClient !== "all" || filterConfirmation !== "all" || dateRange.from;
 
   if (isLoading) {
     return (
