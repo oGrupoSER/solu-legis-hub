@@ -1282,40 +1282,115 @@ export type Database = {
       }
       publications: {
         Row: {
+          area: number | null
+          cod_escritorio: number | null
+          cod_mapa_diario: number | null
           cod_publicacao: number | null
+          comarca: string | null
+          complemento: boolean | null
           content: string | null
+          controle_pg: number | null
           created_at: string | null
+          data_disponibilizacao: string | null
+          data_vsap: string | null
+          esfera_diario: string | null
+          estado: string | null
           gazette_name: string | null
+          hash_publicacao: string | null
           id: string
+          id_nome: number | null
           matched_terms: string[] | null
+          nome_caderno: string | null
+          nome_pesquisado: string | null
+          num_edicao: string | null
+          num_processo: string | null
+          oab: string | null
+          orgao: string | null
+          outros_termos: string | null
           partner_id: string | null
           partner_service_id: string | null
+          perfil_contratante: string | null
           publication_date: string | null
           raw_data: Json
+          sigla_diario: string | null
+          termo_pesquisado: string | null
+          tipo_fonte_conteudo: number | null
+          uf: string | null
+          vara: string | null
         }
         Insert: {
+          area?: number | null
+          cod_escritorio?: number | null
+          cod_mapa_diario?: number | null
           cod_publicacao?: number | null
+          comarca?: string | null
+          complemento?: boolean | null
           content?: string | null
+          controle_pg?: number | null
           created_at?: string | null
+          data_disponibilizacao?: string | null
+          data_vsap?: string | null
+          esfera_diario?: string | null
+          estado?: string | null
           gazette_name?: string | null
+          hash_publicacao?: string | null
           id?: string
+          id_nome?: number | null
           matched_terms?: string[] | null
+          nome_caderno?: string | null
+          nome_pesquisado?: string | null
+          num_edicao?: string | null
+          num_processo?: string | null
+          oab?: string | null
+          orgao?: string | null
+          outros_termos?: string | null
           partner_id?: string | null
           partner_service_id?: string | null
+          perfil_contratante?: string | null
           publication_date?: string | null
           raw_data: Json
+          sigla_diario?: string | null
+          termo_pesquisado?: string | null
+          tipo_fonte_conteudo?: number | null
+          uf?: string | null
+          vara?: string | null
         }
         Update: {
+          area?: number | null
+          cod_escritorio?: number | null
+          cod_mapa_diario?: number | null
           cod_publicacao?: number | null
+          comarca?: string | null
+          complemento?: boolean | null
           content?: string | null
+          controle_pg?: number | null
           created_at?: string | null
+          data_disponibilizacao?: string | null
+          data_vsap?: string | null
+          esfera_diario?: string | null
+          estado?: string | null
           gazette_name?: string | null
+          hash_publicacao?: string | null
           id?: string
+          id_nome?: number | null
           matched_terms?: string[] | null
+          nome_caderno?: string | null
+          nome_pesquisado?: string | null
+          num_edicao?: string | null
+          num_processo?: string | null
+          oab?: string | null
+          orgao?: string | null
+          outros_termos?: string | null
           partner_id?: string | null
           partner_service_id?: string | null
+          perfil_contratante?: string | null
           publication_date?: string | null
           raw_data?: Json
+          sigla_diario?: string | null
+          termo_pesquisado?: string | null
+          tipo_fonte_conteudo?: number | null
+          uf?: string | null
+          vara?: string | null
         }
         Relationships: [
           {
