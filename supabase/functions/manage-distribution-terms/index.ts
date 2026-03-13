@@ -65,8 +65,7 @@ async function getService(supabase: any, serviceId: string): Promise<ServiceConf
   return data;
 }
 
-async function getOfficeCode(supabase: any, serviceId: string): Promise<number> {
-  // First check service-specific config for office_code override
+async function getOfficeCodes(supabase: any, serviceId: string): Promise<{ serviceCode: number; partnerCode: number }> {
   const { data: serviceData, error: serviceError } = await supabase
     .from('partner_services')
     .select('config, partners(office_code)')
@@ -74,13 +73,20 @@ async function getOfficeCode(supabase: any, serviceId: string): Promise<number> 
     .single();
   if (serviceError) throw serviceError;
   
-  // Service-specific office_code takes priority (different APIs may use different codes)
   const serviceConfig = serviceData?.config as Record<string, any> | null;
-  if (serviceConfig?.office_code) return serviceConfig.office_code;
+  const partnerCode = (serviceData?.partners as any)?.office_code as number | null;
+  if (!partnerCode) throw new Error('Parceiro não possui código de escritório configurado.');
   
-  const officeCode = (serviceData?.partners as any)?.office_code as number | null;
-  if (!officeCode) throw new Error('Parceiro não possui código de escritório configurado. Configure no serviço (config.office_code) ou no parceiro.');
-  return officeCode;
+  // serviceCode: used for CadastrarNome (from config or fallback to partner)
+  const serviceCode = serviceConfig?.office_code || partnerCode;
+  
+  return { serviceCode, partnerCode };
+}
+
+// Backward-compatible wrapper
+async function getOfficeCode(supabase: any, serviceId: string): Promise<number> {
+  const { serviceCode } = await getOfficeCodes(supabase, serviceId);
+  return serviceCode;
 }
 
 async function linkTermToClient(supabase: any, termId: string, clientSystemId: string): Promise<void> {
