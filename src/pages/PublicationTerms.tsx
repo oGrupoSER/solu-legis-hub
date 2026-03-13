@@ -256,7 +256,7 @@ const PublicationTerms = () => {
                 <TableRow>
                    <TableHead>Termo</TableHead>
                    <TableHead>Tipo</TableHead>
-                   <TableHead>Clientes</TableHead>
+                   
                    <TableHead>Solucionare</TableHead>
                    <TableHead>Status</TableHead>
                    <TableHead className="text-right">Ações</TableHead>
@@ -265,7 +265,7 @@ const PublicationTerms = () => {
               <TableBody>
                 {filteredTerms.length === 0 ? (
                    <TableRow>
-                     <TableCell colSpan={6} className="text-center text-muted-foreground py-8">Nenhum termo encontrado</TableCell>
+                     <TableCell colSpan={5} className="text-center text-muted-foreground py-8">Nenhum termo encontrado</TableCell>
                    </TableRow>
                 ) : (
                   filteredTerms.map((term) => {
@@ -276,9 +276,6 @@ const PublicationTerms = () => {
                         <TableCell>
                           <Badge variant="outline">{term.term_type === "office" ? "Escritório" : "Nome"}</Badge>
                         </TableCell>
-                         <TableCell>
-                           <ClientBadges clients={clients} />
-                         </TableCell>
                          <TableCell>
                            {term.solucionare_status === 'synced' ? (
                              <Badge variant="outline" className="bg-green-500/10 text-green-700 border-green-500/30 gap-1">
