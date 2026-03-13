@@ -84,7 +84,7 @@ async function fetchAllProcesses(searchQuery: string, filterPartner: string, fil
       .order("process_number")
       .range(from, from + PAGE_SIZE - 1);
 
-    if (searchQuery) query = query.or(`process_number.ilike.%${searchQuery}%,tribunal.ilike.%${searchQuery}%`);
+    if (searchQuery) query = query.or(`process_number.ilike.%${searchQuery}%,tribunal.ilike.%${searchQuery}%,cod_processo::text.ilike.%${searchQuery}%`);
     if (filterPartner !== "all") query = query.eq("partner_id", filterPartner);
     if (filterClient !== "all" && clientProcessIds && clientProcessIds.length > 0) {
       query = query.in("id", clientProcessIds);

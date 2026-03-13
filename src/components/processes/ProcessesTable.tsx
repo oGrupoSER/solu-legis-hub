@@ -79,7 +79,7 @@ export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: Proce
         .range(page * pageSize, (page + 1) * pageSize - 1);
 
       if (searchQuery) {
-        query = query.or(`process_number.ilike.%${searchQuery}%,tribunal.ilike.%${searchQuery}%`);
+        query = query.or(`process_number.ilike.%${searchQuery}%,tribunal.ilike.%${searchQuery}%,cod_processo::text.ilike.%${searchQuery}%`);
       }
 
       if (filterStatus !== "all") {
