@@ -222,7 +222,7 @@ Deno.serve(async (req) => {
 
     for (const pub of publications) {
       try {
-        const codPublicacao = pub.codPublicacao || pub.cod_publicacao;
+        const codPublicacao = pub.codPublicacao;
         if (!codPublicacao) continue;
 
         // Deduplicate by cod_publicacao
@@ -234,18 +234,37 @@ Deno.serve(async (req) => {
 
         if (existing) continue;
 
-        // Extract fields
-        const content = pub.conteudo || pub.textoPublicacao || pub.texto || null;
-        const gazetteName = pub.nomeDiario || pub.nome_diario || null;
-        const publicationDate = pub.dataPublicacao || pub.data_publicacao || null;
-        const matchedTerms = pub.termosEncontrados || pub.matched_terms || null;
-
         await supabase.from('publications').insert({
           cod_publicacao: codPublicacao,
-          content,
-          gazette_name: gazetteName,
-          publication_date: publicationDate,
-          matched_terms: Array.isArray(matchedTerms) ? matchedTerms : matchedTerms ? [matchedTerms] : null,
+          hash_publicacao: pub.hashPublicaco || null,
+          cod_escritorio: pub.codEscritorio || null,
+          content: pub.conteudoPublicacao || null,
+          gazette_name: pub.nomeDiario || null,
+          publication_date: pub.dataPublicacao || null,
+          data_vsap: pub.dataVSap || null,
+          data_disponibilizacao: pub.dataDisponibilizacao || null,
+          vara: pub.vara || null,
+          comarca: pub.comarca || null,
+          orgao: pub.orgao || null,
+          nome_caderno: pub.nomeCaderno || null,
+          sigla_diario: pub.siglaDiario || null,
+          esfera_diario: pub.esferaDiario || null,
+          num_edicao: pub.numEdicao || null,
+          num_processo: pub.numProcesso || null,
+          id_nome: pub.idNome || null,
+          cod_mapa_diario: pub.codMapaDiario || null,
+          nome_pesquisado: pub.nomePesquisado || null,
+          termo_pesquisado: pub.termoPesquisado || null,
+          oab: pub.oab || null,
+          estado: pub.estado || null,
+          uf: pub.uf || null,
+          area: pub.area || null,
+          perfil_contratante: pub.perfilContratante || null,
+          outros_termos: pub.outrosTermosDePesquisaEncontrados || null,
+          controle_pg: pub.controlePg ?? null,
+          complemento: pub.complemento ?? null,
+          tipo_fonte_conteudo: pub.tipoFonteConteudo ?? null,
+          matched_terms: pub.nomePesquisado ? [pub.nomePesquisado] : null,
           partner_id: service.partner_id,
           partner_service_id: serviceId,
           raw_data: pub,
