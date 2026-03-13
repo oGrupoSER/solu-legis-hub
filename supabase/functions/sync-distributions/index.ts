@@ -26,11 +26,6 @@ interface DistributionService {
   is_active: boolean;
 }
 
-interface AuthResponse {
-  token: string;
-  expiration: string;
-}
-
 async function authenticateAPI(service: DistributionService): Promise<string> {
   const response = await fetch(`${service.service_url}/AutenticaAPI`, {
     method: 'POST',
@@ -56,6 +51,10 @@ async function apiRequest(baseUrl: string, endpoint: string, jwtToken: string, m
   const response = await fetch(url, options);
   if (!response.ok) {
     const errorText = await response.text();
+    // Treat 400 "Não foi encontrado resultado" as empty result
+    if (response.status === 400 && errorText.includes('encontrado resultado')) {
+      return [];
+    }
     throw new Error(`API request failed: ${response.status} - ${errorText}`);
   }
   const contentType = response.headers.get('content-type');
@@ -72,7 +71,17 @@ async function getActiveServices(supabase: any): Promise<DistributionService[]> 
   return data || [];
 }
 
-async function getOfficeCode(supabase: any, partnerId: string): Promise<number> {
+async function getOfficeCode(supabase: any, serviceId: string, partnerId: string): Promise<number> {
+  // Check service-specific config first
+  const { data: serviceData } = await supabase
+    .from('partner_services')
+    .select('config')
+    .eq('id', serviceId)
+    .single();
+  
+  const serviceConfig = serviceData?.config as Record<string, any> | null;
+  if (serviceConfig?.office_code) return serviceConfig.office_code;
+
   const { data, error } = await supabase
     .from('partners')
     .select('office_code')
@@ -89,7 +98,6 @@ async function syncDistributions(
   jwtToken: string,
   officeCode: number
 ): Promise<number> {
-  // CORRECTED: Fetch all distributions by codEscritorio (not by term)
   console.log(`Fetching distributions for office code: ${officeCode}`);
 
   const distributions = await apiRequest(
@@ -103,19 +111,50 @@ async function syncDistributions(
     return 0;
   }
 
+  // Also sync terms from the distributions
+  await syncTermsFromDistributions(supabase, service, distributions);
+
   let syncedCount = 0;
 
   for (const dist of distributions) {
+    const processNumber = dist.numeroProcesso || dist.NumeroProcesso;
+    if (!processNumber) continue;
+
     const { error: insertError } = await supabase
       .from('distributions')
       .upsert({
-        process_number: dist.numeroProcesso || dist.NumeroProcesso,
+        process_number: processNumber,
         tribunal: dist.tribunal || dist.Tribunal || null,
         term: dist.nomePesquisado || dist.termo || dist.Termo || null,
         distribution_date: dist.dataDistribuicao || dist.DataDistribuicao || null,
         partner_service_id: service.id,
         partner_id: service.partner_id,
         raw_data: dist,
+        // New detailed fields
+        cod_processo: dist.codProcesso || null,
+        cod_escritorio: dist.codEscritorio || null,
+        instancia: dist.instancia || null,
+        sigla_sistema: dist.siglaSistema || null,
+        comarca: dist.comarca || null,
+        orgao_julgador: dist.orgaoJulgador || null,
+        tipo_do_processo: dist.tipoDoProcesso || null,
+        data_audiencia: dist.dataAudiencia || null,
+        tipo_audiencia: dist.tipoAudiencia || null,
+        valor_da_causa: dist.valorDaCausa || null,
+        assuntos: dist.assuntos || null,
+        magistrado: dist.magistrado || null,
+        autor: dist.autor || null,
+        reu: dist.reu || null,
+        outros_envolvidos: dist.outrosEnvolvidos || null,
+        advogados: dist.advogados || null,
+        movimentos: dist.movimentos || null,
+        documentos_iniciais: dist.documentosIniciais || null,
+        lista_documentos: dist.listaDocumentos || null,
+        cidade: dist.cidade || null,
+        uf: dist.uf || null,
+        cod_pre_cadastro_termo: dist.codPreCadastroTermo || null,
+        nome_pesquisado: dist.nomePesquisado || null,
+        processo_originario: dist.processoOriginario || null,
       }, {
         onConflict: 'process_number,partner_service_id',
         ignoreDuplicates: true,
@@ -128,10 +167,49 @@ async function syncDistributions(
     }
   }
 
-  // DISABLED: Do not confirm receipt - legacy system is the official confirmer
   console.log(`Skipping confirmation for ${distributions.length} distributions (legacy system handles confirmations)`);
 
   return syncedCount;
+}
+
+async function syncTermsFromDistributions(supabase: any, service: DistributionService, distributions: any[]) {
+  // Extract unique terms from distributions
+  const termsSet = new Set<string>();
+  for (const dist of distributions) {
+    const nome = dist.nomePesquisado;
+    if (nome) termsSet.add(nome);
+  }
+
+  // Get entitled clients
+  const { data: entitledClients } = await supabase
+    .from('client_system_services')
+    .select('client_system_id')
+    .eq('partner_service_id', service.id)
+    .eq('is_active', true);
+  const clientIds = (entitledClients || []).map((c: any) => c.client_system_id);
+
+  for (const termo of termsSet) {
+    const { data: existing } = await supabase.from('search_terms')
+      .select('id').eq('term', termo).eq('term_type', 'distribution')
+      .eq('partner_service_id', service.id).maybeSingle();
+
+    if (!existing) {
+      const { data: inserted } = await supabase.from('search_terms').insert({
+        term: termo, term_type: 'distribution',
+        partner_service_id: service.id, partner_id: service.partner_id,
+        is_active: true, solucionare_status: 'synced',
+      }).select('id').single();
+
+      if (inserted) {
+        for (const clientId of clientIds) {
+          await supabase.from('client_search_terms').upsert(
+            { search_term_id: inserted.id, client_system_id: clientId },
+            { onConflict: 'client_system_id,search_term_id' }
+          );
+        }
+      }
+    }
+  }
 }
 
 async function updateLastSync(supabase: any, serviceId: string): Promise<void> {
@@ -166,7 +244,7 @@ serve(async (req) => {
         await logger.start({ partner_service_id: service.id, sync_type: 'distributions' });
 
         const jwtToken = await authenticateAPI(service);
-        const officeCode = await getOfficeCode(supabase, service.partner_id);
+        const officeCode = await getOfficeCode(supabase, service.id, service.partner_id);
         const syncedCount = await syncDistributions(supabase, service, jwtToken, officeCode);
 
         await updateLastSync(supabase, service.id);
