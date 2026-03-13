@@ -253,8 +253,6 @@ export default function Distributions() {
                     <TableHead>Tribunal</TableHead>
                     <TableHead>Termo Monitorado</TableHead>
                     <TableHead>Data Distribuição</TableHead>
-                    <TableHead>Parceiro</TableHead>
-                    <TableHead>Serviço</TableHead>
                     <TableHead>Recebido em</TableHead>
                     <TableHead className="w-[80px]">Confirm.</TableHead>
                   </TableRow>
