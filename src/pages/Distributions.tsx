@@ -26,7 +26,7 @@ import {
 export default function Distributions() {
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterPartner, setFilterPartner] = useState<string>("all");
+  
   const [filterClient, setFilterClient] = useState<string>("all");
   const [filterConfirmation, setFilterConfirmation] = useState<string>("all");
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
@@ -37,7 +37,7 @@ export default function Distributions() {
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterPartner, filterClient, filterConfirmation, dateRange]);
+  }, [searchTerm, filterClient, filterConfirmation, dateRange]);
 
   // Fetch confirmed IDs
   useEffect(() => {
@@ -51,15 +51,6 @@ export default function Distributions() {
     fetchConfirmed();
   }, []);
 
-  const { data: partners } = useQuery({
-    queryKey: ["partners-filter"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("partners").select("id, name").eq("is_active", true);
-      if (error) throw error;
-      return data;
-    },
-  });
-
   const { data: clients } = useQuery({
     queryKey: ["clients-filter"],
     queryFn: async () => {
@@ -70,7 +61,7 @@ export default function Distributions() {
   });
 
   const { data: distributions, isLoading } = useQuery({
-    queryKey: ["distributions", searchTerm, filterPartner, filterClient, filterConfirmation, dateRange],
+    queryKey: ["distributions", searchTerm, filterClient, filterConfirmation, dateRange],
     queryFn: async () => {
       // Client term filter
       let clientTermFilter: string[] | null = null;
@@ -92,7 +83,6 @@ export default function Distributions() {
         .limit(200);
 
       if (searchTerm) query = query.or(`process_number.ilike.%${searchTerm}%,term.ilike.%${searchTerm}%`);
-      if (filterPartner !== "all") query = query.eq("partner_id", filterPartner);
       if (clientTermFilter) query = query.in("term", clientTermFilter);
       if (dateRange.from) query = query.gte("distribution_date", format(dateRange.from, "yyyy-MM-dd"));
       if (dateRange.to) query = query.lte("distribution_date", format(dateRange.to, "yyyy-MM-dd"));
@@ -134,7 +124,7 @@ export default function Distributions() {
     onError: (error) => toast.error(`Erro na sincronização: ${error.message}`),
   });
 
-  const hasActiveFilters = searchTerm || filterPartner !== "all" || filterClient !== "all" || filterConfirmation !== "all" || dateRange.from;
+  const hasActiveFilters = searchTerm || filterClient !== "all" || filterConfirmation !== "all" || dateRange.from;
 
   const totalItems = distributions?.length || 0;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
@@ -192,16 +182,6 @@ export default function Distributions() {
               onSelect={(range) => setDateRange(range)}
             />
 
-            <Select value={filterPartner} onValueChange={setFilterPartner}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Parceiro" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os Parceiros</SelectItem>
-                {partners?.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-
             <Select value={filterClient} onValueChange={setFilterClient}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Cliente" />
@@ -226,7 +206,6 @@ export default function Distributions() {
             {hasActiveFilters && (
               <Button variant="ghost" size="icon" onClick={() => {
                 setSearchTerm("");
-                setFilterPartner("all");
                 setFilterClient("all");
                 setFilterConfirmation("all");
                 setDateRange({ from: undefined, to: undefined });
@@ -255,8 +234,6 @@ export default function Distributions() {
                     <TableHead>Tribunal</TableHead>
                     <TableHead>Termo Monitorado</TableHead>
                     <TableHead>Data Distribuição</TableHead>
-                    <TableHead>Parceiro</TableHead>
-                    <TableHead>Serviço</TableHead>
                     <TableHead>Recebido em</TableHead>
                     <TableHead className="w-[80px]">Confirm.</TableHead>
                   </TableRow>
@@ -272,8 +249,6 @@ export default function Distributions() {
                       <TableCell>
                         {dist.distribution_date ? format(new Date(dist.distribution_date), "dd/MM/yyyy", { locale: ptBR }) : "-"}
                       </TableCell>
-                      <TableCell className="text-sm">{(dist as any).partners?.name || "-"}</TableCell>
-                      <TableCell className="text-muted-foreground">{(dist.partner_services as any)?.service_name || "-"}</TableCell>
                       <TableCell className="text-muted-foreground">
                         {dist.created_at ? format(new Date(dist.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR }) : "-"}
                       </TableCell>

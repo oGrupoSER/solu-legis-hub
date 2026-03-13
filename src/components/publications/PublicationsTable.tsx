@@ -41,7 +41,7 @@ export function PublicationsTable() {
   const [selectedPublication, setSelectedPublication] = useState<Publication | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterGazette, setFilterGazette] = useState<string>("all");
-  const [filterPartner, setFilterPartner] = useState<string>("all");
+  
   const [filterClient, setFilterClient] = useState<string>("all");
   const [filterConfirmation, setFilterConfirmation] = useState<string>("all");
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
@@ -51,14 +51,14 @@ export function PublicationsTable() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [gazetteOptions, setGazetteOptions] = useState<string[]>([]);
-  const [partnerOptions, setPartnerOptions] = useState<{ id: string; name: string }[]>([]);
+  
   const [clientOptions, setClientOptions] = useState<{ id: string; name: string }[]>([]);
   const [confirmedIds, setConfirmedIds] = useState<Set<string>>(new Set());
   const itemsPerPage = 10;
 
   useEffect(() => {
     fetchPublications();
-  }, [currentPage, searchTerm, filterGazette, filterPartner, filterClient, filterConfirmation, dateRange]);
+  }, [currentPage, searchTerm, filterGazette, filterClient, filterConfirmation, dateRange]);
 
   useEffect(() => {
     fetchFilterOptions();
@@ -79,12 +79,6 @@ export function PublicationsTable() {
     
     const gazettes = [...new Set(gazetteData?.map(g => g.gazette_name).filter(Boolean))];
     setGazetteOptions(gazettes as string[]);
-
-    const { data: partnerData } = await supabase
-      .from("partners")
-      .select("id, name")
-      .eq("is_active", true);
-    setPartnerOptions(partnerData || []);
 
     const { data: clientData } = await supabase
       .from("client_systems")
@@ -142,7 +136,6 @@ export function PublicationsTable() {
         query = query.or(`content.ilike.%${searchTerm}%,matched_terms.cs.{${searchTerm}}`);
       }
       if (filterGazette !== "all") query = query.eq("gazette_name", filterGazette);
-      if (filterPartner !== "all") query = query.eq("partner_id", filterPartner);
       if (clientTermFilter) query = query.overlaps("matched_terms", clientTermFilter);
       if (dateRange.from) query = query.gte("publication_date", format(dateRange.from, "yyyy-MM-dd"));
       if (dateRange.to) query = query.lte("publication_date", format(dateRange.to, "yyyy-MM-dd"));
@@ -183,7 +176,7 @@ export function PublicationsTable() {
 
   const totalPages = Math.ceil(totalCount / itemsPerPage);
 
-  const hasActiveFilters = searchTerm || filterGazette !== "all" || filterPartner !== "all" || filterClient !== "all" || filterConfirmation !== "all" || dateRange.from;
+  const hasActiveFilters = searchTerm || filterGazette !== "all" || filterClient !== "all" || filterConfirmation !== "all" || dateRange.from;
 
   if (isLoading) {
     return (
@@ -223,16 +216,6 @@ export function PublicationsTable() {
           </SelectContent>
         </Select>
 
-        <Select value={filterPartner} onValueChange={(v) => { setFilterPartner(v); setCurrentPage(1); }}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Parceiro" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os Parceiros</SelectItem>
-            {partnerOptions.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-
         <Select value={filterClient} onValueChange={(v) => { setFilterClient(v); setCurrentPage(1); }}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Cliente" />
@@ -261,7 +244,6 @@ export function PublicationsTable() {
             onClick={() => {
               setSearchTerm("");
               setFilterGazette("all");
-              setFilterPartner("all");
               setFilterClient("all");
               setFilterConfirmation("all");
               setDateRange({ from: undefined, to: undefined });
@@ -287,7 +269,6 @@ export function PublicationsTable() {
               </TableHead>
               <TableHead>Gazeta</TableHead>
               <TableHead>Termos</TableHead>
-              <TableHead>Parceiro/Serviço</TableHead>
               <TableHead>Preview</TableHead>
               <TableHead className="w-[80px]">Confirm.</TableHead>
               <TableHead className="w-[100px]">Ações</TableHead>
@@ -296,7 +277,7 @@ export function PublicationsTable() {
           <TableBody>
             {publications.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                   Nenhuma publicação encontrada
                 </TableCell>
               </TableRow>
@@ -323,12 +304,6 @@ export function PublicationsTable() {
                       {publication.matched_terms && publication.matched_terms.length > 3 && (
                         <Badge variant="outline" className="text-xs">+{publication.matched_terms.length - 3}</Badge>
                       )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    <div>
-                      <div className="font-medium">{publication.partners?.name || "-"}</div>
-                      <div className="text-muted-foreground text-xs">{publication.partner_services?.service_name || "-"}</div>
                     </div>
                   </TableCell>
                   <TableCell className="max-w-xs">
