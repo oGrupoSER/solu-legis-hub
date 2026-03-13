@@ -570,73 +570,18 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
           {/* STEP 3: Scopes (Abrangências) */}
           {currentStep === 2 && isNameType && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-sm font-semibold">Abrangências (Diários)</h4>
-                  <p className="text-xs text-muted-foreground">Selecione os diários oficiais que serão monitorados</p>
-                </div>
-                {abrangencias.length > 0 && (
-                  <Badge variant="secondary">{abrangencias.length} selecionados</Badge>
-                )}
+              <div>
+                <h4 className="text-sm font-semibold">Abrangências (Diários)</h4>
+                <p className="text-xs text-muted-foreground">Define quais diários oficiais serão monitorados</p>
               </div>
 
-              {isLoadingAbrangencias ? (
-                <div className="flex items-center justify-center py-12 gap-3 text-muted-foreground">
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  <span className="text-sm">Carregando abrangências...</span>
+              <div className="flex items-center gap-3 p-4 rounded-md border bg-muted/30">
+                <Checkbox checked={true} disabled />
+                <div>
+                  <span className="text-sm font-medium">Todas</span>
+                  <p className="text-xs text-muted-foreground">Todos os diários disponíveis serão monitorados</p>
                 </div>
-              ) : abrangenciasDisponiveis.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 gap-3">
-                  <p className="text-sm text-muted-foreground">Nenhuma abrangência carregada</p>
-                  <Button type="button" variant="outline" className="gap-2" onClick={handleFetchAbrangencias}>
-                    <Search className="h-4 w-4" />
-                    Tentar novamente
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      value={abrangenciaSearch}
-                      onChange={(e) => setAbrangenciaSearch(e.target.value)}
-                      placeholder="Filtrar diários..."
-                      className="pl-10"
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button type="button" variant="outline" size="sm" onClick={() => setAbrangencias([...abrangenciasDisponiveis])}>
-                      Selecionar Todos
-                    </Button>
-                    <Button type="button" variant="outline" size="sm" onClick={() => setAbrangencias([])}>
-                      Limpar
-                    </Button>
-                    <span className="text-xs text-muted-foreground self-center ml-auto">
-                      {filteredAbrangencias.length} diários
-                    </span>
-                  </div>
-                  <ScrollArea className="h-[250px] rounded-md border">
-                    <div className="p-2 space-y-0.5">
-                      {filteredAbrangencias.map((sigla) => (
-                        <div
-                          key={sigla}
-                          className={cn(
-                            "flex items-center gap-2.5 px-3 py-1.5 rounded-md cursor-pointer transition-colors text-sm",
-                            abrangencias.includes(sigla) ? "bg-primary/10 text-primary" : "hover:bg-muted/50"
-                          )}
-                          onClick={() => toggleAbrangencia(sigla)}
-                        >
-                          <Checkbox checked={abrangencias.includes(sigla)} onCheckedChange={() => toggleAbrangencia(sigla)} />
-                          <span className="font-medium">{sigla}</span>
-                        </div>
-                      ))}
-                      {filteredAbrangencias.length === 0 && (
-                        <p className="text-sm text-muted-foreground text-center py-8">Nenhum diário encontrado</p>
-                      )}
-                    </div>
-                  </ScrollArea>
-                </>
-              )}
+              </div>
             </div>
           )}
         </div>
