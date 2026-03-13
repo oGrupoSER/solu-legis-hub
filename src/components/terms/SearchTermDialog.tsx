@@ -366,7 +366,7 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="type">Tipo</Label>
-                  <Select value={formData.term_type} onValueChange={(value) => setFormData({ ...formData, term_type: value })}>
+                  <Select value={formData.term_type} onValueChange={(value) => setFormData({ ...formData, term_type: value })} disabled>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="office">Escritório</SelectItem>
