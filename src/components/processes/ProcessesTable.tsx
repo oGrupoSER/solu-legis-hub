@@ -214,9 +214,6 @@ export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: Proce
                        </Badge>
                      )}
                    </TableCell>
-                   <TableCell>
-                     <ClientBadges clients={clients} />
-                   </TableCell>
                    <TableCell className="text-sm text-muted-foreground">
                     {process.last_sync_at
                       ? new Date(process.last_sync_at).toLocaleString("pt-BR")
