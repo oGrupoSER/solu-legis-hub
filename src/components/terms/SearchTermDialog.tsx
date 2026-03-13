@@ -397,7 +397,7 @@ export const SearchTermDialog = ({ open, onOpenChange, term }: SearchTermDialogP
                     onValueChange={(value) => {
                       const partnerId = value === "none" ? "" : value;
                       setFormData({ ...formData, partner_id: partnerId, partner_service_id: "" });
-                      fetchServices(partnerId);
+                      fetchServices(partnerId, true);
                     }}
                   >
                     <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
