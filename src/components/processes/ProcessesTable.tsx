@@ -284,6 +284,39 @@ export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: Proce
         onSuccess={() => { setEditProcess(null); fetchProcesses(); }}
         process={editProcess}
       />
+
+      <AlertDialog open={!!deleteProcess} onOpenChange={(open) => { if (!open) setDeleteProcess(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              <AlertDialogTitle>Excluir Processo</AlertDialogTitle>
+            </div>
+            <AlertDialogDescription className="space-y-2">
+              <p>
+                Tem certeza que deseja excluir o processo{" "}
+                <span className="font-mono font-semibold">{deleteProcess?.process_number}</span>?
+              </p>
+              <p>
+                Esta ação irá remover o processo do parceiro (Solucionare) e excluir
+                todos os dados locais associados, incluindo agrupadores, andamentos,
+                documentos, capas, partes e dependências.
+              </p>
+              <p className="text-destructive font-medium">Esta ação não pode ser desfeita.</p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? "Excluindo..." : "Excluir"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
