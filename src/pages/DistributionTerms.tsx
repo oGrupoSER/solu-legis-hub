@@ -672,13 +672,13 @@ export default function DistributionTerms() {
 
   const handleExport = () => {
     const csv = [
-      ["Nome", "Tipo Consulta", "Parceiro", "Serviço", "Status", "Clientes", "Cadastrado em"],
+      ["Nome", "Tipo Consulta", "Status", "Cadastrado em"],
       ...filteredTerms.map((t) => {
         const meta = t.metadata as any;
         const tipoConsulta = TIPO_CONSULTA_OPTIONS.find(o => o.value === String(meta?.codTipoConsulta))?.label || "-";
         return [
-          t.term, tipoConsulta, t.partners?.name || "-", t.partner_services?.service_name || "-",
-          t.is_active ? "Ativo" : "Inativo", getClientNames(t).join("; ") || "-",
+          t.term, tipoConsulta,
+          t.is_active ? "Ativo" : "Inativo",
           t.created_at ? format(new Date(t.created_at), "dd/MM/yyyy", { locale: ptBR }) : "-",
         ];
       }),
@@ -762,8 +762,6 @@ export default function DistributionTerms() {
                 <TableRow>
                   <TableHead>Nome</TableHead>
                   <TableHead>Tipo Consulta</TableHead>
-                  <TableHead>Parceiro</TableHead>
-                  <TableHead>Clientes</TableHead>
                   <TableHead>Solucionare</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Cadastrado em</TableHead>
@@ -773,13 +771,13 @@ export default function DistributionTerms() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8">
+                    <TableCell colSpan={6} className="text-center py-8">
                       <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
                     </TableCell>
                   </TableRow>
                 ) : filteredTerms.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">Nenhum nome encontrado</TableCell>
+                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">Nenhum nome encontrado</TableCell>
                   </TableRow>
                 ) : (
                   filteredTerms.map((term) => {
@@ -790,8 +788,6 @@ export default function DistributionTerms() {
                       <TableRow key={term.id}>
                         <TableCell className="font-medium">{term.term}</TableCell>
                         <TableCell className="text-sm">{tipoLabel}</TableCell>
-                        <TableCell className="text-sm">{term.partners?.name || "-"}</TableCell>
-                        <TableCell><ClientBadges clients={clients} /></TableCell>
                         <TableCell>
                           {term.solucionare_status === 'synced' ? (
                             <Badge variant="outline" className="bg-green-500/10 text-green-700 border-green-500/30 gap-1">
