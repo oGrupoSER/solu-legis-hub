@@ -617,13 +617,6 @@ async function syncAllDocumentsByProcess(client: RestClient, supabase: any, serv
   }
 }
 
-    return totalSynced;
-  } catch (error) {
-    console.error('Error in syncAllMovementsByProcess:', error);
-    return 0;
-  }
-}
-
 /**
  * Sync Documents
  * GET /BuscaNovosDocumentosPorEscritorio?codEscritorio={code} - returns max 500 unconfirmed documents filtered by office
