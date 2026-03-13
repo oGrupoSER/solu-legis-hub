@@ -191,17 +191,18 @@ serve(async (req) => {
           }
         }
 
-        // Clean up orphan local terms not present in API
+        // Clean up orphan local terms not present in API (trim for encoding safety)
         if (apiNames.length > 0) {
-          const apiTermNames = apiNames.map((n: any) => n.nome || n.Nome || n.term).filter(Boolean);
+          const apiTermNames = apiNames.map((n: any) => (n.nome || n.Nome || n.term || '').trim()).filter(Boolean);
+          console.log(`[listNames] API term names for orphan check: ${JSON.stringify(apiTermNames)}`);
           const { data: localTerms } = await supabase.from('search_terms')
             .select('id, term')
             .eq('term_type', 'distribution')
             .eq('partner_service_id', serviceId);
 
-          const orphans = (localTerms || []).filter((lt: any) => !apiTermNames.includes(lt.term));
+          const orphans = (localTerms || []).filter((lt: any) => !apiTermNames.includes((lt.term || '').trim()));
           if (orphans.length > 0) {
-            console.log(`[listNames] Removing ${orphans.length} orphan local terms not found in API`);
+            console.log(`[listNames] Removing ${orphans.length} orphan local terms: ${orphans.map((o: any) => o.term).join(', ')}`);
             for (const orphan of orphans) {
               await supabase.from('client_search_terms').delete().eq('search_term_id', orphan.id);
               await supabase.from('search_terms').delete().eq('id', orphan.id);
