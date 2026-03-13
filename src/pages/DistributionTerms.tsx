@@ -788,8 +788,6 @@ export default function DistributionTerms() {
                       <TableRow key={term.id}>
                         <TableCell className="font-medium">{term.term}</TableCell>
                         <TableCell className="text-sm">{tipoLabel}</TableCell>
-                        <TableCell className="text-sm">{term.partners?.name || "-"}</TableCell>
-                        <TableCell><ClientBadges clients={clients} /></TableCell>
                         <TableCell>
                           {term.solucionare_status === 'synced' ? (
                             <Badge variant="outline" className="bg-green-500/10 text-green-700 border-green-500/30 gap-1">
