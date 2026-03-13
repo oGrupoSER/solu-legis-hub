@@ -48,9 +48,6 @@ interface ProcessesTableProps {
   filterStatus?: string;
 }
 
-const STATUS_FILTER_MAP: Record<string, number> = {
-  pending: 1, registered: 4, archived: 5, error: 7,
-};
 
 export function ProcessesTable({ searchQuery = "", filterStatus = "all" }: ProcessesTableProps) {
   const [processes, setProcesses] = useState<Process[]>([]);
