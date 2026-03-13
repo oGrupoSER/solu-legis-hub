@@ -282,16 +282,27 @@ serve(async (req) => {
         for (const proc of allInstances) {
           if (!proc.cod_processo) continue;
           try {
-            const statusData = await client.get('/BuscaStatusProcesso', { codProcesso: proc.cod_processo });
-            if (statusData?.codStatus) {
+            const rawStatusData = await client.get('/BuscaStatusProcesso', { codProcesso: proc.cod_processo });
+            const statusPayload = normalizeStatusPayload(rawStatusData);
+            const resolved = statusPayload ? resolveStatus(statusPayload) : null;
+
+            if (resolved) {
               await supabase.from('processes').update({
-                status_code: statusData.codStatus,
-                status_description: STATUS_CODES[statusData.codStatus] || statusData.descricaoStatus,
-                cod_classificacao_status: statusData.codClassificacaoStatus || null,
-                descricao_classificacao_status: statusData.descricaoClassificacaoStatus || null,
+                status: resolved.statusLabel,
+                status_code: resolved.statusCode,
+                status_description: resolved.statusLabel,
+                cod_classificacao_status: resolved.codClassificacaoStatus,
+                descricao_classificacao_status: resolved.descricaoClassificacaoStatus,
+                updated_at: new Date().toISOString(),
               }).eq('id', proc.id);
             }
-            statuses.push({ instance: proc.instance, ...statusData });
+
+            statuses.push({
+              instance: proc.instance,
+              ...(statusPayload || {}),
+              statusCode: resolved?.statusCode ?? null,
+              statusDescription: resolved?.statusLabel ?? null,
+            });
           } catch (err) {
             console.error(`Error checking status for instance ${proc.instance}:`, err);
           }
