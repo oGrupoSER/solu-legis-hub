@@ -761,7 +761,7 @@ export default function DistributionTerms() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nome</TableHead>
-                  <TableHead>Tipo Consulta</TableHead>
+                  
                   <TableHead>Solucionare</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Cadastrado em</TableHead>
@@ -771,13 +771,13 @@ export default function DistributionTerms() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8">
+                    <TableCell colSpan={5} className="text-center py-8">
                       <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
                     </TableCell>
                   </TableRow>
                 ) : filteredTerms.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">Nenhum nome encontrado</TableCell>
+                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">Nenhum nome encontrado</TableCell>
                   </TableRow>
                 ) : (
                   filteredTerms.map((term) => {
@@ -787,7 +787,7 @@ export default function DistributionTerms() {
                     return (
                       <TableRow key={term.id}>
                         <TableCell className="font-medium">{term.term}</TableCell>
-                        <TableCell className="text-sm">{tipoLabel}</TableCell>
+                        
                         <TableCell>
                           {term.solucionare_status === 'synced' ? (
                             <Badge variant="outline" className="bg-green-500/10 text-green-700 border-green-500/30 gap-1">
