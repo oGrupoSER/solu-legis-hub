@@ -18,9 +18,10 @@ interface ProcessesStatsProps {
 
 const STATUS_CONFIG: Record<number, { icon: LucideIcon; colorClass: string }> = {
   1: { icon: Clock, colorClass: "text-warning" },
+  2: { icon: Clock, colorClass: "text-warning" },
   4: { icon: CheckCircle, colorClass: "text-success" },
   5: { icon: Archive, colorClass: "text-muted-foreground" },
-  6: { icon: ShieldAlert, colorClass: "text-destructive" },
+  6: { icon: ShieldAlert, colorClass: "text-purple-600" },
   7: { icon: AlertCircle, colorClass: "text-destructive" },
 };
 
