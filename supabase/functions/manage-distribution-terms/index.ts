@@ -163,15 +163,27 @@ serve(async (req) => {
           const solCode = name.codNome || name.CodNome || null;
           const isActive = name.ativo !== undefined ? !!name.ativo : true;
 
+          // Store full API metadata
+          const apiMetadata = {
+            codTipoConsulta: name.codTipoConsulta || null,
+            listInstancias: name.listInstancias || [],
+            listAbrangencias: name.listAbrangencias || [],
+            qtdDiasCapturaRetroativa: name.qtdDiasCapturaRetroativa || null,
+            listDocumentos: name.listDocumentos || [],
+            listOab: name.listOab || [],
+            forcarPesquisaExata: name.forcarPesquisaExata ?? null,
+            tipoPoloPesquisa: name.tipoPoloPesquisa ?? null,
+          };
+
           const { data: existing } = await supabase.from('search_terms')
             .select('id').eq('term', termo).eq('term_type', 'distribution')
             .eq('partner_service_id', serviceId).maybeSingle();
 
           if (existing) {
-            await supabase.from('search_terms').update({ is_active: isActive, solucionare_code: solCode, solucionare_status: 'synced', updated_at: new Date().toISOString() }).eq('id', existing.id);
+            await supabase.from('search_terms').update({ is_active: isActive, solucionare_code: solCode, solucionare_status: 'synced', metadata: apiMetadata, updated_at: new Date().toISOString() }).eq('id', existing.id);
             await linkTermToClients(existing.id);
           } else {
-            const { data: inserted } = await supabase.from('search_terms').insert({ term: termo, term_type: 'distribution', partner_service_id: serviceId, partner_id: service.partner_id, is_active: isActive, solucionare_code: solCode, solucionare_status: 'synced' }).select('id').single();
+            const { data: inserted } = await supabase.from('search_terms').insert({ term: termo, term_type: 'distribution', partner_service_id: serviceId, partner_id: service.partner_id, is_active: isActive, solucionare_code: solCode, solucionare_status: 'synced', metadata: apiMetadata }).select('id').single();
             if (inserted) await linkTermToClients(inserted.id);
           }
         }
