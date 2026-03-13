@@ -243,7 +243,7 @@ export default function ProcessMovements() {
         .order("data_andamento", { ascending: false, nullsFirst: false })
         .limit(500);
 
-      if (searchQuery) query = query.or(`description.ilike.%${searchQuery}%,tipo_andamento.ilike.%${searchQuery}%`);
+      // Search is handled client-side for movements (to match process_number/cod_processo)
       if (filterClient !== "all" && clientProcessIds && clientProcessIds.length > 0) {
         query = query.in("process_id", clientProcessIds);
       }
@@ -267,11 +267,25 @@ export default function ProcessMovements() {
       const { data, error } = await query;
       if (error) throw error;
 
+      let result = data as unknown as Movement[];
+
       if (filterPartner !== "all") {
-        return (data || []).filter((m: any) => m.processes?.partner_id === filterPartner) as unknown as Movement[];
+        result = result.filter((m: any) => m.processes?.partner_id === filterPartner);
       }
 
-      return data as unknown as Movement[];
+      // Client-side search: match process_number, cod_andamento, or description
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        result = result.filter((m: any) => {
+          const processNumber = m.processes?.process_number?.toLowerCase() || "";
+          const description = m.description?.toLowerCase() || "";
+          const tipoAndamento = m.tipo_andamento?.toLowerCase() || "";
+          const codAndamento = String(m.cod_andamento || "");
+          return processNumber.includes(q) || description.includes(q) || tipoAndamento.includes(q) || codAndamento.includes(q);
+        });
+      }
+
+      return result;
     },
   });
 
@@ -450,7 +464,7 @@ export default function ProcessMovements() {
       <div className="flex flex-col sm:flex-row gap-4 flex-wrap">
         <div className="relative min-w-[200px] flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10" />
+          <Input placeholder="Buscar por número do processo ou código..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10" />
         </div>
 
         <DateRangePicker from={dateRange.from} to={dateRange.to} onSelect={(range) => setDateRange(range)} />
