@@ -3,9 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileText, Download, ExternalLink, CloudDownload, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
+import { FileText, ExternalLink, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
 
 interface Document {
   id: string;
@@ -28,7 +27,6 @@ type FilterType = "all" | "available" | "expired";
 export function ProcessDocumentsTab({ processId }: ProcessDocumentsTabProps) {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
-  const [downloading, setDownloading] = useState(false);
   const [filter, setFilter] = useState<FilterType>("all");
 
   useEffect(() => {
@@ -53,54 +51,6 @@ export function ProcessDocumentsTab({ processId }: ProcessDocumentsTabProps) {
     }
   };
 
-  const handleDownloadAll = async () => {
-    try {
-      setDownloading(true);
-      toast.info("Baixando documentos da Solucionare para o Storage...");
-      
-      const { data, error } = await supabase.functions.invoke("download-process-documents", {
-        body: { processId, limit: 50 },
-      });
-
-      if (error) throw error;
-
-      if (data.downloaded > 0) {
-        toast.success(`${data.downloaded} documento(s) baixado(s) com sucesso`);
-        fetchDocuments();
-      } else if (data.failed > 0) {
-        toast.warning(`${data.failed} documento(s) falharam no download`);
-      } else {
-        toast.info("Todos os documentos já estão armazenados localmente");
-      }
-    } catch (error) {
-      console.error("Error downloading documents:", error);
-      toast.error("Erro ao baixar documentos");
-    } finally {
-      setDownloading(false);
-    }
-  };
-
-  const handleDownloadSingle = async (docId: string) => {
-    try {
-      toast.info("Baixando documento...");
-      const { data, error } = await supabase.functions.invoke("download-process-documents", {
-        body: { documentId: docId },
-      });
-
-      if (error) throw error;
-
-      if (data.downloaded > 0) {
-        toast.success("Documento baixado com sucesso");
-        fetchDocuments();
-      } else {
-        toast.warning("Não foi possível baixar o documento");
-      }
-    } catch (error) {
-      console.error("Error downloading document:", error);
-      toast.error("Erro ao baixar documento");
-    }
-  };
-
   const formatFileSize = (bytes: number | null) => {
     if (!bytes) return "-";
     if (bytes < 1024) return `${bytes} B`;
@@ -108,18 +58,19 @@ export function ProcessDocumentsTab({ processId }: ProcessDocumentsTabProps) {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const isStoredLocally = (doc: Document) => !!doc.storage_path;
+  const isAvailable = (doc: Document) => !!doc.documento_url || !!doc.storage_path;
   const isExpired = (doc: Document) => !doc.storage_path && !doc.documento_url;
 
+  const getDocumentUrl = (doc: Document) => doc.documento_url || null;
+
   const filteredDocuments = documents.filter((doc) => {
-    if (filter === "available") return isStoredLocally(doc);
+    if (filter === "available") return isAvailable(doc);
     if (filter === "expired") return isExpired(doc);
     return true;
   });
 
-  const storedCount = documents.filter(isStoredLocally).length;
+  const availableCount = documents.filter(isAvailable).length;
   const expiredCount = documents.filter(isExpired).length;
-  const pendingCount = documents.filter(d => !d.storage_path && d.documento_url).length;
 
   if (loading) {
     return (
@@ -160,13 +111,8 @@ export function ProcessDocumentsTab({ processId }: ProcessDocumentsTabProps) {
             </CardTitle>
             <CardDescription className="flex items-center gap-3 mt-1">
               <span className="inline-flex items-center gap-1 text-green-600">
-                <CheckCircle2 className="h-3.5 w-3.5" /> {storedCount} disponíveis
+                <CheckCircle2 className="h-3.5 w-3.5" /> {availableCount} disponíveis
               </span>
-              {pendingCount > 0 && (
-                <span className="inline-flex items-center gap-1 text-amber-500">
-                  <CloudDownload className="h-3.5 w-3.5" /> {pendingCount} pendentes
-                </span>
-              )}
               {expiredCount > 0 && (
                 <span className="inline-flex items-center gap-1 text-destructive">
                   <XCircle className="h-3.5 w-3.5" /> {expiredCount} expirados
@@ -181,22 +127,10 @@ export function ProcessDocumentsTab({ processId }: ProcessDocumentsTabProps) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos ({documents.length})</SelectItem>
-                <SelectItem value="available">Disponíveis ({storedCount})</SelectItem>
+                <SelectItem value="available">Disponíveis ({availableCount})</SelectItem>
                 <SelectItem value="expired">Expirados ({expiredCount})</SelectItem>
               </SelectContent>
             </Select>
-            {pendingCount > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleDownloadAll}
-                disabled={downloading}
-                className="gap-2"
-              >
-                <CloudDownload className={`h-4 w-4 ${downloading ? "animate-pulse" : ""}`} />
-                Baixar Todos
-              </Button>
-            )}
           </div>
         </div>
       </CardHeader>
@@ -208,8 +142,9 @@ export function ProcessDocumentsTab({ processId }: ProcessDocumentsTabProps) {
             </div>
           )}
           {filteredDocuments.map((doc) => {
-            const stored = isStoredLocally(doc);
+            const available = isAvailable(doc);
             const expired = isExpired(doc);
+            const url = getDocumentUrl(doc);
 
             return (
               <div
@@ -220,12 +155,12 @@ export function ProcessDocumentsTab({ processId }: ProcessDocumentsTabProps) {
               >
                 <div className="flex items-center gap-3">
                   <div className={`h-10 w-10 rounded flex items-center justify-center ${
-                    expired ? "bg-destructive/10" : stored ? "bg-green-500/10" : "bg-muted"
+                    expired ? "bg-destructive/10" : "bg-green-500/10"
                   }`}>
                     {expired ? (
                       <AlertTriangle className="h-5 w-5 text-destructive" />
                     ) : (
-                      <FileText className={`h-5 w-5 ${stored ? "text-green-600" : "text-muted-foreground"}`} />
+                      <FileText className="h-5 w-5 text-green-600" />
                     )}
                   </div>
                   <div>
@@ -240,20 +175,15 @@ export function ProcessDocumentsTab({ processId }: ProcessDocumentsTabProps) {
                       )}
                       <span>{formatFileSize(doc.tamanho_bytes)}</span>
                       <span>Código: {doc.cod_documento}</span>
-                      {stored ? (
+                      {available ? (
                         <Badge variant="outline" className="text-xs text-green-600 border-green-600">
                           <CheckCircle2 className="h-3 w-3 mr-1" />
                           Disponível
                         </Badge>
-                      ) : expired ? (
+                      ) : (
                         <Badge variant="outline" className="text-xs text-destructive border-destructive">
                           <XCircle className="h-3 w-3 mr-1" />
                           Expirado
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-xs text-amber-500 border-amber-500">
-                          <CloudDownload className="h-3 w-3 mr-1" />
-                          Pendente
                         </Badge>
                       )}
                     </div>
@@ -261,20 +191,10 @@ export function ProcessDocumentsTab({ processId }: ProcessDocumentsTabProps) {
                 </div>
                 
                 <div className="flex items-center gap-2">
-                  {!stored && doc.documento_url && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDownloadSingle(doc.id)}
-                      title="Baixar para o Storage"
-                    >
-                      <Download className="h-4 w-4" />
-                    </Button>
-                  )}
-                  {stored && doc.documento_url && (
+                  {available && url && (
                     <Button variant="outline" size="sm" asChild>
                       <a 
-                        href={doc.documento_url} 
+                        href={url} 
                         target="_blank" 
                         rel="noopener noreferrer"
                         className="gap-2"
