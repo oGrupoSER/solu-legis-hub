@@ -84,13 +84,12 @@ const Processes = () => {
             Vincular Clientes
           </Button>
           <Button
-            onClick={handleSync}
+            onClick={() => setSyncDialogOpen(true)}
             variant="outline"
             size="sm"
             className="gap-2"
-            disabled={syncing}
           >
-            <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
+            <RefreshCw className="h-4 w-4" />
             Sincronizar
           </Button>
           <Button
