@@ -65,8 +65,7 @@ async function getService(supabase: any, serviceId: string): Promise<ServiceConf
   return data;
 }
 
-async function getOfficeCode(supabase: any, serviceId: string): Promise<number> {
-  // First check service-specific config for office_code override
+async function getOfficeCodes(supabase: any, serviceId: string): Promise<{ serviceCode: number; partnerCode: number }> {
   const { data: serviceData, error: serviceError } = await supabase
     .from('partner_services')
     .select('config, partners(office_code)')
@@ -74,13 +73,20 @@ async function getOfficeCode(supabase: any, serviceId: string): Promise<number> 
     .single();
   if (serviceError) throw serviceError;
   
-  // Service-specific office_code takes priority (different APIs may use different codes)
   const serviceConfig = serviceData?.config as Record<string, any> | null;
-  if (serviceConfig?.office_code) return serviceConfig.office_code;
+  const partnerCode = (serviceData?.partners as any)?.office_code as number | null;
+  if (!partnerCode) throw new Error('Parceiro não possui código de escritório configurado.');
   
-  const officeCode = (serviceData?.partners as any)?.office_code as number | null;
-  if (!officeCode) throw new Error('Parceiro não possui código de escritório configurado. Configure no serviço (config.office_code) ou no parceiro.');
-  return officeCode;
+  // serviceCode: used for CadastrarNome (from config or fallback to partner)
+  const serviceCode = serviceConfig?.office_code || partnerCode;
+  
+  return { serviceCode, partnerCode };
+}
+
+// Backward-compatible wrapper
+async function getOfficeCode(supabase: any, serviceId: string): Promise<number> {
+  const { serviceCode } = await getOfficeCodes(supabase, serviceId);
+  return serviceCode;
 }
 
 async function linkTermToClient(supabase: any, termId: string, clientSystemId: string): Promise<void> {
@@ -110,20 +116,23 @@ serve(async (req) => {
 
     const service = await getService(supabase, serviceId);
     const jwtToken = await authenticate(service);
-    const officeCode = await getOfficeCode(supabase, serviceId);
+    const { serviceCode: officeCode, partnerCode: partnerOfficeCode } = await getOfficeCodes(supabase, serviceId);
     let result;
 
     switch (action) {
       case 'listNames': {
         // Try fetching from API first
         let apiNames: any[] = [];
+        console.log(`[listNames] Using officeCode=${officeCode}, partnerOfficeCode=${partnerOfficeCode}`);
         try {
-          const rawResponse = await apiRequest(service.service_url, `/BuscaNomesCadastrados?codEscritorio=${officeCode}`, jwtToken);
-          console.log(`[listNames] Full API response:`, JSON.stringify(rawResponse));
+          console.log(`[listNames] Trying BuscaNomesCadastrados with partnerOfficeCode=${partnerOfficeCode}`);
+          const rawResponse = await apiRequest(service.service_url, `/BuscaNomesCadastrados?codEscritorio=${partnerOfficeCode}`, jwtToken);
+          console.log(`[listNames] API returned ${Array.isArray(rawResponse) ? rawResponse.length : 0} names`);
           apiNames = Array.isArray(rawResponse) ? rawResponse : [];
         } catch (e: any) {
-          if (e.message?.includes('400')) {
-            console.log('[listNames] No names found via API (400)');
+          console.log(`[listNames] API error: ${e.message}, apiStatus: ${e.apiStatus}, apiBody: ${e.apiBody}`);
+          if (e.apiStatus === 400 || e.message?.includes('400')) {
+            console.log('[listNames] Treating 400 as empty result');
             apiNames = [];
           } else {
             throw e;
@@ -157,15 +166,27 @@ serve(async (req) => {
           const solCode = name.codNome || name.CodNome || null;
           const isActive = name.ativo !== undefined ? !!name.ativo : true;
 
+          // Store full API metadata
+          const apiMetadata = {
+            codTipoConsulta: name.codTipoConsulta || null,
+            listInstancias: name.listInstancias || [],
+            listAbrangencias: name.listAbrangencias || [],
+            qtdDiasCapturaRetroativa: name.qtdDiasCapturaRetroativa || null,
+            listDocumentos: name.listDocumentos || [],
+            listOab: name.listOab || [],
+            forcarPesquisaExata: name.forcarPesquisaExata ?? null,
+            tipoPoloPesquisa: name.tipoPoloPesquisa ?? null,
+          };
+
           const { data: existing } = await supabase.from('search_terms')
             .select('id').eq('term', termo).eq('term_type', 'distribution')
             .eq('partner_service_id', serviceId).maybeSingle();
 
           if (existing) {
-            await supabase.from('search_terms').update({ is_active: isActive, solucionare_code: solCode, solucionare_status: 'synced', updated_at: new Date().toISOString() }).eq('id', existing.id);
+            await supabase.from('search_terms').update({ is_active: isActive, solucionare_code: solCode, solucionare_status: 'synced', metadata: apiMetadata, updated_at: new Date().toISOString() }).eq('id', existing.id);
             await linkTermToClients(existing.id);
           } else {
-            const { data: inserted } = await supabase.from('search_terms').insert({ term: termo, term_type: 'distribution', partner_service_id: serviceId, partner_id: service.partner_id, is_active: isActive, solucionare_code: solCode, solucionare_status: 'synced' }).select('id').single();
+            const { data: inserted } = await supabase.from('search_terms').insert({ term: termo, term_type: 'distribution', partner_service_id: serviceId, partner_id: service.partner_id, is_active: isActive, solucionare_code: solCode, solucionare_status: 'synced', metadata: apiMetadata }).select('id').single();
             if (inserted) await linkTermToClients(inserted.id);
           }
         }
