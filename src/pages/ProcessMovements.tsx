@@ -526,8 +526,6 @@ export default function ProcessMovements() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Número do Processo</TableHead>
-                    <TableHead>Escritório</TableHead>
-                    <TableHead>Tribunal</TableHead>
                     <TableHead>UF</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Andamentos</TableHead>
@@ -538,15 +536,13 @@ export default function ProcessMovements() {
                 </TableHeader>
                 <TableBody>
                   {loadingProcesses ? (
-                    <TableRow><TableCell colSpan={9} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-8"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
                   ) : processes.length === 0 ? (
-                    <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8"><FileText className="h-10 w-10 mx-auto mb-2 text-muted-foreground/50" />Nenhum processo encontrado</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8"><FileText className="h-10 w-10 mx-auto mb-2 text-muted-foreground/50" />Nenhum processo encontrado</TableCell></TableRow>
                   ) : (
                     paginatedProcesses.map((proc) => (
                       <TableRow key={proc.id} className="cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/processes/${proc.id}`)}>
                         <TableCell className="font-mono text-sm">{proc.process_number}</TableCell>
-                        <TableCell>{proc.cod_escritorio || "-"}</TableCell>
-                        <TableCell>{proc.tribunal || "-"}</TableCell>
                         <TableCell>{proc.uf || "-"}</TableCell>
                         <TableCell>
                           <Badge variant="outline">{getStatusLabel(proc)}</Badge>
