@@ -258,8 +258,6 @@ const PublicationTerms = () => {
                 <TableRow>
                    <TableHead>Termo</TableHead>
                    <TableHead>Tipo</TableHead>
-                   <TableHead>Parceiro</TableHead>
-                   <TableHead>Serviço</TableHead>
                    <TableHead>Clientes</TableHead>
                    <TableHead>Solucionare</TableHead>
                    <TableHead>Status</TableHead>
