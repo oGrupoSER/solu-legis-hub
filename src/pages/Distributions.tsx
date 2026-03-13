@@ -26,7 +26,7 @@ import {
 export default function Distributions() {
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterPartner, setFilterPartner] = useState<string>("all");
+  
   const [filterClient, setFilterClient] = useState<string>("all");
   const [filterConfirmation, setFilterConfirmation] = useState<string>("all");
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
