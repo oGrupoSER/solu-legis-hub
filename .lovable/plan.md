@@ -1,129 +1,115 @@
 
 
-# Plano: Filtros Avancados e Indicador de Confirmacao por Registro
+## Plano: Integrar Infojudiciais com Hub Jurídico via API do Playground
 
-## Contexto
+### Situação atual
 
-As telas de Publicacoes, Distribuicoes e Andamentos precisam de:
-1. Filtros por **cliente**, **parceiro** e **periodo** (algumas telas ja tem parceiro/periodo parcialmente)
-2. Indicador visual por registro mostrando se o cliente ja **confirmou o recebimento**
-3. Ao clicar no indicador, exibir **data/hora** e **IP de origem** da confirmacao
-4. Filtro por status de confirmacao (confirmado / nao confirmado)
+**Hub (este projeto):**
+- Endpoints de **consulta** (`api-publications`, `api-distributions`, `api-processes`) — autenticação por **API Token** do `client_systems`
+- Endpoints de **gerenciamento** (`manage-publication-terms`, `manage-distribution-terms`, `sync-process-management`) — autenticação por **JWT do Supabase** (sessão de usuário logado)
 
-## Analise do Estado Atual
+**Infojudiciais:**
+- `hub-juridico-crud`: tenta cadastrar termos chamando endpoints de consulta (`api-publications` POST) — **incorreto**, pois esses endpoints só aceitam GET e POST confirm
+- `hub-juridico-sync`: faz pull de dados via GET nos endpoints de consulta — **funcional**
+- Usa `integracao_apis` com `client_id` (token) e `folder_id` (base URL) para configurar a conexão
 
-| Tela | Filtro Cliente | Filtro Parceiro | Filtro Periodo | Confirmacao |
-|------|---------------|-----------------|----------------|-------------|
-| Publicacoes (PublicationsTable) | Nao tem | Tem | Tem | Nao tem |
-| Distribuicoes (Distributions) | Nao tem | Nao tem | Nao tem | Nao tem |
-| Andamentos (ProcessMovements) | Nao tem | Nao tem | Nao tem | Nao tem |
+### Problema central
 
-O modelo de confirmacao atual e por **lote** (tabela `api_delivery_cursors`), sem rastreamento por registro individual. Nao ha dados de IP nem timestamp por registro.
+Os endpoints de gerenciamento do Hub exigem JWT de sessão (usuário logado no Hub). Isso impede comunicação sistema-a-sistema. O Infojudiciais precisa cadastrar/excluir termos e processos usando seu API token.
 
-## O Que Sera Feito
+### Solução proposta
 
-### 1. Nova Tabela: `record_confirmations`
+Criar um novo edge function **`api-management`** no Hub que:
+1. Aceita autenticação por **API Token** (igual aos endpoints de consulta)
+2. Roteia para as operações corretas de cadastro/exclusão
+3. Aplica lógica de **deduplicação** (se o termo já existe no Hub, apenas vincula o `client_system_id`)
+4. Se o termo já possui publicações/distribuições, elas ficam imediatamente disponíveis via endpoint de consulta
 
-Rastreia confirmacoes individuais por registro e por cliente:
-
-| Coluna | Tipo | Descricao |
-|--------|------|-----------|
-| id | uuid PK | Identificador |
-| record_id | uuid NOT NULL | ID do registro (publicacao, distribuicao ou movimento) |
-| record_type | text NOT NULL | "publications", "distributions" ou "movements" |
-| client_system_id | uuid NOT NULL | Cliente que confirmou |
-| confirmed_at | timestamptz | Data/hora da confirmacao |
-| ip_address | text | IP de origem da requisicao |
-| created_at | timestamptz | Timestamp de criacao |
-
-Indice unico em (record_id, record_type, client_system_id) para evitar duplicatas.
-RLS: SELECT para authenticated, INSERT para service role.
-
-### 2. Atualizar Endpoints de Confirmacao (api-processes, api-distributions, api-publications)
-
-Quando o cliente chama `POST ?action=confirm`:
-- Alem de atualizar o `api_delivery_cursors`, inserir registros na tabela `record_confirmations` para cada item do lote entregue
-- Capturar o IP da requisicao via headers (`x-forwarded-for` ou `x-real-ip`)
-- Gravar o timestamp da confirmacao
-
-### 3. Adicionar Filtros nas 3 Telas
-
-**Publicacoes (PublicationsTable.tsx):**
-- Adicionar filtro por **Cliente** (Select com client_systems)
-- Filtro de confirmacao ja e viavel apos a nova tabela
-
-**Distribuicoes (Distributions.tsx):**
-- Adicionar filtro por **Parceiro** (Select com partners)
-- Adicionar filtro por **Cliente** (Select com client_systems)
-- Adicionar filtro por **Periodo** (DateRangePicker reutilizado)
-
-**Andamentos (ProcessMovements.tsx):**
-- Adicionar filtro por **Parceiro** (via processes.partner_id)
-- Adicionar filtro por **Cliente** (via client_processes)
-- Adicionar filtro por **Periodo** (DateRangePicker)
-
-### 4. Indicador Visual de Confirmacao
-
-Em cada linha da tabela, adicionar uma coluna "Confirmacao" com:
-- Icone verde (CheckCircle) se pelo menos um cliente confirmou
-- Icone cinza (Circle) se nenhum cliente confirmou ainda
-- Ao clicar, abrir um **Popover/Dialog** com a lista de clientes que confirmaram, mostrando:
-  - Nome do cliente
-  - Data e hora da confirmacao
-  - IP de origem
-
-### 5. Filtro por Status de Confirmacao
-
-Adicionar Select com 3 opcoes em cada tela:
-- "Todos" (sem filtro)
-- "Confirmados" (registros com pelo menos 1 entrada em record_confirmations)
-- "Nao confirmados" (registros sem entrada)
-
-Para filtrar, utilizar subquery ou left join com record_confirmations.
+Depois, atualizar o **`hub-juridico-crud`** no Infojudiciais para chamar corretamente esse novo endpoint.
 
 ---
 
-## Detalhes Tecnicos
+### Alterações no Hub (este projeto)
 
-### Arquivos a Modificar
+**1. Novo edge function: `supabase/functions/api-management/index.ts`**
 
-| Arquivo | Acao |
-|---------|------|
-| Migracao SQL | Criar tabela `record_confirmations` com indices e RLS |
-| `src/components/publications/PublicationsTable.tsx` | Adicionar filtro por cliente e confirmacao, coluna de status |
-| `src/pages/Distributions.tsx` | Adicionar filtros por parceiro, cliente, periodo e confirmacao |
-| `src/pages/ProcessMovements.tsx` | Adicionar filtros por parceiro, cliente, periodo e confirmacao |
-| `supabase/functions/api-publications/index.ts` | Gravar record_confirmations no confirm |
-| `supabase/functions/api-distributions/index.ts` | Gravar record_confirmations no confirm |
-| `supabase/functions/api-processes/index.ts` | Gravar record_confirmations no confirm |
-
-### Componente Reutilizavel: ConfirmationBadge
-
-Criar componente `src/components/shared/ConfirmationBadge.tsx` que:
-- Recebe `recordId` e `recordType`
-- Consulta `record_confirmations` para esse registro
-- Exibe icone verde/cinza
-- Ao clicar, abre Popover com detalhes (cliente, data/hora, IP)
-
-### Logica de Filtragem por Confirmacao
-
-Para filtrar registros confirmados/nao confirmados sem degradar performance:
-- Buscar IDs confirmados via query separada em `record_confirmations` filtrada por `record_type`
-- Aplicar filtro `.in('id', confirmedIds)` ou `.not.in('id', confirmedIds)` na query principal
-- Limitar a subquery ao tipo de registro da tela atual
-
-### Captura de IP nos Endpoints
+- Autenticação via `validateToken` (mesmo middleware dos endpoints de consulta)
+- Ações suportadas via body JSON `{ action, data }`:
 
 ```text
-const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-  || req.headers.get('x-real-ip')
-  || 'unknown';
+Publicações:
+  register-pub-term   → Recebe { nome, oab?, service_id }
+                        Se termo já existe em search_terms, apenas vincula client via client_search_terms
+                        Se não existe, chama register-publication-term para cadastrar na Solucionare
+  delete-pub-term     → Desvincula client; se nenhum outro client usa, remove da Solucionare
+
+Distribuições:
+  register-dist-term  → Recebe { nome, service_id, abrangencias?, documentos?, oabs?, instancias? }
+                        Mesma lógica de deduplicação
+  delete-dist-term    → Desvincula; remove se último
+
+Processos:
+  register-process    → Recebe { processNumber, instance, uf?, service_id }
+                        Se processo já existe, vincula via client_processes
+                        Se não existe, cadastra na Solucionare
+  delete-process      → Desvincula; remove se último
 ```
 
-### Filtro por Cliente nas Publicacoes/Distribuicoes
+- Toda a lógica de negócio (chamar Solucionare, salvar em `search_terms`/`processes`, vincular em `client_search_terms`/`client_processes`) fica neste endpoint
+- Resposta inclui IDs criados para que o Infojudiciais possa correlacionar
 
-Como publicacoes e distribuicoes nao tem link direto com `client_systems`, o filtro por cliente funcionara via:
-- Publicacoes: `client_search_terms` -> `search_terms` -> `publications.matched_terms` (pelo termo)
-- Distribuicoes: `client_search_terms` -> `search_terms` -> `distributions.term` (pelo termo)
-- Andamentos: `client_processes` -> `processes` -> `process_movements.process_id` (direto)
+**2. `supabase/config.toml`**
+- Adicionar `[functions.api-management]` com `verify_jwt = false` (validação por token no código)
+
+---
+
+### Alterações no Infojudiciais (outro projeto)
+
+**3. Reescrever `supabase/functions/hub-juridico-crud/index.ts`**
+
+Substituir as chamadas incorretas aos endpoints de consulta pelas chamadas ao novo `api-management`:
+
+```text
+create_termo_pub  → POST api-management { action: "register-pub-term", data: { nome, oab, service_id } }
+create_termo_dist → POST api-management { action: "register-dist-term", data: { nome, ... } }
+create_processo   → POST api-management { action: "register-process", data: { processNumber, ... } }
+delete_*          → POST api-management { action: "delete-*", data: { ... } }
+```
+
+- Autenticação: `Authorization: Bearer {hubToken}` (o token do `client_systems` já existente)
+- Ao receber resposta com `term_id` ou `process_id` do Hub, salvar o `hub_id` na tabela local
+
+**4. Atualizar `supabase/functions/hub-juridico-sync/index.ts`**
+
+- Manter o fluxo de pull (GET) + confirm existente, que já funciona
+- Melhorar o mapeamento de campos para incluir todos os ~25 campos de metadados das publicações/distribuições
+
+---
+
+### Fluxo completo (exemplo: Publicação)
+
+```text
+1. Cliente no Info cadastra termo "João Silva" com OAB 12345/PR
+2. Info verifica se já existe localmente (deduplicação local)
+3. Info chama Hub: POST api-management { action: "register-pub-term", data: { nome: "João Silva", oab: { numero: "12345", uf: "PR" }, service_id: "..." } }
+4. Hub recebe, verifica se "João Silva" já existe em search_terms:
+   a. SIM → apenas vincula client_system_id via client_search_terms → publicações já existentes ficam disponíveis
+   b. NÃO → cadastra na Solucionare (Autenticação → nome_cadastrar → oab_Cadastrar → abrangência) → salva em search_terms → vincula client
+5. Hub retorna { success: true, term_id: "...", already_existed: true/false }
+6. Info salva hub_id localmente
+7. Na próxima sync (pull), Info chama GET api-publications com seu token → recebe publicações daquele termo
+```
+
+### Detalhes técnicos
+
+- O `api-management` reutiliza a lógica já existente em `register-publication-term`, `manage-distribution-terms` e `sync-process-management`, invocando-os internamente ou replicando a lógica core
+- A deduplicação é garantida em 2 níveis: no Infojudiciais (não envia se já tem localmente) e no Hub (não registra na Solucionare se já existe em `search_terms`)
+- O `service_id` do parceiro será passado como configuração no Infojudiciais (junto com o token e URL base)
+- Sem alterações de schema no Hub — usa tabelas existentes (`search_terms`, `client_search_terms`, `processes`, `client_processes`)
+
+### Estimativa de escopo
+- 1 novo edge function no Hub (~300 linhas)
+- 1 reescrita de edge function no Infojudiciais (~200 linhas)
+- 1 atualização de edge function no Infojudiciais (sync, ~50 linhas)
+- Config.toml do Hub (2 linhas)
 
