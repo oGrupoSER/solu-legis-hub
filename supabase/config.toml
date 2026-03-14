@@ -47,3 +47,6 @@ verify_jwt = true
 
 [functions.revert-confirmations]
 verify_jwt = true
+
+[functions.api-management]
+verify_jwt = false
