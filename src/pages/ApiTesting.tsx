@@ -182,7 +182,7 @@ const distributionEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "dis-cadastrar-escritorio", label: "Dis - Cadastrar Escritório", method: "POST", path: "manage-distribution-terms",
+    id: "dis-cadastrar-escritorio", label: "Cadastrar Escritório", method: "POST", path: "manage-distribution-terms",
     category: "management", authType: "jwt",
     description: "Cadastra um novo escritório para monitoramento de distribuições (CadastrarEscritorio).",
     params: [],
