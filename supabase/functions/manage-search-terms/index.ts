@@ -8,6 +8,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.77.0';
 import { SoapClient } from '../_shared/soap-client.ts';
 import { getServiceById, validateService, updateLastSync } from '../_shared/service-config.ts';
+import { validateToken } from '../_shared/auth-middleware.ts';
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
