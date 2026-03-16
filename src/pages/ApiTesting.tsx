@@ -758,7 +758,7 @@ const ApiTesting = () => {
             <div className="flex items-center gap-2">
               <Badge variant={ep.method === "POST" ? "default" : "secondary"} className="text-xs font-mono">{ep.method}</Badge>
               <span className="font-medium text-sm">{ep.label}</span>
-              {ep.method === "POST" && ep.category === "query" && !isIntegrationTab && <CheckCircle className="h-3.5 w-3.5 text-muted-foreground ml-auto" />}
+              {ep.method === "POST" && ep.category === "query" && <CheckCircle className="h-3.5 w-3.5 text-muted-foreground ml-auto" />}
             </div>
             <p className="text-xs text-muted-foreground mt-1">{ep.description}</p>
           </button>
