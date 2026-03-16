@@ -531,7 +531,6 @@ const ApiTesting = () => {
   const getEndpointsForTab = () => {
     if (serviceTab === "processes") return processEndpoints;
     if (serviceTab === "distributions") return distributionEndpoints;
-    if (serviceTab === "integration") return integrationEndpoints;
     return publicationEndpoints;
   };
 
