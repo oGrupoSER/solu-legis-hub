@@ -1,5 +1,5 @@
 /**
- * Postman Collection v2.1 generator for Hub Jurídico API
+ * Postman Collection v2.1 generator for HUB Jurídico API
  */
 
 const BASE_URL_VAR = '{{base_url}}';
