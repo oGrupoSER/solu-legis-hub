@@ -374,7 +374,7 @@ const publicationEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "rest-buscar-catalogo", label: "Pub - Buscar Catálogo", method: "POST", path: "manage-search-terms",
+    id: "rest-buscar-catalogo", label: "Buscar Catálogo", method: "GET", path: "manage-search-terms",
     category: "management", authType: "jwt",
     description: "Busca o catálogo completo de diários/abrangências disponíveis na Solucionare.",
     params: [],
