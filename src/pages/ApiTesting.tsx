@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { downloadPostmanCollection } from "@/lib/postman-collection";
+import { downloadPlaygroundExport } from "@/lib/playground-export";
 import { useQuery } from "@tanstack/react-query";
 
 interface ParamDef {
