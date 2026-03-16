@@ -209,6 +209,11 @@ export function generatePostmanCollection(baseUrl: string) {
         description: 'Lista abrangências disponíveis para monitoramento.',
         body: { action: 'listAbrangencias', serviceId: 'UUID_DO_SERVICO' },
       }),
+      buildRequest({
+        name: 'Confirmar Recebimento', method: 'POST', path: 'manage-distribution-terms', authType: 'jwt',
+        description: 'Confirma recebimento de distribuições na API V3 (ConfirmaRecebimentoDistribuicoes).',
+        body: { action: 'confirmDistributions', serviceId: 'UUID_DO_SERVICO', codEscritorio: 41, distribuicoes: [{ codEscritorio: 41, codProcesso: 195148028 }] },
+      }),
     ],
   };
 
