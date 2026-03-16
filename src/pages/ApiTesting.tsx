@@ -773,7 +773,7 @@ const ApiTesting = () => {
     );
   };
 
-  const allTabs = ["processes", "distributions", "publications"];
+  const allTabs = ["publications", "distributions", "processes"];
 
   return (
     <div className="container py-8 space-y-6">
