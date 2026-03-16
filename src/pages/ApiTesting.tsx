@@ -680,7 +680,7 @@ const managementActionMap: Record<string, string> = {
 
 const ApiTesting = () => {
   const [serviceTab, setServiceTab] = useState("publications");
-  const [selectedEndpoint, setSelectedEndpoint] = useState<EndpointDef>(publicationEndpoints[0]);
+  const [selectedEndpoint, setSelectedEndpoint] = useState<EndpointDef | null>(null);
   const [token, setToken] = useState("");
   const [paramValues, setParamValues] = useState<Record<string, string>>({});
   const [bodyValues, setBodyValues] = useState<Record<string, string>>({});
