@@ -473,8 +473,14 @@ async function syncMovements(client: RestClient, supabase: any, service: any, of
       return 0;
     }
 
-    // DISABLED: Do not confirm receipt - legacy system is the official confirmer
-    console.log(`Skipping confirmation for ${data.length} movements (legacy system handles confirmations)`);
+    // Confirm receipt if enabled
+    const { data: svcData3 } = await supabase.from('partner_services').select('confirm_receipt').eq('id', service.id).single();
+    if (svcData3?.confirm_receipt) {
+      const movIds = data.map((m: any) => m.codAndamento).filter(Boolean);
+      if (movIds.length > 0) await confirmReceipt(client, supabase, 'movements', movIds);
+    } else {
+      console.log(`Skipping confirmation for ${data.length} movements (confirm_receipt disabled)`);
+    }
 
     return data.length;
   } catch (error) {
