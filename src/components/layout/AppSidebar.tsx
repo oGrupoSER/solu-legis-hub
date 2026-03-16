@@ -1,10 +1,11 @@
 import { useState } from "react";
 import {
-  LayoutDashboard, Clock, Activity, Search, TestTube, Scale, Shield,
+  LayoutDashboard, Clock, Activity, Search, TestTube,
   FileText, Settings, HelpCircle, Newspaper, Gavel, FolderInput,
   AlertCircle, Building2, Users, RotateCcw, ChevronDown, Bookmark,
   ArrowRightLeft, ListChecks,
 } from "lucide-react";
+import logo from "@/assets/logo-orbo.png";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
