@@ -127,6 +127,15 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Validate authentication (supports both API tokens and Supabase JWTs)
+    const authResult = await validateToken(req);
+    if (!authResult.authenticated) {
+      return new Response(
+        JSON.stringify({ success: false, error: authResult.error || 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const request: ManageRequest = await req.json();
     const { service_id, client_system_id, action, data } = request;
 
