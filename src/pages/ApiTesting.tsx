@@ -464,6 +464,7 @@ const ApiTesting = () => {
     return partnerServices.filter((s) => s.service_type === filterType);
   };
 
+  const getEndpointsForTab = () => {
     if (serviceTab === "processes") return processEndpoints;
     if (serviceTab === "distributions") return distributionEndpoints;
     return publicationEndpoints;
