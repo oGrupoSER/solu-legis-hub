@@ -151,6 +151,14 @@ Deno.serve(async (req) => {
 
     let result: any = { success: true, action };
 
+    // REST V2 actions don't need SOAP client
+    if (action.startsWith('rest_')) {
+      result.data = await handleRestV2Action(action, service, officeCode, data || {});
+      return new Response(JSON.stringify(result), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     switch (action) {
       case 'cadastrar_nome':
         result.data = await cadastrarNome(soapClient, service, officeCode, data!, client_system_id);
@@ -193,7 +201,6 @@ Deno.serve(async (req) => {
         result.data = await gerarVariacoes(soapClient, data!);
         break;
       case 'buscar_abrangencias': {
-        // getAbrangencias is on the Escritórios module, not Nomes
         const { endpoint: escEndpoint, namespace: escNamespace } = resolveSolucionareEndpoint(service.service_url, 'escritorios');
         const escSoapClient = new SoapClient({
           serviceUrl: escEndpoint,
