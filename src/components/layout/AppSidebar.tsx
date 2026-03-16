@@ -120,7 +120,7 @@ export function AppSidebar() {
             <img src={logo} alt="HUB Jurídico" className={cn("object-contain shrink-0", open ? "h-9 w-9" : "h-10 w-10")} />
             {open && (
               <div className="flex flex-col justify-center">
-                <h2 className="text-sm font-bold text-foreground leading-tight">HUB Jurídico</h2>
+                <h2 className="text-sm font-bold text-sidebar-foreground leading-tight">HUB Jurídico</h2>
               </div>
             )}
           </div>
