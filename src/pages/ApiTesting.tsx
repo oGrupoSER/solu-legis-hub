@@ -473,6 +473,17 @@ const distributionEndpoints: EndpointDef[] = [
       { key: "serviceId", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
     ],
   },
+  {
+    id: "dis-confirmar-recebimento", label: "Confirmar Recebimento", method: "POST", path: "manage-distribution-terms",
+    category: "management", authType: "jwt",
+    description: "Confirma recebimento de distribuições na API V3 (ConfirmaRecebimentoDistribuicoes). Envie um array JSON de objetos com codEscritorio e codProcesso.",
+    params: [],
+    bodyParams: [
+      { key: "serviceId", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+      { key: "codEscritorio", label: "Código do Escritório", placeholder: "41", required: true, type: "number" },
+      { key: "distribuicoes", label: "Distribuições (JSON array)", placeholder: '[{"codEscritorio": 41, "codProcesso": 195148028}]', required: true },
+    ],
+  },
 ];
 
 // ─── PUBLICAÇÕES ──────────────────────────────────────────────
