@@ -275,7 +275,7 @@ const publicationEndpoints: EndpointDef[] = [
   },
   // Gerenciamento REST V2
   {
-    id: "rest-autenticar", label: "Pub - Autenticação", method: "POST", path: "manage-search-terms",
+    id: "rest-autenticar", label: "Autenticação", method: "POST", path: "manage-search-terms",
     category: "management", authType: "jwt",
     description: "Autentica na API REST V2 da Solucionare e retorna um tokenJWT.",
     params: [],
