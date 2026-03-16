@@ -736,17 +736,16 @@ const ApiTesting = () => {
   };
 
   const renderEndpointList = (endpoints: EndpointDef[]) => {
-    const isIntegrationTab = serviceTab === "integration";
     const queryEps = endpoints.filter(ep => ep.category === "query");
     const mgmtEps = endpoints.filter(ep => ep.category === "management");
 
     return (
       <div className="space-y-2">
-        {/* Query / Integration endpoints */}
+        {/* Query endpoints */}
         <div className="flex items-center gap-2 px-1 pt-1">
           <Key className="h-3.5 w-3.5 text-muted-foreground" />
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            {isIntegrationTab ? "Ações" : "Consulta"}
+            Consulta
           </span>
           <Badge variant="outline" className="text-[10px] px-1.5 py-0">Token</Badge>
         </div>
