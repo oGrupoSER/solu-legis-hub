@@ -409,8 +409,14 @@ async function syncDependencies(client: RestClient, supabase: any, service: any,
       return 0;
     }
 
-    // DISABLED: Do not confirm receipt - legacy system is the official confirmer
-    console.log(`Skipping confirmation for ${data.length} dependencies (legacy system handles confirmations)`);
+    // Confirm receipt if enabled
+    const { data: svcData2 } = await supabase.from('partner_services').select('confirm_receipt').eq('id', service.id).single();
+    if (svcData2?.confirm_receipt) {
+      const depIds = data.map((d: any) => d.codDependencia).filter(Boolean);
+      if (depIds.length > 0) await confirmReceipt(client, supabase, 'dependencies', depIds);
+    } else {
+      console.log(`Skipping confirmation for ${data.length} dependencies (confirm_receipt disabled)`);
+    }
 
     return data.length;
   } catch (error) {
