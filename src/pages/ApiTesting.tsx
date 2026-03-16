@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Play, Copy, Code, FileText, Download, Gavel, FileSearch, BookOpen, CheckCircle, Shield, Key, Settings, Link } from "lucide-react";
+import { Play, Copy, Code, FileText, Download, Gavel, FileSearch, BookOpen, CheckCircle, Shield, Key, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
