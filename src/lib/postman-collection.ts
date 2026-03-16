@@ -240,108 +240,62 @@ export function generatePostmanCollection(baseUrl: string) {
   };
 
   const publicationsManagementFolder = {
-    name: '⚙️ Gerenciamento (REST)',
+    name: '⚙️ Gerenciamento (REST V2)',
     item: [
       buildRequest({
-        name: 'Cadastrar Termo', method: 'POST', path: 'manage-publication-terms', authType: 'jwt',
-        description: 'Cadastra um novo termo para monitoramento de publicações.',
-        body: { action: 'register', service_id: 'UUID_DO_SERVICO', term: 'Nome ou Expressão', term_type: 'name', variacoes: ['João Silva', 'J. Silva'], termos_bloqueio: ['homônimo'], abrangencias: [{ codEstado: 26 }], oab: [{ numero: '12345', uf: 'SP' }] },
+        name: 'Pub - Autenticação', method: 'POST', path: 'manage-search-terms', authType: 'jwt',
+        description: 'Autentica na API REST V2 e retorna um tokenJWT.',
+        body: { action: 'rest_autenticar', service_id: 'UUID_DO_SERVICO' },
       }),
       buildRequest({
-        name: 'Editar Termo', method: 'POST', path: 'manage-publication-terms', authType: 'jwt',
-        description: 'Edita um termo existente de publicação.',
-        body: { action: 'edit', service_id: 'UUID_DO_SERVICO', term_id: 'UUID_DO_TERMO', term: 'Novo Valor', term_type: 'name' },
+        name: 'Pub - Cadastrar Nome', method: 'POST', path: 'manage-search-terms', authType: 'jwt',
+        description: 'Cadastra um nome (termo) para monitoramento. Retorna codNome.',
+        body: { action: 'rest_cadastrar_nome', service_id: 'UUID_DO_SERVICO', data: { nome: 'CHRISTIAN FERNANDES DE BARROS', codEscritorio: 41 } },
       }),
       buildRequest({
-        name: 'Excluir Termo', method: 'POST', path: 'manage-publication-terms', authType: 'jwt',
-        description: 'Exclui um termo de publicação.',
-        body: { action: 'delete', service_id: 'UUID_DO_SERVICO', term_id: 'UUID_DO_TERMO', term_type: 'name' },
+        name: 'Pub - Excluir Nome', method: 'POST', path: 'manage-search-terms', authType: 'jwt',
+        description: 'Exclui um nome pelo codNome.',
+        body: { action: 'rest_excluir_nome', service_id: 'UUID_DO_SERVICO', data: { codNome: 636295 } },
       }),
       buildRequest({
-        name: 'Listar Termos', method: 'POST', path: 'manage-search-terms', authType: 'jwt',
-        description: 'Lista todos os termos cadastrados para publicações.',
-        body: { action: 'list', service_id: 'UUID_DO_SERVICO', term_type: 'name' },
-      }),
-    ],
-  };
-
-  const publicationsSoapFolder = {
-    name: '⚙️ Gerenciamento (SOAP)',
-    item: [
-      buildRequest({
-        name: 'Cadastrar Nome (SOAP)', method: 'POST', path: 'manage-search-terms', authType: 'jwt',
-        description: 'Cadastra um novo nome de pesquisa via SOAP.',
-        body: { action: 'cadastrar_nome', service_id: 'UUID_DO_SERVICO', data: { nome: 'Nome a cadastrar', variacoes: ['J. Silva'], abrangencias: ['DJE'] } },
+        name: 'Pub - Consultar Nomes', method: 'POST', path: 'manage-search-terms', authType: 'jwt',
+        description: 'Consulta nomes por código de escritório com paginação.',
+        body: { action: 'rest_consultar_nomes', service_id: 'UUID_DO_SERVICO', data: { codEscritorio: 41, codUltimoNome: 1 } },
       }),
       buildRequest({
-        name: 'Editar Nome (SOAP)', method: 'POST', path: 'manage-search-terms', authType: 'jwt',
-        description: 'Edita um nome existente via SOAP.',
-        body: { action: 'editar_nome', service_id: 'UUID_DO_SERVICO', data: { cod_nome: 12345, nome: 'Nome Atualizado', variacoes: ['J. Silva'] } },
+        name: 'Pub - Cadastrar OAB', method: 'POST', path: 'manage-search-terms', authType: 'jwt',
+        description: 'Cadastra OAB vinculada a um codNome. Número 6 dígitos, letra "s" fixo.',
+        body: { action: 'rest_cadastrar_oab', service_id: 'UUID_DO_SERVICO', data: { codNome: 637666, uf: 'RS', numero: '000000', letra: 's' } },
       }),
       buildRequest({
-        name: 'Ativar Nome (SOAP)', method: 'POST', path: 'manage-search-terms', authType: 'jwt',
-        description: 'Ativa um nome de pesquisa via SOAP.',
-        body: { action: 'ativar_nome', service_id: 'UUID_DO_SERVICO', data: { cod_nome: 12345 } },
+        name: 'Pub - Consultar OAB', method: 'POST', path: 'manage-search-terms', authType: 'jwt',
+        description: 'Consulta OABs vinculadas a um codNome.',
+        body: { action: 'rest_consultar_oab', service_id: 'UUID_DO_SERVICO', data: { codNome: 636295, codUltimoOab: 1233 } },
       }),
       buildRequest({
-        name: 'Desativar Nome (SOAP)', method: 'POST', path: 'manage-search-terms', authType: 'jwt',
-        description: 'Desativa um nome de pesquisa via SOAP.',
-        body: { action: 'desativar_nome', service_id: 'UUID_DO_SERVICO', data: { cod_nome: 12345 } },
+        name: 'Pub - Cadastrar Variação', method: 'POST', path: 'manage-search-terms', authType: 'jwt',
+        description: 'Cadastra variações de um nome.',
+        body: { action: 'rest_cadastrar_variacao', service_id: 'UUID_DO_SERVICO', data: { codNome: 637668, listVariacoes: ['ADMINISTRADORA GERAL DE ESTACIONAMENTOS S A'], variacaoTipoNumProcesso: true } },
       }),
       buildRequest({
-        name: 'Excluir Nome (SOAP)', method: 'POST', path: 'manage-search-terms', authType: 'jwt',
-        description: 'Exclui um nome de pesquisa via SOAP.',
-        body: { action: 'excluir_nome', service_id: 'UUID_DO_SERVICO', data: { cod_nome: 12345 } },
+        name: 'Pub - Cadastrar TermoValidação', method: 'POST', path: 'manage-search-terms', authType: 'jwt',
+        description: 'Cadastra termos de validação para nomes e variações.',
+        body: { action: 'rest_cadastrar_termo_validacao', service_id: 'UUID_DO_SERVICO', data: { listTermosValidacaoNome: [{ codNome: 637668, termoValidacao: 'ADMINISTRADORA GERAL' }], listTermosValidacaoVariacao: [{ codVariacao: 637669, termoValidacao: 'ADMINISTRADORA GERAL' }] } },
       }),
       buildRequest({
-        name: 'Excluir Nome (REST V2)', method: 'POST', path: 'manage-search-terms', authType: 'jwt',
-        description: 'Exclui um nome de pesquisa via REST V2.',
-        body: { action: 'excluir_nome_rest', service_id: 'UUID_DO_SERVICO', data: { cod_nome: 12345 } },
+        name: 'Pub - Cadastrar Abrangência', method: 'POST', path: 'manage-search-terms', authType: 'jwt',
+        description: 'Cadastra abrangências (diários) para um nome.',
+        body: { action: 'rest_cadastrar_abrangencia', service_id: 'UUID_DO_SERVICO', data: { codNome: 637719, listCodDiarios: [434, 718, 526, 717, 295] } },
       }),
       buildRequest({
-        name: 'Cadastrar Escritório (SOAP)', method: 'POST', path: 'manage-search-terms', authType: 'jwt',
-        description: 'Cadastra um escritório via SOAP.',
-        body: { action: 'cadastrar_escritorio', service_id: 'UUID_DO_SERVICO', data: { escritorio: 'Escritório XYZ', cod_escritorio: 41 } },
+        name: 'Pub - Buscar Catálogo', method: 'POST', path: 'manage-search-terms', authType: 'jwt',
+        description: 'Busca catálogo completo de diários/abrangências disponíveis.',
+        body: { action: 'rest_buscar_catalogo', service_id: 'UUID_DO_SERVICO' },
       }),
       buildRequest({
-        name: 'Ativar Escritório (SOAP)', method: 'POST', path: 'manage-search-terms', authType: 'jwt',
-        description: 'Ativa um escritório via SOAP.',
-        body: { action: 'ativar_escritorio', service_id: 'UUID_DO_SERVICO', data: { cod_escritorio: 41 } },
-      }),
-      buildRequest({
-        name: 'Desativar Escritório (SOAP)', method: 'POST', path: 'manage-search-terms', authType: 'jwt',
-        description: 'Desativa um escritório via SOAP.',
-        body: { action: 'desativar_escritorio', service_id: 'UUID_DO_SERVICO', data: { cod_escritorio: 41 } },
-      }),
-      buildRequest({
-        name: 'Listar Nomes (SOAP)', method: 'POST', path: 'manage-search-terms', authType: 'jwt',
-        description: 'Lista todos os nomes cadastrados via SOAP.',
-        body: { action: 'listar_nomes', service_id: 'UUID_DO_SERVICO' },
-      }),
-      buildRequest({
-        name: 'Listar Escritórios (SOAP)', method: 'POST', path: 'manage-search-terms', authType: 'jwt',
-        description: 'Lista escritórios cadastrados via SOAP.',
-        body: { action: 'listar_escritorios', service_id: 'UUID_DO_SERVICO' },
-      }),
-      buildRequest({
-        name: 'Sincronizar Tudo (SOAP)', method: 'POST', path: 'manage-search-terms', authType: 'jwt',
-        description: 'Sincroniza todos os nomes e escritórios.',
-        body: { action: 'sync_all', service_id: 'UUID_DO_SERVICO' },
-      }),
-      buildRequest({
-        name: 'Gerar Variações', method: 'POST', path: 'manage-search-terms', authType: 'jwt',
-        description: 'Gera variações automáticas de um nome.',
-        body: { action: 'gerar_variacoes', service_id: 'UUID_DO_SERVICO', data: { nome: 'Nome para variações' } },
-      }),
-      buildRequest({
-        name: 'Buscar Abrangências', method: 'POST', path: 'manage-search-terms', authType: 'jwt',
-        description: 'Busca diários/abrangências disponíveis.',
-        body: { action: 'buscar_abrangencias', service_id: 'UUID_DO_SERVICO' },
-      }),
-      buildRequest({
-        name: 'Visualizar Nome', method: 'POST', path: 'manage-search-terms', authType: 'jwt',
-        description: 'Visualiza configuração completa de um nome.',
-        body: { action: 'visualizar_nome', service_id: 'UUID_DO_SERVICO', data: { cod_nome: 12345 } },
+        name: 'Pub - Buscar Publicações', method: 'POST', path: 'manage-search-terms', authType: 'jwt',
+        description: 'Busca publicações por código de escritório.',
+        body: { action: 'rest_buscar_publicacoes', service_id: 'UUID_DO_SERVICO', data: { codEscritorio: 41 } },
       }),
     ],
   };
@@ -349,66 +303,13 @@ export function generatePostmanCollection(baseUrl: string) {
   const publicationsFolder = {
     name: '📂 Publicações',
     description: 'Endpoints para consulta e gerenciamento de publicações de diários oficiais',
-    item: [publicationsQueryFolder, publicationsManagementFolder, publicationsSoapFolder],
-  };
-
-  // ─── INTEGRAÇÃO SISTEMA-A-SISTEMA ──────────────────
-  const integrationFolder = {
-    name: '🔗 Integração Sistema-a-Sistema',
-    description: 'Endpoints para integração via API Token (sistema-a-sistema). Usam o mesmo token dos endpoints de consulta.',
-    item: [
-      buildRequest({
-        name: 'Cadastrar Termo Publicação', method: 'POST', path: 'api-management',
-        description: 'Cadastra termo de publicação via Token. Deduplicação automática.',
-        body: { action: 'register-pub-term', data: { nome: 'Nome a Monitorar', service_id: 'UUID_DO_SERVICO' } },
-      }),
-      buildRequest({
-        name: 'Excluir Termo Publicação', method: 'POST', path: 'api-management',
-        description: 'Desvincula termo de publicação. Remove da Solucionare se último cliente.',
-        body: { action: 'delete-pub-term', data: { term_id: 'UUID_DO_TERMO', service_id: 'UUID_DO_SERVICO' } },
-      }),
-      buildRequest({
-        name: 'Cadastrar Termo Distribuição', method: 'POST', path: 'api-management',
-        description: 'Cadastra termo de distribuição via Token. Deduplicação automática.',
-        body: { action: 'register-dist-term', data: { nome: 'Nome a Monitorar', service_id: 'UUID_DO_SERVICO', codTipoConsulta: 1, listInstancias: [1, 2], abrangencias: [{ codEstado: 26 }] } },
-      }),
-      buildRequest({
-        name: 'Excluir Termo Distribuição', method: 'POST', path: 'api-management',
-        description: 'Desvincula termo de distribuição. Remove se último cliente.',
-        body: { action: 'delete-dist-term', data: { term_id: 'UUID_DO_TERMO', service_id: 'UUID_DO_SERVICO' } },
-      }),
-      buildRequest({
-        name: 'Cadastrar Processo', method: 'POST', path: 'api-management',
-        description: 'Cadastra processo para monitoramento via Token. Deduplicação automática.',
-        body: { action: 'register-process', data: { processNumber: '0000000-00.0000.0.00.0000', instance: 1, uf: 'SP', service_id: 'UUID_DO_SERVICO' } },
-      }),
-      buildRequest({
-        name: 'Excluir Processo', method: 'POST', path: 'api-management',
-        description: 'Desvincula processo. Remove da Solucionare se último cliente.',
-        body: { action: 'delete-process', data: { processNumber: '0000000-00.0000.0.00.0000', service_id: 'UUID_DO_SERVICO' } },
-      }),
-      buildRequest({
-        name: 'Listar Serviços', method: 'POST', path: 'api-management',
-        description: 'Lista serviços de parceiros disponíveis para o cliente.',
-        body: { action: 'list-services' },
-      }),
-      buildRequest({
-        name: 'Listar Meus Termos', method: 'POST', path: 'api-management',
-        description: 'Lista termos vinculados ao cliente do token.',
-        body: { action: 'list-my-terms', data: { term_type: 'name' } },
-      }),
-      buildRequest({
-        name: 'Listar Meus Processos', method: 'POST', path: 'api-management',
-        description: 'Lista processos vinculados ao cliente do token.',
-        body: { action: 'list-my-processes' },
-      }),
-    ],
+    item: [publicationsQueryFolder, publicationsManagementFolder],
   };
 
   return {
     info: {
       name: 'Hub Jurídico - API',
-      description: 'Coleção completa da API do Hub Jurídico para consumo e gerenciamento de processos, distribuições e publicações.\n\n## Autenticação\n\n### Endpoints de Consulta e Integração\nRequerem um token Bearer customizado (obtido via painel do Hub Jurídico).\n\n### Endpoints de Gerenciamento\nRequerem JWT do usuário autenticado (Supabase Auth).\n\n## Controle de Volumetria\nOs dados são entregues em lotes de até 500 registros. Após receber um lote, é necessário confirmar o recebimento via POST antes de solicitar novos dados.\n\n## Rate Limit\nPadrão: 1000 requisições/hora por token. Verifique os headers X-RateLimit-* na resposta.',
+      description: 'Coleção completa da API do Hub Jurídico para consumo e gerenciamento de processos, distribuições e publicações.\n\n## Autenticação\n\n### Endpoints de Consulta\nRequerem um token Bearer customizado (obtido via painel do Hub Jurídico).\n\n### Endpoints de Gerenciamento\nRequerem JWT do usuário autenticado (Supabase Auth).\n\n## Controle de Volumetria\nOs dados são entregues em lotes de até 500 registros. Após receber um lote, é necessário confirmar o recebimento via POST antes de solicitar novos dados.\n\n## Rate Limit\nPadrão: 1000 requisições/hora por token. Verifique os headers X-RateLimit-* na resposta.',
       schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',
     },
     variable: [
@@ -416,7 +317,7 @@ export function generatePostmanCollection(baseUrl: string) {
       { key: 'api_token', value: 'SEU_TOKEN_AQUI', type: 'string' },
       { key: 'jwt_token', value: 'SEU_JWT_AQUI', type: 'string' },
     ],
-    item: [processesFolder, distributionsFolder, publicationsFolder, integrationFolder],
+    item: [processesFolder, distributionsFolder, publicationsFolder],
   };
 }
 

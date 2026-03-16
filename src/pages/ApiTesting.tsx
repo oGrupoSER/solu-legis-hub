@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Play, Copy, Code, FileText, Download, Gavel, FileSearch, BookOpen, CheckCircle, Shield, Key, Settings, Link } from "lucide-react";
+import { Play, Copy, Code, FileText, Download, Gavel, FileSearch, BookOpen, CheckCircle, Shield, Key, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
@@ -348,318 +348,124 @@ const publicationEndpoints: EndpointDef[] = [
     description: "Confirma recebimento do último lote de publicações.",
     params: [],
   },
-  // Gerenciamento (manage-publication-terms)
+  // Gerenciamento REST V2
   {
-    id: "register-pub-term", label: "Cadastrar Termo", method: "POST", path: "manage-publication-terms",
+    id: "rest-autenticar", label: "Pub - Autenticação", method: "POST", path: "manage-search-terms",
     category: "management", authType: "jwt",
-    description: "Cadastra um novo termo para monitoramento de publicações em diários oficiais.",
+    description: "Autentica na API REST V2 da Solucionare e retorna um tokenJWT.",
     params: [],
     bodyParams: [
-      { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
-      { key: "term", label: "Termo", placeholder: "Nome ou expressão a monitorar", required: true },
-      { key: "term_type", label: "Tipo do Termo", placeholder: "name ou office", required: true },
-      { key: "variacoes", label: "Variações (JSON array)", placeholder: '["João Silva", "J. Silva"]' },
-      { key: "termos_bloqueio", label: "Termos de Bloqueio (JSON array)", placeholder: '["homônimo"]' },
-      { key: "abrangencias", label: "Abrangências (JSON array)", placeholder: '[{"codEstado": 26}]' },
-      { key: "oab", label: "OAB (JSON array)", placeholder: '[{"numero": "12345", "uf": "SP"}]' },
-      { key: "client_system_id", label: "ID do Sistema Cliente", placeholder: "uuid (opcional)" },
+      { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service (tipo terms)", required: true },
     ],
   },
   {
-    id: "edit-pub-term", label: "Editar Termo", method: "POST", path: "manage-publication-terms",
+    id: "rest-cadastrar-nome", label: "Pub - Cadastrar Nome", method: "POST", path: "manage-search-terms",
     category: "management", authType: "jwt",
-    description: "Edita um termo existente de monitoramento de publicações.",
+    description: "Cadastra um novo nome (termo) para monitoramento de publicações. Retorna o codNome gerado.",
     params: [],
     bodyParams: [
       { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
-      { key: "term_id", label: "ID do Termo", placeholder: "uuid do search_term", required: true },
-      { key: "term", label: "Termo", placeholder: "Novo valor do termo", required: true },
-      { key: "term_type", label: "Tipo do Termo", placeholder: "name ou office", required: true },
-      { key: "variacoes", label: "Variações (JSON array)", placeholder: '["João Silva", "J. Silva"]' },
-      { key: "termos_bloqueio", label: "Termos de Bloqueio (JSON array)", placeholder: '["homônimo"]' },
-      { key: "abrangencias", label: "Abrangências (JSON array)", placeholder: '[{"codEstado": 26}]' },
-      { key: "oab", label: "OAB (JSON array)", placeholder: '[{"numero": "12345", "uf": "SP"}]' },
+      { key: "data.nome", label: "Nome", placeholder: "CHRISTIAN FERNANDES DE BARROS", required: true },
+      { key: "data.codEscritorio", label: "Código do Escritório", placeholder: "41", type: "number" },
     ],
   },
   {
-    id: "delete-pub-term", label: "Excluir Termo", method: "POST", path: "manage-publication-terms",
+    id: "rest-excluir-nome", label: "Pub - Excluir Nome", method: "POST", path: "manage-search-terms",
     category: "management", authType: "jwt",
-    description: "Exclui um termo de monitoramento de publicações.",
+    description: "Exclui um nome (termo) pelo codNome gerado no cadastro.",
     params: [],
     bodyParams: [
       { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
-      { key: "term_id", label: "ID do Termo", placeholder: "uuid do search_term", required: true },
-      { key: "term_type", label: "Tipo do Termo", placeholder: "name ou office", required: true },
-      { key: "client_system_id", label: "ID do Sistema Cliente", placeholder: "uuid (opcional)" },
+      { key: "data.codNome", label: "Código do Nome", placeholder: "636295", required: true, type: "number" },
     ],
   },
   {
-    id: "list-pub-terms", label: "Listar Termos", method: "POST", path: "manage-search-terms",
+    id: "rest-consultar-nomes", label: "Pub - Consultar Nomes", method: "POST", path: "manage-search-terms",
     category: "management", authType: "jwt",
-    description: "Lista todos os termos cadastrados para publicações em um serviço.",
+    description: "Consulta nomes cadastrados por código de escritório. Use codUltimoNome para paginação.",
     params: [],
     bodyParams: [
       { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
-      { key: "term_type", label: "Tipo do Termo", placeholder: "name ou office", required: true },
+      { key: "data.codEscritorio", label: "Código do Escritório", placeholder: "41", required: true, type: "number" },
+      { key: "data.codUltimoNome", label: "Código Último Nome", placeholder: "1", type: "number" },
     ],
   },
-  // Gerenciamento SOAP (manage-search-terms)
   {
-    id: "cadastrar-nome-soap", label: "Cadastrar Nome (SOAP)", method: "POST", path: "manage-search-terms",
+    id: "rest-cadastrar-oab", label: "Pub - Cadastrar OAB", method: "POST", path: "manage-search-terms",
     category: "management", authType: "jwt",
-    description: "Cadastra um novo nome de pesquisa via SOAP na Solucionare.",
+    description: "Cadastra uma OAB vinculada a um codNome. Número com 6 dígitos, letra 's' fixo.",
     params: [],
     bodyParams: [
       { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
-      { key: "data.nome", label: "Nome", placeholder: "Nome a cadastrar", required: true },
-      { key: "data.variacoes", label: "Variações (JSON array)", placeholder: '["J. Silva", "João S."]' },
-      { key: "data.termos_bloqueio", label: "Termos Bloqueio (JSON array)", placeholder: '[{"termo": "homônimo", "contido": true}]' },
-      { key: "data.abrangencias", label: "Abrangências (JSON array)", placeholder: '["DJE"]' },
-      { key: "data.oab", label: "OAB", placeholder: "12345/SP" },
-      { key: "client_system_id", label: "ID do Sistema Cliente", placeholder: "uuid (opcional)" },
+      { key: "data.codNome", label: "Código do Nome", placeholder: "637666", required: true, type: "number" },
+      { key: "data.uf", label: "UF da OAB", placeholder: "RS", required: true },
+      { key: "data.numero", label: "Número da OAB", placeholder: "000000", required: true },
+      { key: "data.letra", label: "Letra", placeholder: "s" },
     ],
   },
   {
-    id: "editar-nome-soap", label: "Editar Nome (SOAP)", method: "POST", path: "manage-search-terms",
+    id: "rest-consultar-oab", label: "Pub - Consultar OAB", method: "POST", path: "manage-search-terms",
     category: "management", authType: "jwt",
-    description: "Edita um nome existente via SOAP (variações, bloqueios, abrangências).",
+    description: "Consulta OABs vinculadas a um codNome. Use codUltimoOab para paginação.",
     params: [],
     bodyParams: [
       { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
-      { key: "data.cod_nome", label: "Código do Nome (Solucionare)", placeholder: "12345", required: true },
-      { key: "data.nome", label: "Nome", placeholder: "Nome atualizado" },
-      { key: "data.variacoes", label: "Variações (JSON array)", placeholder: '["J. Silva"]' },
-      { key: "data.termos_bloqueio", label: "Termos Bloqueio (JSON array)", placeholder: '[{"termo": "homônimo", "contido": true}]' },
-      { key: "data.abrangencias", label: "Abrangências (JSON array)", placeholder: '["DJE"]' },
-      { key: "data.oab", label: "OAB", placeholder: "12345/SP" },
+      { key: "data.codNome", label: "Código do Nome", placeholder: "636295", required: true, type: "number" },
+      { key: "data.codUltimoOab", label: "Código Última OAB", placeholder: "1233", type: "number" },
     ],
   },
   {
-    id: "ativar-nome-soap", label: "Ativar Nome (SOAP)", method: "POST", path: "manage-search-terms",
+    id: "rest-cadastrar-variacao", label: "Pub - Cadastrar Variação", method: "POST", path: "manage-search-terms",
     category: "management", authType: "jwt",
-    description: "Ativa um nome de pesquisa via SOAP.",
+    description: "Cadastra variações de um nome para ampliar o monitoramento.",
     params: [],
     bodyParams: [
       { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
-      { key: "data.cod_nome", label: "Código do Nome (Solucionare)", placeholder: "12345", required: true },
+      { key: "data.codNome", label: "Código do Nome", placeholder: "637668", required: true, type: "number" },
+      { key: "data.listVariacoes", label: "Lista de Variações (JSON array)", placeholder: '["ADMINISTRADORA GERAL DE ESTACIONAMENTOS S A"]', required: true },
+      { key: "data.variacaoTipoNumProcesso", label: "Variação Tipo Num Processo", placeholder: "true" },
     ],
   },
   {
-    id: "desativar-nome-soap", label: "Desativar Nome (SOAP)", method: "POST", path: "manage-search-terms",
+    id: "rest-cadastrar-termo-validacao", label: "Pub - Cadastrar TermoValidação", method: "POST", path: "manage-search-terms",
     category: "management", authType: "jwt",
-    description: "Desativa um nome de pesquisa via SOAP.",
+    description: "Cadastra termos de validação para nomes e variações.",
     params: [],
     bodyParams: [
       { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
-      { key: "data.cod_nome", label: "Código do Nome (Solucionare)", placeholder: "12345", required: true },
+      { key: "data.listTermosValidacaoNome", label: "Termos Validação Nome (JSON)", placeholder: '[{"codNome": 637668, "termoValidacao": "TERMO"}]', required: true },
+      { key: "data.listTermosValidacaoVariacao", label: "Termos Validação Variação (JSON)", placeholder: '[{"codVariacao": 637669, "termoValidacao": "TERMO"}]' },
     ],
   },
   {
-    id: "excluir-nome-soap", label: "Excluir Nome (SOAP)", method: "POST", path: "manage-search-terms",
+    id: "rest-cadastrar-abrangencia", label: "Pub - Cadastrar Abrangência", method: "POST", path: "manage-search-terms",
     category: "management", authType: "jwt",
-    description: "Exclui um nome de pesquisa via SOAP.",
+    description: "Cadastra abrangências (diários) para um nome. Use os códigos do catálogo.",
     params: [],
     bodyParams: [
       { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
-      { key: "data.cod_nome", label: "Código do Nome (Solucionare)", placeholder: "12345", required: true },
-      { key: "client_system_id", label: "ID do Sistema Cliente", placeholder: "uuid (opcional)" },
+      { key: "data.codNome", label: "Código do Nome", placeholder: "637719", required: true, type: "number" },
+      { key: "data.listCodDiarios", label: "Lista Códigos Diários (JSON array)", placeholder: "[434, 718, 526, 717, 295]", required: true },
     ],
   },
   {
-    id: "excluir-nome-rest", label: "Excluir Nome (REST V2)", method: "POST", path: "manage-search-terms",
+    id: "rest-buscar-catalogo", label: "Pub - Buscar Catálogo", method: "POST", path: "manage-search-terms",
     category: "management", authType: "jwt",
-    description: "Exclui um nome de pesquisa via REST V2.",
-    params: [],
-    bodyParams: [
-      { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
-      { key: "data.cod_nome", label: "Código do Nome (Solucionare)", placeholder: "12345", required: true },
-      { key: "client_system_id", label: "ID do Sistema Cliente", placeholder: "uuid (opcional)" },
-    ],
-  },
-  {
-    id: "cadastrar-escritorio-soap", label: "Cadastrar Escritório (SOAP)", method: "POST", path: "manage-search-terms",
-    category: "management", authType: "jwt",
-    description: "Cadastra um novo escritório via SOAP.",
-    params: [],
-    bodyParams: [
-      { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
-      { key: "data.escritorio", label: "Nome do Escritório", placeholder: "Escritório XYZ", required: true },
-      { key: "data.cod_escritorio", label: "Código do Escritório", placeholder: "41", type: "number" },
-    ],
-  },
-  {
-    id: "ativar-escritorio-soap", label: "Ativar Escritório (SOAP)", method: "POST", path: "manage-search-terms",
-    category: "management", authType: "jwt",
-    description: "Ativa um escritório via SOAP.",
-    params: [],
-    bodyParams: [
-      { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
-      { key: "data.cod_escritorio", label: "Código do Escritório", placeholder: "41", required: true, type: "number" },
-    ],
-  },
-  {
-    id: "desativar-escritorio-soap", label: "Desativar Escritório (SOAP)", method: "POST", path: "manage-search-terms",
-    category: "management", authType: "jwt",
-    description: "Desativa um escritório via SOAP.",
-    params: [],
-    bodyParams: [
-      { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
-      { key: "data.cod_escritorio", label: "Código do Escritório", placeholder: "41", required: true, type: "number" },
-    ],
-  },
-  {
-    id: "listar-nomes-soap", label: "Listar Nomes (SOAP)", method: "POST", path: "manage-search-terms",
-    category: "management", authType: "jwt",
-    description: "Lista todos os nomes cadastrados via SOAP.",
+    description: "Busca o catálogo completo de diários/abrangências disponíveis na Solucionare.",
     params: [],
     bodyParams: [
       { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
     ],
   },
   {
-    id: "listar-escritorios-soap", label: "Listar Escritórios (SOAP)", method: "POST", path: "manage-search-terms",
+    id: "rest-buscar-publicacoes", label: "Pub - Buscar Publicações", method: "POST", path: "manage-search-terms",
     category: "management", authType: "jwt",
-    description: "Lista todos os escritórios cadastrados via SOAP.",
+    description: "Busca publicações diretamente da API REST V2 por código de escritório.",
     params: [],
     bodyParams: [
       { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+      { key: "data.codEscritorio", label: "Código do Escritório", placeholder: "41", required: true, type: "number" },
     ],
-  },
-  {
-    id: "sync-all-soap", label: "Sincronizar Tudo (SOAP)", method: "POST", path: "manage-search-terms",
-    category: "management", authType: "jwt",
-    description: "Sincroniza todos os nomes e escritórios da Solucionare com o banco local.",
-    params: [],
-    bodyParams: [
-      { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
-    ],
-  },
-  {
-    id: "gerar-variacoes-soap", label: "Gerar Variações", method: "POST", path: "manage-search-terms",
-    category: "management", authType: "jwt",
-    description: "Gera variações automáticas de um nome de pesquisa.",
-    params: [],
-    bodyParams: [
-      { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
-      { key: "data.nome", label: "Nome", placeholder: "Nome para gerar variações", required: true },
-    ],
-  },
-  {
-    id: "buscar-abrangencias-soap", label: "Buscar Abrangências", method: "POST", path: "manage-search-terms",
-    category: "management", authType: "jwt",
-    description: "Busca diários/abrangências disponíveis para monitoramento.",
-    params: [],
-    bodyParams: [
-      { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
-    ],
-  },
-  {
-    id: "visualizar-nome-soap", label: "Visualizar Nome", method: "POST", path: "manage-search-terms",
-    category: "management", authType: "jwt",
-    description: "Visualiza configuração completa de um nome (variações, bloqueios, abrangências).",
-    params: [],
-    bodyParams: [
-      { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
-      { key: "data.cod_nome", label: "Código do Nome (Solucionare)", placeholder: "12345", required: true },
-    ],
-  },
-];
-
-// ─── INTEGRAÇÃO (api-management, Token-based) ─────────────────
-const integrationEndpoints: EndpointDef[] = [
-  {
-    id: "int-register-pub-term", label: "Cadastrar Termo Publicação", method: "POST", path: "api-management",
-    category: "query", authType: "token",
-    description: "Cadastra um termo de publicação via Token. Deduplicação automática: se já existe, vincula o cliente.",
-    params: [],
-    bodyParams: [
-      { key: "data.nome", label: "Nome", placeholder: "Nome a monitorar", required: true },
-      { key: "data.service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
-      { key: "data.oab", label: "OAB", placeholder: "12345/SP" },
-    ],
-  },
-  {
-    id: "int-delete-pub-term", label: "Excluir Termo Publicação", method: "POST", path: "api-management",
-    category: "query", authType: "token",
-    description: "Desvincula termo de publicação do cliente. Remove da Solucionare se for o último cliente.",
-    params: [],
-    bodyParams: [
-      { key: "data.term_id", label: "ID do Termo", placeholder: "uuid do search_term" },
-      { key: "data.nome", label: "Ou Nome", placeholder: "Nome do termo (alternativo ao ID)" },
-      { key: "data.service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
-    ],
-  },
-  {
-    id: "int-register-dist-term", label: "Cadastrar Termo Distribuição", method: "POST", path: "api-management",
-    category: "query", authType: "token",
-    description: "Cadastra um termo de distribuição via Token. Deduplicação automática.",
-    params: [],
-    bodyParams: [
-      { key: "data.nome", label: "Nome", placeholder: "Nome a monitorar", required: true },
-      { key: "data.service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
-      { key: "data.codTipoConsulta", label: "Tipo Consulta", placeholder: "1", type: "number" },
-      { key: "data.listInstancias", label: "Instâncias (JSON array)", placeholder: "[1, 2]" },
-      { key: "data.abrangencias", label: "Abrangências (JSON array)", placeholder: '[{"codEstado": 26}]' },
-      { key: "data.qtdDiasCapturaRetroativa", label: "Dias Retroativa", placeholder: "30", type: "number" },
-      { key: "data.listDocumentos", label: "Documentos (JSON array)", placeholder: '["12345678900"]' },
-      { key: "data.listOab", label: "OABs (JSON array)", placeholder: '[{"numero": "12345", "uf": "SP"}]' },
-    ],
-  },
-  {
-    id: "int-delete-dist-term", label: "Excluir Termo Distribuição", method: "POST", path: "api-management",
-    category: "query", authType: "token",
-    description: "Desvincula termo de distribuição do cliente. Remove se for o último.",
-    params: [],
-    bodyParams: [
-      { key: "data.term_id", label: "ID do Termo", placeholder: "uuid do search_term" },
-      { key: "data.nome", label: "Ou Nome", placeholder: "Nome do termo (alternativo)" },
-      { key: "data.service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
-    ],
-  },
-  {
-    id: "int-register-process", label: "Cadastrar Processo", method: "POST", path: "api-management",
-    category: "query", authType: "token",
-    description: "Cadastra um processo para monitoramento via Token. Deduplicação automática.",
-    params: [],
-    bodyParams: [
-      { key: "data.processNumber", label: "Número do Processo (CNJ)", placeholder: "0000000-00.0000.0.00.0000", required: true },
-      { key: "data.instance", label: "Instância", placeholder: "1", type: "number" },
-      { key: "data.uf", label: "UF", placeholder: "SP" },
-      { key: "data.service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
-    ],
-  },
-  {
-    id: "int-delete-process", label: "Excluir Processo", method: "POST", path: "api-management",
-    category: "query", authType: "token",
-    description: "Desvincula processo do cliente. Remove da Solucionare se for o último.",
-    params: [],
-    bodyParams: [
-      { key: "data.processNumber", label: "Número do Processo (CNJ)", placeholder: "0000000-00.0000.0.00.0000", required: true },
-      { key: "data.service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
-    ],
-  },
-  {
-    id: "int-list-services", label: "Listar Serviços", method: "POST", path: "api-management",
-    category: "query", authType: "token",
-    description: "Lista serviços de parceiros disponíveis para o cliente do token.",
-    params: [],
-    bodyParams: [],
-  },
-  {
-    id: "int-list-my-terms", label: "Listar Meus Termos", method: "POST", path: "api-management",
-    category: "query", authType: "token",
-    description: "Lista termos de busca vinculados ao cliente do token.",
-    params: [],
-    bodyParams: [
-      { key: "data.term_type", label: "Tipo do Termo", placeholder: "name, distribution ou office" },
-    ],
-  },
-  {
-    id: "int-list-my-processes", label: "Listar Meus Processos", method: "POST", path: "api-management",
-    category: "query", authType: "token",
-    description: "Lista processos vinculados ao cliente do token.",
-    params: [],
-    bodyParams: [],
   },
 ];
 
@@ -687,37 +493,18 @@ const managementActionMap: Record<string, string> = {
   "list-dist-systems": "listSystems",
   "list-dist-all-names": "listAllNames",
   "list-dist-abrangencias": "listAbrangencias",
-  // Publicações (manage-publication-terms)
-  "register-pub-term": "register",
-  "edit-pub-term": "edit",
-  "delete-pub-term": "delete",
-  "list-pub-terms": "list",
-  // Publicações SOAP (manage-search-terms)
-  "cadastrar-nome-soap": "cadastrar_nome",
-  "editar-nome-soap": "editar_nome",
-  "ativar-nome-soap": "ativar_nome",
-  "desativar-nome-soap": "desativar_nome",
-  "excluir-nome-soap": "excluir_nome",
-  "excluir-nome-rest": "excluir_nome_rest",
-  "cadastrar-escritorio-soap": "cadastrar_escritorio",
-  "ativar-escritorio-soap": "ativar_escritorio",
-  "desativar-escritorio-soap": "desativar_escritorio",
-  "listar-nomes-soap": "listar_nomes",
-  "listar-escritorios-soap": "listar_escritorios",
-  "sync-all-soap": "sync_all",
-  "gerar-variacoes-soap": "gerar_variacoes",
-  "buscar-abrangencias-soap": "buscar_abrangencias",
-  "visualizar-nome-soap": "visualizar_nome",
-  // Integração (api-management)
-  "int-register-pub-term": "register-pub-term",
-  "int-delete-pub-term": "delete-pub-term",
-  "int-register-dist-term": "register-dist-term",
-  "int-delete-dist-term": "delete-dist-term",
-  "int-register-process": "register-process",
-  "int-delete-process": "delete-process",
-  "int-list-services": "list-services",
-  "int-list-my-terms": "list-my-terms",
-  "int-list-my-processes": "list-my-processes",
+  // Publicações REST V2 (manage-search-terms)
+  "rest-autenticar": "rest_autenticar",
+  "rest-cadastrar-nome": "rest_cadastrar_nome",
+  "rest-excluir-nome": "rest_excluir_nome",
+  "rest-consultar-nomes": "rest_consultar_nomes",
+  "rest-cadastrar-oab": "rest_cadastrar_oab",
+  "rest-consultar-oab": "rest_consultar_oab",
+  "rest-cadastrar-variacao": "rest_cadastrar_variacao",
+  "rest-cadastrar-termo-validacao": "rest_cadastrar_termo_validacao",
+  "rest-cadastrar-abrangencia": "rest_cadastrar_abrangencia",
+  "rest-buscar-catalogo": "rest_buscar_catalogo",
+  "rest-buscar-publicacoes": "rest_buscar_publicacoes",
 };
 
 const ApiTesting = () => {
@@ -744,7 +531,6 @@ const ApiTesting = () => {
   const getEndpointsForTab = () => {
     if (serviceTab === "processes") return processEndpoints;
     if (serviceTab === "distributions") return distributionEndpoints;
-    if (serviceTab === "integration") return integrationEndpoints;
     return publicationEndpoints;
   };
 
@@ -771,35 +557,15 @@ const ApiTesting = () => {
   const buildBody = (): Record<string, any> | null => {
     if (!selectedEndpoint.bodyParams?.length && !managementActionMap[selectedEndpoint.id]) return null;
     
-    const isIntegration = selectedEndpoint.path === "api-management";
     const action = managementActionMap[selectedEndpoint.id];
     
-    if (isIntegration) {
-      // api-management uses nested { action, data: { ... } }
-      const data: Record<string, any> = {};
-      for (const p of (selectedEndpoint.bodyParams || [])) {
-        const val = bodyValues[p.key];
-        if (!val && !p.required) continue;
-        // Strip "data." prefix for nesting
-        const actualKey = p.key.startsWith("data.") ? p.key.slice(5) : p.key;
-        if (p.type === "number") {
-          data[actualKey] = val ? Number(val) : undefined;
-        } else if (val && (val.startsWith("[") || val.startsWith("{"))) {
-          try { data[actualKey] = JSON.parse(val); } catch { data[actualKey] = val; }
-        } else {
-          data[actualKey] = val || undefined;
-        }
-      }
-      return { action, data: Object.keys(data).length > 0 ? data : undefined };
-    }
-    
-    // manage-search-terms uses { action, service_id, data: { ... } } for SOAP endpoints
-    const isSearchTermsSoap = selectedEndpoint.path === "manage-search-terms" && selectedEndpoint.id !== "list-pub-terms";
+    // manage-search-terms uses { action, service_id, data: { ... } }
+    const isSearchTerms = selectedEndpoint.path === "manage-search-terms";
     
     const body: Record<string, any> = {};
     if (action) body.action = action;
 
-    if (isSearchTermsSoap) {
+    if (isSearchTerms) {
       const data: Record<string, any> = {};
       for (const p of (selectedEndpoint.bodyParams || [])) {
         const val = bodyValues[p.key];
@@ -947,21 +713,19 @@ const ApiTesting = () => {
     processes: <Gavel className="h-4 w-4" />,
     distributions: <FileSearch className="h-4 w-4" />,
     publications: <BookOpen className="h-4 w-4" />,
-    integration: <Link className="h-4 w-4" />,
   };
 
   const renderEndpointList = (endpoints: EndpointDef[]) => {
-    const isIntegrationTab = serviceTab === "integration";
     const queryEps = endpoints.filter(ep => ep.category === "query");
     const mgmtEps = endpoints.filter(ep => ep.category === "management");
 
     return (
       <div className="space-y-2">
-        {/* Query / Integration endpoints */}
+        {/* Query endpoints */}
         <div className="flex items-center gap-2 px-1 pt-1">
           <Key className="h-3.5 w-3.5 text-muted-foreground" />
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            {isIntegrationTab ? "Ações" : "Consulta"}
+            Consulta
           </span>
           <Badge variant="outline" className="text-[10px] px-1.5 py-0">Token</Badge>
         </div>
@@ -974,7 +738,7 @@ const ApiTesting = () => {
             <div className="flex items-center gap-2">
               <Badge variant={ep.method === "POST" ? "default" : "secondary"} className="text-xs font-mono">{ep.method}</Badge>
               <span className="font-medium text-sm">{ep.label}</span>
-              {ep.method === "POST" && ep.category === "query" && !isIntegrationTab && <CheckCircle className="h-3.5 w-3.5 text-muted-foreground ml-auto" />}
+              {ep.method === "POST" && ep.category === "query" && <CheckCircle className="h-3.5 w-3.5 text-muted-foreground ml-auto" />}
             </div>
             <p className="text-xs text-muted-foreground mt-1">{ep.description}</p>
           </button>
@@ -1009,7 +773,7 @@ const ApiTesting = () => {
     );
   };
 
-  const allTabs = ["processes", "distributions", "publications", "integration"];
+  const allTabs = ["processes", "distributions", "publications"];
 
   return (
     <div className="container py-8 space-y-6">
@@ -1030,7 +794,7 @@ const ApiTesting = () => {
         <CardContent className="pt-6">
           <div className="flex gap-4 items-end">
             <div className="flex-1 space-y-2">
-              <Label>Token de Autenticação <span className="text-xs text-muted-foreground">(para endpoints de consulta e integração)</span></Label>
+              <Label>Token de Autenticação <span className="text-xs text-muted-foreground">(para endpoints de consulta)</span></Label>
               <div className="flex gap-2">
                 <Select onValueChange={(v) => setToken(v)}>
                   <SelectTrigger className="flex-1"><SelectValue placeholder="Selecione um token..." /></SelectTrigger>
@@ -1061,14 +825,13 @@ const ApiTesting = () => {
       {/* Service tabs */}
       <Tabs value={serviceTab} onValueChange={(v) => {
         setServiceTab(v);
-        const eps = v === "processes" ? processEndpoints : v === "distributions" ? distributionEndpoints : v === "integration" ? integrationEndpoints : publicationEndpoints;
+        const eps = v === "processes" ? processEndpoints : v === "distributions" ? distributionEndpoints : publicationEndpoints;
         selectEndpoint(eps[0]);
       }}>
         <TabsList>
           <TabsTrigger value="processes" className="gap-2">{tabIcons.processes} Processos</TabsTrigger>
           <TabsTrigger value="distributions" className="gap-2">{tabIcons.distributions} Distribuições</TabsTrigger>
           <TabsTrigger value="publications" className="gap-2">{tabIcons.publications} Publicações</TabsTrigger>
-          <TabsTrigger value="integration" className="gap-2">{tabIcons.integration} Integração</TabsTrigger>
         </TabsList>
 
         {allTabs.map((tab) => (
@@ -1081,11 +844,7 @@ const ApiTesting = () => {
                   <CardHeader className="pb-3">
                     <CardTitle className="text-lg flex items-center gap-2">
                       Endpoints
-                      {tab === "integration" && <Badge variant="outline" className="text-[10px] border-blue-500/50 text-blue-600">Token API</Badge>}
                     </CardTitle>
-                    {tab === "integration" && (
-                      <CardDescription>Endpoints para integração sistema-a-sistema via Token de API</CardDescription>
-                    )}
                   </CardHeader>
                   <CardContent>
                     {renderEndpointList(getEndpointsForTab())}
