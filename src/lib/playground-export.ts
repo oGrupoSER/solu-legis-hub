@@ -478,9 +478,9 @@ export function generatePlaygroundExport(baseUrl: string): PlaygroundExport {
   return {
     meta: {
       exportDate: new Date().toISOString(),
-      projectName: 'Hub Jurídico (SoluLegisHub)',
+      projectName: 'HUB Jurídico (SoluLegisHub)',
       version: '2.0',
-      description: 'Documentação completa do Playground de API do Hub Jurídico. Contém todos os endpoints, mapeamentos de ações, fluxos de autenticação e configuração para replicação em outros projetos (ex: Infojudiciais).',
+      description: 'Documentação completa do Playground de API do HUB Jurídico. Contém todos os endpoints, mapeamentos de ações, fluxos de autenticação e configuração para replicação em outros projetos (ex: Infojudiciais).',
     },
     configuration: {
       baseUrl: `${baseUrl}/functions/v1`,
