@@ -1094,34 +1094,8 @@ const ApiTesting = () => {
                   <Play className="h-4 w-4" />{isLoading ? "Executando..." : "Executar Requisição"}
                 </Button>
 
-                {/* Code examples */}
+                {/* Response */}
                 <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="flex items-center gap-2 text-lg"><Code className="h-4 w-4" />Exemplos de Código</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <Tabs defaultValue="curl">
-                      <TabsList className="grid w-full grid-cols-3">
-                        <TabsTrigger value="curl">cURL</TabsTrigger>
-                        <TabsTrigger value="javascript">JavaScript</TabsTrigger>
-                        <TabsTrigger value="python">Python</TabsTrigger>
-                      </TabsList>
-                      {(["curl", "javascript", "python"] as const).map((lang) => (
-                        <TabsContent key={lang} value={lang}>
-                          <div className="relative">
-                            <pre className="bg-muted p-4 rounded-lg text-xs overflow-x-auto"><code>{codeExamples[lang]}</code></pre>
-                            <Button variant="ghost" size="icon" className="absolute top-2 right-2" onClick={() => copy(codeExamples[lang])}><Copy className="h-4 w-4" /></Button>
-                          </div>
-                        </TabsContent>
-                      ))}
-                    </Tabs>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Right: response */}
-              <div className="space-y-4">
-                <Card className="sticky top-4">
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <CardTitle className="flex items-center gap-2"><FileText className="h-5 w-5" />Resposta</CardTitle>
@@ -1160,6 +1134,30 @@ const ApiTesting = () => {
                         </div>
                       </div>
                     )}
+                  </CardContent>
+                </Card>
+
+                {/* Code examples */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-lg"><Code className="h-4 w-4" />Exemplos de Código</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Tabs defaultValue="curl">
+                      <TabsList className="grid w-full grid-cols-3">
+                        <TabsTrigger value="curl">cURL</TabsTrigger>
+                        <TabsTrigger value="javascript">JavaScript</TabsTrigger>
+                        <TabsTrigger value="python">Python</TabsTrigger>
+                      </TabsList>
+                      {(["curl", "javascript", "python"] as const).map((lang) => (
+                        <TabsContent key={lang} value={lang}>
+                          <div className="relative">
+                            <pre className="bg-muted p-4 rounded-lg text-xs overflow-x-auto"><code>{codeExamples[lang]}</code></pre>
+                            <Button variant="ghost" size="icon" className="absolute top-2 right-2" onClick={() => copy(codeExamples[lang])}><Copy className="h-4 w-4" /></Button>
+                          </div>
+                        </TabsContent>
+                      ))}
+                    </Tabs>
                   </CardContent>
                 </Card>
               </div>
