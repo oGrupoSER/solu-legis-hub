@@ -203,7 +203,7 @@ const distributionEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "dis-cadastrar-termo", label: "Dis - Cadastrar Termo", method: "POST", path: "manage-distribution-terms",
+    id: "dis-cadastrar-termo", label: "Cadastrar Termo", method: "POST", path: "manage-distribution-terms",
     category: "management", authType: "jwt",
     description: "Cadastra um novo nome/termo para monitoramento de distribuições (CadastrarNome).\nInstância fixa: Todas (4). Abrangências preenchidas automaticamente.",
     params: [],
