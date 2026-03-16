@@ -712,7 +712,7 @@ const ApiTesting = () => {
 
   const getFilteredServices = () => {
     if (!partnerServices || !selectedEndpoint) return [];
-    const filterType = getServiceTypeFilter(selectedEndpoint.path);
+    const filterType = getServiceTypeFilter(selectedEndpoint!.path);
     if (!filterType) return partnerServices;
     return partnerServices.filter((s) => s.service_type === filterType);
   };
