@@ -798,6 +798,7 @@ const ApiTesting = () => {
   };
 
   const handleTest = async () => {
+    if (!selectedEndpoint) return;
     const isManagement = selectedEndpoint.authType === "jwt";
 
     if (!isManagement && !token) {
