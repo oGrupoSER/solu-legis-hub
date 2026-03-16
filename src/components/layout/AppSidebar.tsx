@@ -115,13 +115,12 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarContent>
         {/* Logo */}
-        <div className="px-4 py-6 border-b border-border">
-          <div className="flex items-center gap-2">
-            <img src={logo} alt="HUB Jurídico" className="h-7 w-7 object-contain" />
+        <div className="px-3 py-5 border-b border-border flex justify-center">
+          <div className="flex items-center gap-3">
+            <img src={logo} alt="HUB Jurídico" className={cn("object-contain shrink-0", open ? "h-9 w-9" : "h-10 w-10")} />
             {open && (
-              <div>
-                <h2 className="text-sm font-bold text-foreground">HUB Jurídico</h2>
-                <p className="text-xs text-muted-foreground">Sistema Processual</p>
+              <div className="flex flex-col justify-center">
+                <h2 className="text-sm font-bold text-foreground leading-tight">HUB Jurídico</h2>
               </div>
             )}
           </div>
