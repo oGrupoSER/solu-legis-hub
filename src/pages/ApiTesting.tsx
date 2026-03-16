@@ -215,7 +215,7 @@ const distributionEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "dis-desativar-termo", label: "Dis - Desativar Termo", method: "POST", path: "manage-distribution-terms",
+    id: "dis-desativar-termo", label: "Desativar Termo", method: "POST", path: "manage-distribution-terms",
     category: "management", authType: "jwt",
     description: "Desativa um nome/termo de distribuição na Solucionare (DesativarNome).",
     params: [],
