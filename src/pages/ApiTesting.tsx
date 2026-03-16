@@ -508,8 +508,8 @@ const managementActionMap: Record<string, string> = {
 };
 
 const ApiTesting = () => {
-  const [serviceTab, setServiceTab] = useState("processes");
-  const [selectedEndpoint, setSelectedEndpoint] = useState<EndpointDef>(processEndpoints[0]);
+  const [serviceTab, setServiceTab] = useState("publications");
+  const [selectedEndpoint, setSelectedEndpoint] = useState<EndpointDef>(publicationEndpoints[0]);
   const [token, setToken] = useState("");
   const [paramValues, setParamValues] = useState<Record<string, string>>({});
   const [bodyValues, setBodyValues] = useState<Record<string, string>>({});
@@ -773,7 +773,7 @@ const ApiTesting = () => {
     );
   };
 
-  const allTabs = ["processes", "distributions", "publications"];
+  const allTabs = ["publications", "distributions", "processes"];
 
   return (
     <div className="container py-8 space-y-6">
@@ -828,10 +828,10 @@ const ApiTesting = () => {
         const eps = v === "processes" ? processEndpoints : v === "distributions" ? distributionEndpoints : publicationEndpoints;
         selectEndpoint(eps[0]);
       }}>
-        <TabsList>
-          <TabsTrigger value="processes" className="gap-2">{tabIcons.processes} Processos</TabsTrigger>
-          <TabsTrigger value="distributions" className="gap-2">{tabIcons.distributions} Distribuições</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="publications" className="gap-2">{tabIcons.publications} Publicações</TabsTrigger>
+          <TabsTrigger value="distributions" className="gap-2">{tabIcons.distributions} Distribuições</TabsTrigger>
+          <TabsTrigger value="processes" className="gap-2">{tabIcons.processes} Processos</TabsTrigger>
         </TabsList>
 
         {allTabs.map((tab) => (
