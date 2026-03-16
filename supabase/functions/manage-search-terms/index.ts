@@ -52,7 +52,7 @@ interface ManageRequest {
           'rest_autenticar' | 'rest_cadastrar_nome' | 'rest_excluir_nome' | 'rest_consultar_nomes' |
           'rest_cadastrar_oab' | 'rest_consultar_oab' | 'rest_cadastrar_variacao' |
           'rest_cadastrar_termo_validacao' | 'rest_cadastrar_abrangencia' |
-          'rest_buscar_catalogo' | 'rest_buscar_publicacoes';
+          'rest_buscar_catalogo' | 'rest_buscar_publicacoes' | 'rest_confirmar_recebimento';
   data?: {
     nome?: string;
     cod_nome?: number;
