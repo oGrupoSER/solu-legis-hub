@@ -957,44 +957,11 @@ const ApiTesting = () => {
         </Button>
       </div>
 
-      {/* Token selector */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex gap-4 items-end">
-            <div className="flex-1 space-y-2">
-              <Label>Token de Autenticação <span className="text-xs text-muted-foreground">(para endpoints de consulta)</span></Label>
-              <div className="flex gap-2">
-                <Select onValueChange={(v) => setToken(v)}>
-                  <SelectTrigger className="flex-1"><SelectValue placeholder="Selecione um token..." /></SelectTrigger>
-                  <SelectContent>
-                    {tokens?.map((t: any) => (
-                      <SelectItem key={t.id} value={t.token}>
-                        <div className="flex items-center gap-2">
-                          {t.name} <span className="text-muted-foreground text-xs">({t.client_systems?.name || "sem cliente"})</span>
-                          {t.is_blocked && <Badge variant="destructive" className="text-xs">Bloqueado</Badge>}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Input value={token} onChange={(e) => setToken(e.target.value)} placeholder="Ou cole um token..." className="flex-1" type="password" />
-              </div>
-              {selectedEndpoint.authType === "jwt" && (
-                <p className="text-xs text-amber-600 flex items-center gap-1.5">
-                  <Shield className="h-3.5 w-3.5" />
-                  Este endpoint usa autenticação JWT do usuário logado (automático)
-                </p>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Service tabs */}
       <Tabs value={serviceTab} onValueChange={(v) => {
         setServiceTab(v);
-        const eps = v === "processes" ? processEndpoints : v === "distributions" ? distributionEndpoints : publicationEndpoints;
-        selectEndpoint(eps[0]);
+        setSelectedEndpoint(null);
+        setResponse(null);
       }}>
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="publications" className="gap-2">{tabIcons.publications} Publicações</TabsTrigger>
