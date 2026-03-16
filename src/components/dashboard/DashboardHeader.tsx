@@ -22,12 +22,9 @@ export const DashboardHeader = () => {
     <header className="border-b border-border bg-card sticky top-0 z-40 backdrop-blur supports-[backdrop-filter]:bg-card/60">
       <div className="container flex h-16 items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <Scale className="h-7 w-7 text-primary" />
-            <Shield className="h-7 w-7 text-accent" />
-          </div>
+          <img src={logo} alt="HUB Jurídico" className="h-8 w-8 object-contain" />
           <div>
-            <h1 className="text-xl font-bold text-foreground">Hub Jurídico</h1>
+            <h1 className="text-xl font-bold text-foreground">HUB Jurídico</h1>
             <p className="text-xs text-muted-foreground">Sistema de Integração de Dados Processuais</p>
           </div>
         </div>
