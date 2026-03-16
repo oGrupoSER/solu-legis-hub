@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
           .from('search_terms')
           .select('*')
           .eq('partner_service_id', service.id)
-          .eq('term_type', 'publication')
+          .in('term_type', ['name', 'office'])
           .eq('is_active', true);
 
         if (termsError) {
@@ -93,7 +93,7 @@ Deno.serve(async (req) => {
         const terms = termsData || [];
         console.log(`Found ${terms.length} active publication terms for local matching`);
         if (terms.length === 0) {
-          console.log('No terms found - will import all publications without term matching');
+          console.log('No terms found - will use API nomePesquisado as primary source');
         }
 
       // Initialize REST client for publications (API uses query params for auth)
