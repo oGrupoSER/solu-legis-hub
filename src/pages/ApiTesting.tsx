@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Play, Copy, Code, FileText, Download, Gavel, FileSearch, BookOpen, CheckCircle, Shield, Key, Settings } from "lucide-react";
+import { Play, Copy, Code, FileText, Download, Gavel, FileSearch, BookOpen, CheckCircle, Shield, Key, Settings, Link } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
@@ -124,6 +124,15 @@ const processEndpoints: EndpointDef[] = [
       { key: "serviceId", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
     ],
   },
+  {
+    id: "sync-processes", label: "Sincronizar Processos", method: "POST", path: "sync-process-management",
+    category: "management", authType: "jwt",
+    description: "Sincroniza status de todos os processos cadastrados + busca novos via BuscaProcessos.",
+    params: [],
+    bodyParams: [
+      { key: "serviceId", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+    ],
+  },
 ];
 
 // ─── DISTRIBUIÇÕES ────────────────────────────────────────────
@@ -230,6 +239,85 @@ const distributionEndpoints: EndpointDef[] = [
       { key: "serviceId", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
     ],
   },
+  {
+    id: "edit-dist-name-scope", label: "Editar Instância/Abrangência", method: "POST", path: "manage-distribution-terms",
+    category: "management", authType: "jwt",
+    description: "Edita instâncias e abrangências de um nome existente na Solucionare.",
+    params: [],
+    bodyParams: [
+      { key: "serviceId", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+      { key: "codNome", label: "Código do Nome (Solucionare)", placeholder: "12345", required: true },
+      { key: "instancia", label: "Instância", placeholder: "1", type: "number" },
+      { key: "abrangencia", label: "Abrangência (JSON)", placeholder: '{"codEstado": 26}' },
+    ],
+  },
+  {
+    id: "register-dist-office", label: "Cadastrar Escritório", method: "POST", path: "manage-distribution-terms",
+    category: "management", authType: "jwt",
+    description: "Cadastra um novo escritório para monitoramento de distribuições.",
+    params: [],
+    bodyParams: [
+      { key: "serviceId", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+      { key: "nomeEscritorio", label: "Nome do Escritório", placeholder: "Escritório XYZ", required: true },
+      { key: "codAbrangencia", label: "Código da Abrangência", placeholder: "26", type: "number" },
+    ],
+  },
+  {
+    id: "activate-dist-office", label: "Ativar Escritório", method: "POST", path: "manage-distribution-terms",
+    category: "management", authType: "jwt",
+    description: "Ativa um escritório de distribuição na Solucionare.",
+    params: [],
+    bodyParams: [
+      { key: "serviceId", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+      { key: "codEscritorio", label: "Código do Escritório", placeholder: "41", required: true, type: "number" },
+    ],
+  },
+  {
+    id: "deactivate-dist-office", label: "Desativar Escritório", method: "POST", path: "manage-distribution-terms",
+    category: "management", authType: "jwt",
+    description: "Desativa um escritório de distribuição na Solucionare.",
+    params: [],
+    bodyParams: [
+      { key: "serviceId", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+      { key: "codEscritorio", label: "Código do Escritório", placeholder: "41", required: true, type: "number" },
+    ],
+  },
+  {
+    id: "list-dist-scopes", label: "Listar Escritórios", method: "POST", path: "manage-distribution-terms",
+    category: "management", authType: "jwt",
+    description: "Lista escritórios cadastrados na Solucionare (BuscaEscritoriosCadastrados).",
+    params: [],
+    bodyParams: [
+      { key: "serviceId", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+    ],
+  },
+  {
+    id: "list-dist-systems", label: "Listar Status Sistemas", method: "POST", path: "manage-distribution-terms",
+    category: "management", authType: "jwt",
+    description: "Lista o status dos sistemas de distribuição na Solucionare (BuscaStatusSistemas).",
+    params: [],
+    bodyParams: [
+      { key: "serviceId", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+    ],
+  },
+  {
+    id: "list-dist-all-names", label: "Listar Todos os Nomes (API)", method: "POST", path: "manage-distribution-terms",
+    category: "management", authType: "jwt",
+    description: "Lista todos os nomes diretamente da API Solucionare (BuscaNomesCadastrados).",
+    params: [],
+    bodyParams: [
+      { key: "serviceId", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+    ],
+  },
+  {
+    id: "list-dist-abrangencias", label: "Listar Abrangências", method: "POST", path: "manage-distribution-terms",
+    category: "management", authType: "jwt",
+    description: "Lista abrangências/diários disponíveis para monitoramento de distribuições.",
+    params: [],
+    bodyParams: [
+      { key: "serviceId", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+    ],
+  },
 ];
 
 // ─── PUBLICAÇÕES ──────────────────────────────────────────────
@@ -260,7 +348,7 @@ const publicationEndpoints: EndpointDef[] = [
     description: "Confirma recebimento do último lote de publicações.",
     params: [],
   },
-  // Gerenciamento
+  // Gerenciamento (manage-publication-terms)
   {
     id: "register-pub-term", label: "Cadastrar Termo", method: "POST", path: "manage-publication-terms",
     category: "management", authType: "jwt",
@@ -315,25 +403,321 @@ const publicationEndpoints: EndpointDef[] = [
       { key: "term_type", label: "Tipo do Termo", placeholder: "name ou office", required: true },
     ],
   },
+  // Gerenciamento SOAP (manage-search-terms)
+  {
+    id: "cadastrar-nome-soap", label: "Cadastrar Nome (SOAP)", method: "POST", path: "manage-search-terms",
+    category: "management", authType: "jwt",
+    description: "Cadastra um novo nome de pesquisa via SOAP na Solucionare.",
+    params: [],
+    bodyParams: [
+      { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+      { key: "data.nome", label: "Nome", placeholder: "Nome a cadastrar", required: true },
+      { key: "data.variacoes", label: "Variações (JSON array)", placeholder: '["J. Silva", "João S."]' },
+      { key: "data.termos_bloqueio", label: "Termos Bloqueio (JSON array)", placeholder: '[{"termo": "homônimo", "contido": true}]' },
+      { key: "data.abrangencias", label: "Abrangências (JSON array)", placeholder: '["DJE"]' },
+      { key: "data.oab", label: "OAB", placeholder: "12345/SP" },
+      { key: "client_system_id", label: "ID do Sistema Cliente", placeholder: "uuid (opcional)" },
+    ],
+  },
+  {
+    id: "editar-nome-soap", label: "Editar Nome (SOAP)", method: "POST", path: "manage-search-terms",
+    category: "management", authType: "jwt",
+    description: "Edita um nome existente via SOAP (variações, bloqueios, abrangências).",
+    params: [],
+    bodyParams: [
+      { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+      { key: "data.cod_nome", label: "Código do Nome (Solucionare)", placeholder: "12345", required: true },
+      { key: "data.nome", label: "Nome", placeholder: "Nome atualizado" },
+      { key: "data.variacoes", label: "Variações (JSON array)", placeholder: '["J. Silva"]' },
+      { key: "data.termos_bloqueio", label: "Termos Bloqueio (JSON array)", placeholder: '[{"termo": "homônimo", "contido": true}]' },
+      { key: "data.abrangencias", label: "Abrangências (JSON array)", placeholder: '["DJE"]' },
+      { key: "data.oab", label: "OAB", placeholder: "12345/SP" },
+    ],
+  },
+  {
+    id: "ativar-nome-soap", label: "Ativar Nome (SOAP)", method: "POST", path: "manage-search-terms",
+    category: "management", authType: "jwt",
+    description: "Ativa um nome de pesquisa via SOAP.",
+    params: [],
+    bodyParams: [
+      { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+      { key: "data.cod_nome", label: "Código do Nome (Solucionare)", placeholder: "12345", required: true },
+    ],
+  },
+  {
+    id: "desativar-nome-soap", label: "Desativar Nome (SOAP)", method: "POST", path: "manage-search-terms",
+    category: "management", authType: "jwt",
+    description: "Desativa um nome de pesquisa via SOAP.",
+    params: [],
+    bodyParams: [
+      { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+      { key: "data.cod_nome", label: "Código do Nome (Solucionare)", placeholder: "12345", required: true },
+    ],
+  },
+  {
+    id: "excluir-nome-soap", label: "Excluir Nome (SOAP)", method: "POST", path: "manage-search-terms",
+    category: "management", authType: "jwt",
+    description: "Exclui um nome de pesquisa via SOAP.",
+    params: [],
+    bodyParams: [
+      { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+      { key: "data.cod_nome", label: "Código do Nome (Solucionare)", placeholder: "12345", required: true },
+      { key: "client_system_id", label: "ID do Sistema Cliente", placeholder: "uuid (opcional)" },
+    ],
+  },
+  {
+    id: "excluir-nome-rest", label: "Excluir Nome (REST V2)", method: "POST", path: "manage-search-terms",
+    category: "management", authType: "jwt",
+    description: "Exclui um nome de pesquisa via REST V2.",
+    params: [],
+    bodyParams: [
+      { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+      { key: "data.cod_nome", label: "Código do Nome (Solucionare)", placeholder: "12345", required: true },
+      { key: "client_system_id", label: "ID do Sistema Cliente", placeholder: "uuid (opcional)" },
+    ],
+  },
+  {
+    id: "cadastrar-escritorio-soap", label: "Cadastrar Escritório (SOAP)", method: "POST", path: "manage-search-terms",
+    category: "management", authType: "jwt",
+    description: "Cadastra um novo escritório via SOAP.",
+    params: [],
+    bodyParams: [
+      { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+      { key: "data.escritorio", label: "Nome do Escritório", placeholder: "Escritório XYZ", required: true },
+      { key: "data.cod_escritorio", label: "Código do Escritório", placeholder: "41", type: "number" },
+    ],
+  },
+  {
+    id: "ativar-escritorio-soap", label: "Ativar Escritório (SOAP)", method: "POST", path: "manage-search-terms",
+    category: "management", authType: "jwt",
+    description: "Ativa um escritório via SOAP.",
+    params: [],
+    bodyParams: [
+      { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+      { key: "data.cod_escritorio", label: "Código do Escritório", placeholder: "41", required: true, type: "number" },
+    ],
+  },
+  {
+    id: "desativar-escritorio-soap", label: "Desativar Escritório (SOAP)", method: "POST", path: "manage-search-terms",
+    category: "management", authType: "jwt",
+    description: "Desativa um escritório via SOAP.",
+    params: [],
+    bodyParams: [
+      { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+      { key: "data.cod_escritorio", label: "Código do Escritório", placeholder: "41", required: true, type: "number" },
+    ],
+  },
+  {
+    id: "listar-nomes-soap", label: "Listar Nomes (SOAP)", method: "POST", path: "manage-search-terms",
+    category: "management", authType: "jwt",
+    description: "Lista todos os nomes cadastrados via SOAP.",
+    params: [],
+    bodyParams: [
+      { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+    ],
+  },
+  {
+    id: "listar-escritorios-soap", label: "Listar Escritórios (SOAP)", method: "POST", path: "manage-search-terms",
+    category: "management", authType: "jwt",
+    description: "Lista todos os escritórios cadastrados via SOAP.",
+    params: [],
+    bodyParams: [
+      { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+    ],
+  },
+  {
+    id: "sync-all-soap", label: "Sincronizar Tudo (SOAP)", method: "POST", path: "manage-search-terms",
+    category: "management", authType: "jwt",
+    description: "Sincroniza todos os nomes e escritórios da Solucionare com o banco local.",
+    params: [],
+    bodyParams: [
+      { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+    ],
+  },
+  {
+    id: "gerar-variacoes-soap", label: "Gerar Variações", method: "POST", path: "manage-search-terms",
+    category: "management", authType: "jwt",
+    description: "Gera variações automáticas de um nome de pesquisa.",
+    params: [],
+    bodyParams: [
+      { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+      { key: "data.nome", label: "Nome", placeholder: "Nome para gerar variações", required: true },
+    ],
+  },
+  {
+    id: "buscar-abrangencias-soap", label: "Buscar Abrangências", method: "POST", path: "manage-search-terms",
+    category: "management", authType: "jwt",
+    description: "Busca diários/abrangências disponíveis para monitoramento.",
+    params: [],
+    bodyParams: [
+      { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+    ],
+  },
+  {
+    id: "visualizar-nome-soap", label: "Visualizar Nome", method: "POST", path: "manage-search-terms",
+    category: "management", authType: "jwt",
+    description: "Visualiza configuração completa de um nome (variações, bloqueios, abrangências).",
+    params: [],
+    bodyParams: [
+      { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+      { key: "data.cod_nome", label: "Código do Nome (Solucionare)", placeholder: "12345", required: true },
+    ],
+  },
+];
+
+// ─── INTEGRAÇÃO (api-management, Token-based) ─────────────────
+const integrationEndpoints: EndpointDef[] = [
+  {
+    id: "int-register-pub-term", label: "Cadastrar Termo Publicação", method: "POST", path: "api-management",
+    category: "query", authType: "token",
+    description: "Cadastra um termo de publicação via Token. Deduplicação automática: se já existe, vincula o cliente.",
+    params: [],
+    bodyParams: [
+      { key: "data.nome", label: "Nome", placeholder: "Nome a monitorar", required: true },
+      { key: "data.service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+      { key: "data.oab", label: "OAB", placeholder: "12345/SP" },
+    ],
+  },
+  {
+    id: "int-delete-pub-term", label: "Excluir Termo Publicação", method: "POST", path: "api-management",
+    category: "query", authType: "token",
+    description: "Desvincula termo de publicação do cliente. Remove da Solucionare se for o último cliente.",
+    params: [],
+    bodyParams: [
+      { key: "data.term_id", label: "ID do Termo", placeholder: "uuid do search_term" },
+      { key: "data.nome", label: "Ou Nome", placeholder: "Nome do termo (alternativo ao ID)" },
+      { key: "data.service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+    ],
+  },
+  {
+    id: "int-register-dist-term", label: "Cadastrar Termo Distribuição", method: "POST", path: "api-management",
+    category: "query", authType: "token",
+    description: "Cadastra um termo de distribuição via Token. Deduplicação automática.",
+    params: [],
+    bodyParams: [
+      { key: "data.nome", label: "Nome", placeholder: "Nome a monitorar", required: true },
+      { key: "data.service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+      { key: "data.codTipoConsulta", label: "Tipo Consulta", placeholder: "1", type: "number" },
+      { key: "data.listInstancias", label: "Instâncias (JSON array)", placeholder: "[1, 2]" },
+      { key: "data.abrangencias", label: "Abrangências (JSON array)", placeholder: '[{"codEstado": 26}]' },
+      { key: "data.qtdDiasCapturaRetroativa", label: "Dias Retroativa", placeholder: "30", type: "number" },
+      { key: "data.listDocumentos", label: "Documentos (JSON array)", placeholder: '["12345678900"]' },
+      { key: "data.listOab", label: "OABs (JSON array)", placeholder: '[{"numero": "12345", "uf": "SP"}]' },
+    ],
+  },
+  {
+    id: "int-delete-dist-term", label: "Excluir Termo Distribuição", method: "POST", path: "api-management",
+    category: "query", authType: "token",
+    description: "Desvincula termo de distribuição do cliente. Remove se for o último.",
+    params: [],
+    bodyParams: [
+      { key: "data.term_id", label: "ID do Termo", placeholder: "uuid do search_term" },
+      { key: "data.nome", label: "Ou Nome", placeholder: "Nome do termo (alternativo)" },
+      { key: "data.service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+    ],
+  },
+  {
+    id: "int-register-process", label: "Cadastrar Processo", method: "POST", path: "api-management",
+    category: "query", authType: "token",
+    description: "Cadastra um processo para monitoramento via Token. Deduplicação automática.",
+    params: [],
+    bodyParams: [
+      { key: "data.processNumber", label: "Número do Processo (CNJ)", placeholder: "0000000-00.0000.0.00.0000", required: true },
+      { key: "data.instance", label: "Instância", placeholder: "1", type: "number" },
+      { key: "data.uf", label: "UF", placeholder: "SP" },
+      { key: "data.service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+    ],
+  },
+  {
+    id: "int-delete-process", label: "Excluir Processo", method: "POST", path: "api-management",
+    category: "query", authType: "token",
+    description: "Desvincula processo do cliente. Remove da Solucionare se for o último.",
+    params: [],
+    bodyParams: [
+      { key: "data.processNumber", label: "Número do Processo (CNJ)", placeholder: "0000000-00.0000.0.00.0000", required: true },
+      { key: "data.service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+    ],
+  },
+  {
+    id: "int-list-services", label: "Listar Serviços", method: "POST", path: "api-management",
+    category: "query", authType: "token",
+    description: "Lista serviços de parceiros disponíveis para o cliente do token.",
+    params: [],
+    bodyParams: [],
+  },
+  {
+    id: "int-list-my-terms", label: "Listar Meus Termos", method: "POST", path: "api-management",
+    category: "query", authType: "token",
+    description: "Lista termos de busca vinculados ao cliente do token.",
+    params: [],
+    bodyParams: [
+      { key: "data.term_type", label: "Tipo do Termo", placeholder: "name, distribution ou office" },
+    ],
+  },
+  {
+    id: "int-list-my-processes", label: "Listar Meus Processos", method: "POST", path: "api-management",
+    category: "query", authType: "token",
+    description: "Lista processos vinculados ao cliente do token.",
+    params: [],
+    bodyParams: [],
+  },
 ];
 
 // ─── Action map for management endpoints ──────────────────────
 const managementActionMap: Record<string, string> = {
+  // Processos
   "register-process": "register",
   "delete-process": "delete",
   "status-process": "status",
   "list-registered-processes": "list",
   "resend-pending-processes": "send-pending",
-  "register-dist-term": "register",
-  "edit-dist-term": "edit",
-  "activate-dist-term": "activate",
-  "deactivate-dist-term": "deactivate",
-  "delete-dist-term": "delete",
-  "list-dist-terms": "list",
+  "sync-processes": "sync",
+  // Distribuições
+  "register-dist-term": "registerName",
+  "edit-dist-term": "editName",
+  "activate-dist-term": "activateName",
+  "deactivate-dist-term": "deactivateName",
+  "delete-dist-term": "deleteName",
+  "list-dist-terms": "listNames",
+  "edit-dist-name-scope": "editNameScope",
+  "register-dist-office": "registerOffice",
+  "activate-dist-office": "activateOffice",
+  "deactivate-dist-office": "deactivateOffice",
+  "list-dist-scopes": "listScopes",
+  "list-dist-systems": "listSystems",
+  "list-dist-all-names": "listAllNames",
+  "list-dist-abrangencias": "listAbrangencias",
+  // Publicações (manage-publication-terms)
   "register-pub-term": "register",
   "edit-pub-term": "edit",
   "delete-pub-term": "delete",
   "list-pub-terms": "list",
+  // Publicações SOAP (manage-search-terms)
+  "cadastrar-nome-soap": "cadastrar_nome",
+  "editar-nome-soap": "editar_nome",
+  "ativar-nome-soap": "ativar_nome",
+  "desativar-nome-soap": "desativar_nome",
+  "excluir-nome-soap": "excluir_nome",
+  "excluir-nome-rest": "excluir_nome_rest",
+  "cadastrar-escritorio-soap": "cadastrar_escritorio",
+  "ativar-escritorio-soap": "ativar_escritorio",
+  "desativar-escritorio-soap": "desativar_escritorio",
+  "listar-nomes-soap": "listar_nomes",
+  "listar-escritorios-soap": "listar_escritorios",
+  "sync-all-soap": "sync_all",
+  "gerar-variacoes-soap": "gerar_variacoes",
+  "buscar-abrangencias-soap": "buscar_abrangencias",
+  "visualizar-nome-soap": "visualizar_nome",
+  // Integração (api-management)
+  "int-register-pub-term": "register-pub-term",
+  "int-delete-pub-term": "delete-pub-term",
+  "int-register-dist-term": "register-dist-term",
+  "int-delete-dist-term": "delete-dist-term",
+  "int-register-process": "register-process",
+  "int-delete-process": "delete-process",
+  "int-list-services": "list-services",
+  "int-list-my-terms": "list-my-terms",
+  "int-list-my-processes": "list-my-processes",
 };
 
 const ApiTesting = () => {
@@ -360,6 +744,7 @@ const ApiTesting = () => {
   const getEndpointsForTab = () => {
     if (serviceTab === "processes") return processEndpoints;
     if (serviceTab === "distributions") return distributionEndpoints;
+    if (serviceTab === "integration") return integrationEndpoints;
     return publicationEndpoints;
   };
 
@@ -384,20 +769,72 @@ const ApiTesting = () => {
   };
 
   const buildBody = (): Record<string, any> | null => {
-    if (!selectedEndpoint.bodyParams?.length) return null;
-    const body: Record<string, any> = {};
+    if (!selectedEndpoint.bodyParams?.length && !managementActionMap[selectedEndpoint.id]) return null;
+    
+    const isIntegration = selectedEndpoint.path === "api-management";
     const action = managementActionMap[selectedEndpoint.id];
+    
+    if (isIntegration) {
+      // api-management uses nested { action, data: { ... } }
+      const data: Record<string, any> = {};
+      for (const p of (selectedEndpoint.bodyParams || [])) {
+        const val = bodyValues[p.key];
+        if (!val && !p.required) continue;
+        // Strip "data." prefix for nesting
+        const actualKey = p.key.startsWith("data.") ? p.key.slice(5) : p.key;
+        if (p.type === "number") {
+          data[actualKey] = val ? Number(val) : undefined;
+        } else if (val && (val.startsWith("[") || val.startsWith("{"))) {
+          try { data[actualKey] = JSON.parse(val); } catch { data[actualKey] = val; }
+        } else {
+          data[actualKey] = val || undefined;
+        }
+      }
+      return { action, data: Object.keys(data).length > 0 ? data : undefined };
+    }
+    
+    // manage-search-terms uses { action, service_id, data: { ... } } for SOAP endpoints
+    const isSearchTermsSoap = selectedEndpoint.path === "manage-search-terms" && selectedEndpoint.id !== "list-pub-terms";
+    
+    const body: Record<string, any> = {};
     if (action) body.action = action;
 
-    for (const p of selectedEndpoint.bodyParams) {
-      const val = bodyValues[p.key];
-      if (!val && !p.required) continue;
-      if (p.type === "number") {
-        body[p.key] = val ? Number(val) : undefined;
-      } else if (val && (val.startsWith("[") || val.startsWith("{"))) {
-        try { body[p.key] = JSON.parse(val); } catch { body[p.key] = val; }
-      } else {
-        body[p.key] = val || undefined;
+    if (isSearchTermsSoap) {
+      const data: Record<string, any> = {};
+      for (const p of (selectedEndpoint.bodyParams || [])) {
+        const val = bodyValues[p.key];
+        if (!val && !p.required) continue;
+        if (p.key.startsWith("data.")) {
+          const actualKey = p.key.slice(5);
+          if (p.type === "number") {
+            data[actualKey] = val ? Number(val) : undefined;
+          } else if (val && (val.startsWith("[") || val.startsWith("{"))) {
+            try { data[actualKey] = JSON.parse(val); } catch { data[actualKey] = val; }
+          } else {
+            data[actualKey] = val || undefined;
+          }
+        } else {
+          if (p.type === "number") {
+            body[p.key] = val ? Number(val) : undefined;
+          } else if (val && (val.startsWith("[") || val.startsWith("{"))) {
+            try { body[p.key] = JSON.parse(val); } catch { body[p.key] = val; }
+          } else {
+            body[p.key] = val || undefined;
+          }
+        }
+      }
+      if (Object.keys(data).length > 0) body.data = data;
+    } else {
+      for (const p of (selectedEndpoint.bodyParams || [])) {
+        const val = bodyValues[p.key];
+        if (!val && !p.required) continue;
+        if (p.type === "number") {
+          body[p.key] = val ? Number(val) : undefined;
+        } else if (val && (val.startsWith("[") || val.startsWith("{"))) {
+          try { body[p.key] = JSON.parse(val); } catch { body[p.key] = val; }
+        } else {
+          body[p.key] = val || undefined;
+        }
       }
     }
     return body;
@@ -506,18 +943,26 @@ const ApiTesting = () => {
     python: `import requests\n\nresponse = requests.${(exampleBody ? "post" : selectedEndpoint.method.toLowerCase())}(\n    '${baseUrl}/${fullPath}',\n    headers={\n        'Authorization': 'Bearer ${tokenLabel}',\n        'Content-Type': 'application/json'\n    }${bodyJsonStr ? `,\n    json=${bodyJsonStr}` : ""}\n)\nprint(response.json())`,
   };
 
-  const tabIcons = { processes: <Gavel className="h-4 w-4" />, distributions: <FileSearch className="h-4 w-4" />, publications: <BookOpen className="h-4 w-4" /> };
+  const tabIcons: Record<string, React.ReactNode> = {
+    processes: <Gavel className="h-4 w-4" />,
+    distributions: <FileSearch className="h-4 w-4" />,
+    publications: <BookOpen className="h-4 w-4" />,
+    integration: <Link className="h-4 w-4" />,
+  };
 
   const renderEndpointList = (endpoints: EndpointDef[]) => {
+    const isIntegrationTab = serviceTab === "integration";
     const queryEps = endpoints.filter(ep => ep.category === "query");
     const mgmtEps = endpoints.filter(ep => ep.category === "management");
 
     return (
       <div className="space-y-2">
-        {/* Query endpoints */}
+        {/* Query / Integration endpoints */}
         <div className="flex items-center gap-2 px-1 pt-1">
           <Key className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Consulta</span>
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            {isIntegrationTab ? "Ações" : "Consulta"}
+          </span>
           <Badge variant="outline" className="text-[10px] px-1.5 py-0">Token</Badge>
         </div>
         {queryEps.map((ep) => (
@@ -529,7 +974,7 @@ const ApiTesting = () => {
             <div className="flex items-center gap-2">
               <Badge variant={ep.method === "POST" ? "default" : "secondary"} className="text-xs font-mono">{ep.method}</Badge>
               <span className="font-medium text-sm">{ep.label}</span>
-              {ep.method === "POST" && ep.category === "query" && <CheckCircle className="h-3.5 w-3.5 text-muted-foreground ml-auto" />}
+              {ep.method === "POST" && ep.category === "query" && !isIntegrationTab && <CheckCircle className="h-3.5 w-3.5 text-muted-foreground ml-auto" />}
             </div>
             <p className="text-xs text-muted-foreground mt-1">{ep.description}</p>
           </button>
@@ -564,6 +1009,8 @@ const ApiTesting = () => {
     );
   };
 
+  const allTabs = ["processes", "distributions", "publications", "integration"];
+
   return (
     <div className="container py-8 space-y-6">
       <BreadcrumbNav items={[{ label: "Dashboard", href: "/" }, { label: "Playground de API" }]} />
@@ -583,7 +1030,7 @@ const ApiTesting = () => {
         <CardContent className="pt-6">
           <div className="flex gap-4 items-end">
             <div className="flex-1 space-y-2">
-              <Label>Token de Autenticação <span className="text-xs text-muted-foreground">(para endpoints de consulta)</span></Label>
+              <Label>Token de Autenticação <span className="text-xs text-muted-foreground">(para endpoints de consulta e integração)</span></Label>
               <div className="flex gap-2">
                 <Select onValueChange={(v) => setToken(v)}>
                   <SelectTrigger className="flex-1"><SelectValue placeholder="Selecione um token..." /></SelectTrigger>
@@ -612,14 +1059,19 @@ const ApiTesting = () => {
       </Card>
 
       {/* Service tabs */}
-      <Tabs value={serviceTab} onValueChange={(v) => { setServiceTab(v); const eps = v === "processes" ? processEndpoints : v === "distributions" ? distributionEndpoints : publicationEndpoints; selectEndpoint(eps[0]); }}>
+      <Tabs value={serviceTab} onValueChange={(v) => {
+        setServiceTab(v);
+        const eps = v === "processes" ? processEndpoints : v === "distributions" ? distributionEndpoints : v === "integration" ? integrationEndpoints : publicationEndpoints;
+        selectEndpoint(eps[0]);
+      }}>
         <TabsList>
           <TabsTrigger value="processes" className="gap-2">{tabIcons.processes} Processos</TabsTrigger>
           <TabsTrigger value="distributions" className="gap-2">{tabIcons.distributions} Distribuições</TabsTrigger>
           <TabsTrigger value="publications" className="gap-2">{tabIcons.publications} Publicações</TabsTrigger>
+          <TabsTrigger value="integration" className="gap-2">{tabIcons.integration} Integração</TabsTrigger>
         </TabsList>
 
-        {["processes", "distributions", "publications"].map((tab) => (
+        {allTabs.map((tab) => (
           <TabsContent key={tab} value={tab}>
             <div className="grid gap-6 lg:grid-cols-2">
               {/* Left: request config */}
@@ -627,7 +1079,13 @@ const ApiTesting = () => {
                 {/* Endpoint selector */}
                 <Card>
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-lg">Endpoints</CardTitle>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      Endpoints
+                      {tab === "integration" && <Badge variant="outline" className="text-[10px] border-blue-500/50 text-blue-600">Token API</Badge>}
+                    </CardTitle>
+                    {tab === "integration" && (
+                      <CardDescription>Endpoints para integração sistema-a-sistema via Token de API</CardDescription>
+                    )}
                   </CardHeader>
                   <CardContent>
                     {renderEndpointList(getEndpointsForTab())}
@@ -673,7 +1131,7 @@ const ApiTesting = () => {
                       {selectedEndpoint.bodyParams.map((p) => (
                         <div key={p.key} className="space-y-1">
                           <Label className="text-xs">
-                            {p.label} <span className="text-muted-foreground">({p.key})</span>
+                            {p.label} <span className="text-muted-foreground">({p.key.replace("data.", "")})</span>
                             {p.required && <span className="text-destructive ml-1">*</span>}
                           </Label>
                           <Input
