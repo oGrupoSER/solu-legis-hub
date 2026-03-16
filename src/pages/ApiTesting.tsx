@@ -36,6 +36,14 @@ interface EndpointDef {
 }
 
 // ─── PROCESSOS ────────────────────────────────────────────────
+// Helper: determine service_type filter based on endpoint path
+const getServiceTypeFilter = (path: string): string | null => {
+  if (path.includes("search-terms") || path.includes("publication")) return "terms";
+  if (path.includes("distribution")) return "distributions";
+  if (path.includes("process")) return "processes";
+  return null;
+};
+
 const processEndpoints: EndpointDef[] = [
   // Consulta
   {
