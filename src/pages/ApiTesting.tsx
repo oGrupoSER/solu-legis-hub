@@ -1000,20 +1000,23 @@ const ApiTesting = () => {
 
         {allTabs.map((tab) => (
           <TabsContent key={tab} value={tab}>
-            <div className="grid gap-6 lg:grid-cols-2">
-              {/* Left: request config */}
-              <div className="space-y-4">
-                {/* Endpoint selector */}
+            <div className="grid gap-6" style={{ gridTemplateColumns: "350px 1fr" }}>
+              {/* Left: Endpoint list (sticky) */}
+              <div className="sticky top-4 self-start">
                 <Card>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-lg flex items-center gap-2">
                       Endpoints
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="max-h-[calc(100vh-220px)] overflow-y-auto">
                     {renderEndpointList(getEndpointsForTab())}
                   </CardContent>
                 </Card>
+              </div>
+
+              {/* Right: Params + Execute + Response + Code */}
+              <div className="space-y-4">
 
                 {/* Query Parameters */}
                 {selectedEndpoint.params.length > 0 && (
