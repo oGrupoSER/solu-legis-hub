@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Scale, Shield } from "lucide-react";
+import logo from "@/assets/logo-orbo.png";
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -64,11 +64,10 @@ const Auth = () => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-primary/5 to-accent/10">
       <Card className="w-full max-w-md shadow-xl">
         <CardHeader className="space-y-4 text-center">
-          <div className="flex justify-center items-center gap-2">
-            <Scale className="h-10 w-10 text-primary" />
-            <Shield className="h-10 w-10 text-accent" />
+          <div className="flex justify-center">
+            <img src={logo} alt="HUB Jurídico" className="h-16 w-16 object-contain" />
           </div>
-          <CardTitle className="text-3xl font-bold">Hub Jurídico</CardTitle>
+          <CardTitle className="text-3xl font-bold">HUB Jurídico</CardTitle>
           <CardDescription className="text-base">
             Sistema de integração e distribuição de dados processuais
           </CardDescription>

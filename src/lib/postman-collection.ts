@@ -1,5 +1,5 @@
 /**
- * Postman Collection v2.1 generator for Hub Jurídico API
+ * Postman Collection v2.1 generator for HUB Jurídico API
  */
 
 const BASE_URL_VAR = '{{base_url}}';
@@ -318,8 +318,8 @@ export function generatePostmanCollection(baseUrl: string) {
 
   return {
     info: {
-      name: 'Hub Jurídico - API',
-      description: 'Coleção completa da API do Hub Jurídico para consumo e gerenciamento de processos, distribuições e publicações.\n\n## Autenticação\n\n### Endpoints de Consulta\nRequerem um token Bearer customizado (obtido via painel do Hub Jurídico).\n\n### Endpoints de Gerenciamento\nRequerem JWT do usuário autenticado (Supabase Auth).\n\n## Controle de Volumetria\nOs dados são entregues em lotes de até 500 registros. Após receber um lote, é necessário confirmar o recebimento via POST antes de solicitar novos dados.\n\n## Rate Limit\nPadrão: 1000 requisições/hora por token. Verifique os headers X-RateLimit-* na resposta.',
+      name: 'HUB Jurídico - API',
+      description: 'Coleção completa da API do HUB Jurídico para consumo e gerenciamento de processos, distribuições e publicações.\n\n## Autenticação\n\n### Endpoints de Consulta\nRequerem um token Bearer customizado (obtido via painel do HUB Jurídico).\n\n### Endpoints de Gerenciamento\nRequerem JWT do usuário autenticado (Supabase Auth).\n\n## Controle de Volumetria\nOs dados são entregues em lotes de até 500 registros. Após receber um lote, é necessário confirmar o recebimento via POST antes de solicitar novos dados.\n\n## Rate Limit\nPadrão: 1000 requisições/hora por token. Verifique os headers X-RateLimit-* na resposta.',
       schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',
     },
     variable: [

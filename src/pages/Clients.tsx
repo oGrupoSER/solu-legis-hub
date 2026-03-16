@@ -138,7 +138,7 @@ const Clients = () => {
               <div>
                 <CardTitle>Sistemas Clientes</CardTitle>
                 <CardDescription>
-                  Gerencie os sistemas que consomem a API do Hub Jurídico
+                  Gerencie os sistemas que consomem a API do HUB Jurídico
                 </CardDescription>
               </div>
             </div>

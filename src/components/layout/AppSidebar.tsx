@@ -1,10 +1,11 @@
 import { useState } from "react";
 import {
-  LayoutDashboard, Clock, Activity, Search, TestTube, Scale, Shield,
+  LayoutDashboard, Clock, Activity, Search, TestTube,
   FileText, Settings, HelpCircle, Newspaper, Gavel, FolderInput,
   AlertCircle, Building2, Users, RotateCcw, ChevronDown, Bookmark,
   ArrowRightLeft, ListChecks,
 } from "lucide-react";
+import logo from "@/assets/logo-orbo.png";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
@@ -116,13 +117,10 @@ export function AppSidebar() {
         {/* Logo */}
         <div className="px-4 py-6 border-b border-border">
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1">
-              <Scale className="h-5 w-5 text-primary" />
-              <Shield className="h-5 w-5 text-accent" />
-            </div>
+            <img src={logo} alt="HUB Jurídico" className="h-7 w-7 object-contain" />
             {open && (
               <div>
-                <h2 className="text-sm font-bold text-foreground">Hub Jurídico</h2>
+                <h2 className="text-sm font-bold text-foreground">HUB Jurídico</h2>
                 <p className="text-xs text-muted-foreground">Sistema Processual</p>
               </div>
             )}
