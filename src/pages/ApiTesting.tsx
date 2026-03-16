@@ -363,7 +363,7 @@ const publicationEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "rest-cadastrar-abrangencia", label: "Pub - Cadastrar Abrangência", method: "POST", path: "manage-search-terms",
+    id: "rest-cadastrar-abrangencia", label: "Cadastrar Abrangência", method: "POST", path: "manage-search-terms",
     category: "management", authType: "jwt",
     description: "Cadastra abrangências (diários) para um nome. Use os códigos do catálogo.",
     params: [],
