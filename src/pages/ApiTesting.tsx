@@ -731,6 +731,7 @@ const ApiTesting = () => {
   };
 
   const buildUrl = () => {
+    if (!selectedEndpoint) return baseUrl;
     let url = `${baseUrl}/${selectedEndpoint.path}`;
     const queryParts: string[] = [];
     for (const p of selectedEndpoint.params) {
