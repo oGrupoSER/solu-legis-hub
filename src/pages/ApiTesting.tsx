@@ -235,7 +235,7 @@ const distributionEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "dis-buscar-nomes", label: "Dis - Buscar Nomes Cadastrados", method: "POST", path: "manage-distribution-terms",
+    id: "dis-buscar-nomes", label: "Buscar Nomes Cadastrados", method: "GET", path: "manage-distribution-terms",
     category: "management", authType: "jwt",
     description: "Lista todos os nomes cadastrados na Solucionare (BuscaNomesCadastrados).",
     params: [],
