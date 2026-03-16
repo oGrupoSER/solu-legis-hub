@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
-import { Scale, Shield, LogOut } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import logo from "@/assets/logo-orbo.png";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
