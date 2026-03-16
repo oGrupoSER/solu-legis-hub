@@ -977,6 +977,13 @@ async function handleRestV2Action(action: string, service: any, officeCode: numb
       return await restApiCall(`/Publicacao/publicacao_buscar?codEscritorio=${codEscritorio}`,
         'GET', tokenJWT, undefined, service.id, null);
 
+    case 'rest_confirmar_recebimento': {
+      const ids = data.ids || [];
+      const parsedIds = typeof ids === 'string' ? JSON.parse(ids) : ids;
+      return await restApiCall('/Publicacao/publicacao_confirmarRecebimento', 'POST', tokenJWT,
+        parsedIds, service.id, null);
+    }
+
     default:
       throw new Error(`Unknown REST V2 action: ${action}`);
   }

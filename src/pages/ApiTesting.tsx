@@ -697,6 +697,8 @@ const managementActionMap: Record<string, string> = {
   "rest-cadastrar-abrangencia": "rest_cadastrar_abrangencia",
   "rest-buscar-catalogo": "rest_buscar_catalogo",
   "rest-buscar-publicacoes": "rest_buscar_publicacoes",
+  "rest-confirmar-recebimento": "rest_confirmar_recebimento",
+  "dis-confirmar-recebimento": "confirmDistributions",
 };
 
 const ApiTesting = () => {

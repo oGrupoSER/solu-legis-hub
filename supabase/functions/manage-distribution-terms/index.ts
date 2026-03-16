@@ -605,6 +605,14 @@ serve(async (req) => {
         break;
       }
 
+      case 'confirmDistributions': {
+        const { distribuicoes, codEscritorio: codEsc } = params;
+        if (!distribuicoes) throw new Error('distribuicoes array is required');
+        const distList = typeof distribuicoes === 'string' ? JSON.parse(distribuicoes) : distribuicoes;
+        result = await apiRequest(service.service_url, `/ConfirmaRecebimentoDistribuicoes?codEscritorio=${codEsc || partnerOfficeCode}`, jwtToken, 'POST', { distribuicoes: distList });
+        break;
+      }
+
       default:
         throw new Error(`Unknown action: ${action}`);
     }
