@@ -745,6 +745,7 @@ const ApiTesting = () => {
   };
 
   const buildBody = (): Record<string, any> | null => {
+    if (!selectedEndpoint) return null;
     if (!selectedEndpoint.bodyParams?.length && !managementActionMap[selectedEndpoint.id]) return null;
     
     const action = managementActionMap[selectedEndpoint.id];
