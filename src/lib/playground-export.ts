@@ -1,5 +1,5 @@
 /**
- * Playground Export - Comprehensive documentation of all Hub Jurídico API endpoints
+ * Playground Export - Comprehensive documentation of all HUB Jurídico API endpoints
  * Generates a structured JSON document with all endpoint definitions, action mappings,
  * auth flows, and configuration details for replication in other projects.
  */
