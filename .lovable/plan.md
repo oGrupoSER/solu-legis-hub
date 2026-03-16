@@ -1,83 +1,129 @@
 
 
-## Plano: Adicionar endpoints "Confirmar Recebimento" em Publicações e Distribuições
+# Plano: Filtros Avancados e Indicador de Confirmacao por Registro
 
-### 1. Publicações — Confirmar Recebimento (REST V2)
+## Contexto
 
-**Endpoint real**: `POST /Publicacao/publicacao_confirmarRecebimento`
-- Body: array de IDs (ex: `[135040011, 479125026]`)
-- Auth: Bearer tokenJWT (auto-autenticado)
+As telas de Publicacoes, Distribuicoes e Andamentos precisam de:
+1. Filtros por **cliente**, **parceiro** e **periodo** (algumas telas ja tem parceiro/periodo parcialmente)
+2. Indicador visual por registro mostrando se o cliente ja **confirmou o recebimento**
+3. Ao clicar no indicador, exibir **data/hora** e **IP de origem** da confirmacao
+4. Filtro por status de confirmacao (confirmado / nao confirmado)
 
-**Alterações:**
+## Analise do Estado Atual
 
-**`src/pages/ApiTesting.tsx`** — Adicionar endpoint no final do array `publicationEndpoints`:
-```ts
-{
-  id: "rest-confirmar-recebimento", label: "Confirmar Recebimento", method: "POST",
-  path: "manage-search-terms", category: "management", authType: "jwt",
-  description: "Confirma recebimento de publicações na API REST V2 (publicacao_confirmarRecebimento). Envie um array de IDs.",
-  params: [],
-  bodyParams: [
-    { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
-    { key: "data.ids", label: "IDs das Publicações (JSON array)", placeholder: "[135040011, 479125026]", required: true },
-  ],
-}
-```
+| Tela | Filtro Cliente | Filtro Parceiro | Filtro Periodo | Confirmacao |
+|------|---------------|-----------------|----------------|-------------|
+| Publicacoes (PublicationsTable) | Nao tem | Tem | Tem | Nao tem |
+| Distribuicoes (Distributions) | Nao tem | Nao tem | Nao tem | Nao tem |
+| Andamentos (ProcessMovements) | Nao tem | Nao tem | Nao tem | Nao tem |
 
-Adicionar no `managementActionMap`: `"rest-confirmar-recebimento": "rest_confirmar_recebimento"`
+O modelo de confirmacao atual e por **lote** (tabela `api_delivery_cursors`), sem rastreamento por registro individual. Nao ha dados de IP nem timestamp por registro.
 
-**`supabase/functions/manage-search-terms/index.ts`** — Adicionar case no `handleRestV2Action`:
-```ts
-case 'rest_confirmar_recebimento': {
-  const ids = data.ids || [];
-  return await restApiCall('/Publicacao/publicacao_confirmarRecebimento', 'POST', tokenJWT, ids, service.id, null);
-}
-```
+## O Que Sera Feito
 
-Adicionar `'rest_confirmar_recebimento'` ao type union de `ManageRequest.action`.
+### 1. Nova Tabela: `record_confirmations`
+
+Rastreia confirmacoes individuais por registro e por cliente:
+
+| Coluna | Tipo | Descricao |
+|--------|------|-----------|
+| id | uuid PK | Identificador |
+| record_id | uuid NOT NULL | ID do registro (publicacao, distribuicao ou movimento) |
+| record_type | text NOT NULL | "publications", "distributions" ou "movements" |
+| client_system_id | uuid NOT NULL | Cliente que confirmou |
+| confirmed_at | timestamptz | Data/hora da confirmacao |
+| ip_address | text | IP de origem da requisicao |
+| created_at | timestamptz | Timestamp de criacao |
+
+Indice unico em (record_id, record_type, client_system_id) para evitar duplicatas.
+RLS: SELECT para authenticated, INSERT para service role.
+
+### 2. Atualizar Endpoints de Confirmacao (api-processes, api-distributions, api-publications)
+
+Quando o cliente chama `POST ?action=confirm`:
+- Alem de atualizar o `api_delivery_cursors`, inserir registros na tabela `record_confirmations` para cada item do lote entregue
+- Capturar o IP da requisicao via headers (`x-forwarded-for` ou `x-real-ip`)
+- Gravar o timestamp da confirmacao
+
+### 3. Adicionar Filtros nas 3 Telas
+
+**Publicacoes (PublicationsTable.tsx):**
+- Adicionar filtro por **Cliente** (Select com client_systems)
+- Filtro de confirmacao ja e viavel apos a nova tabela
+
+**Distribuicoes (Distributions.tsx):**
+- Adicionar filtro por **Parceiro** (Select com partners)
+- Adicionar filtro por **Cliente** (Select com client_systems)
+- Adicionar filtro por **Periodo** (DateRangePicker reutilizado)
+
+**Andamentos (ProcessMovements.tsx):**
+- Adicionar filtro por **Parceiro** (via processes.partner_id)
+- Adicionar filtro por **Cliente** (via client_processes)
+- Adicionar filtro por **Periodo** (DateRangePicker)
+
+### 4. Indicador Visual de Confirmacao
+
+Em cada linha da tabela, adicionar uma coluna "Confirmacao" com:
+- Icone verde (CheckCircle) se pelo menos um cliente confirmou
+- Icone cinza (Circle) se nenhum cliente confirmou ainda
+- Ao clicar, abrir um **Popover/Dialog** com a lista de clientes que confirmaram, mostrando:
+  - Nome do cliente
+  - Data e hora da confirmacao
+  - IP de origem
+
+### 5. Filtro por Status de Confirmacao
+
+Adicionar Select com 3 opcoes em cada tela:
+- "Todos" (sem filtro)
+- "Confirmados" (registros com pelo menos 1 entrada em record_confirmations)
+- "Nao confirmados" (registros sem entrada)
+
+Para filtrar, utilizar subquery ou left join com record_confirmations.
 
 ---
 
-### 2. Distribuições — Confirmar Recebimento (REST V3)
+## Detalhes Tecnicos
 
-**Endpoint real**: `POST /distribuicoes/ConfirmaRecebimentoDistribuicoes?codEscritorio=41`
-- Body: `{ "distribuicoes": [{ "codEscritorio": 41, "codProcesso": 195148028 }, ...] }`
-- Auth: Bearer token (auto-autenticado)
+### Arquivos a Modificar
 
-**Alterações:**
+| Arquivo | Acao |
+|---------|------|
+| Migracao SQL | Criar tabela `record_confirmations` com indices e RLS |
+| `src/components/publications/PublicationsTable.tsx` | Adicionar filtro por cliente e confirmacao, coluna de status |
+| `src/pages/Distributions.tsx` | Adicionar filtros por parceiro, cliente, periodo e confirmacao |
+| `src/pages/ProcessMovements.tsx` | Adicionar filtros por parceiro, cliente, periodo e confirmacao |
+| `supabase/functions/api-publications/index.ts` | Gravar record_confirmations no confirm |
+| `supabase/functions/api-distributions/index.ts` | Gravar record_confirmations no confirm |
+| `supabase/functions/api-processes/index.ts` | Gravar record_confirmations no confirm |
 
-**`src/pages/ApiTesting.tsx`** — Adicionar endpoint no final do array `distributionEndpoints`:
-```ts
-{
-  id: "dis-confirmar-recebimento", label: "Confirmar Recebimento", method: "POST",
-  path: "manage-distribution-terms", category: "management", authType: "jwt",
-  description: "Confirma recebimento de distribuições na API V3 (ConfirmaRecebimentoDistribuicoes).",
-  params: [],
-  bodyParams: [
-    { key: "serviceId", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
-    { key: "codEscritorio", label: "Código do Escritório", placeholder: "41", required: true, type: "number" },
-    { key: "distribuicoes", label: "Distribuições (JSON array)", placeholder: '[{"codEscritorio": 41, "codProcesso": 195148028}]', required: true },
-  ],
-}
+### Componente Reutilizavel: ConfirmationBadge
+
+Criar componente `src/components/shared/ConfirmationBadge.tsx` que:
+- Recebe `recordId` e `recordType`
+- Consulta `record_confirmations` para esse registro
+- Exibe icone verde/cinza
+- Ao clicar, abre Popover com detalhes (cliente, data/hora, IP)
+
+### Logica de Filtragem por Confirmacao
+
+Para filtrar registros confirmados/nao confirmados sem degradar performance:
+- Buscar IDs confirmados via query separada em `record_confirmations` filtrada por `record_type`
+- Aplicar filtro `.in('id', confirmedIds)` ou `.not.in('id', confirmedIds)` na query principal
+- Limitar a subquery ao tipo de registro da tela atual
+
+### Captura de IP nos Endpoints
+
+```text
+const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+  || req.headers.get('x-real-ip')
+  || 'unknown';
 ```
 
-Adicionar no `managementActionMap`: `"dis-confirmar-recebimento": "confirmDistributions"`
+### Filtro por Cliente nas Publicacoes/Distribuicoes
 
-**`supabase/functions/manage-distribution-terms/index.ts`** — Adicionar case `confirmDistributions` no switch:
-```ts
-case 'confirmDistributions': {
-  const { distribuicoes, codEscritorio: codEsc } = params;
-  if (!distribuicoes) throw new Error('distribuicoes array is required');
-  const distList = typeof distribuicoes === 'string' ? JSON.parse(distribuicoes) : distribuicoes;
-  result = await apiRequest(service.service_url, `/ConfirmaRecebimentoDistribuicoes?codEscritorio=${codEsc || officeCode}`, jwtToken, 'POST', { distribuicoes: distList });
-  break;
-}
-```
-
----
-
-### Arquivos alterados
-- `src/pages/ApiTesting.tsx` — 2 novos endpoints + 2 entradas no actionMap
-- `supabase/functions/manage-search-terms/index.ts` — 1 novo case + type union
-- `supabase/functions/manage-distribution-terms/index.ts` — 1 novo case
+Como publicacoes e distribuicoes nao tem link direto com `client_systems`, o filtro por cliente funcionara via:
+- Publicacoes: `client_search_terms` -> `search_terms` -> `publications.matched_terms` (pelo termo)
+- Distribuicoes: `client_search_terms` -> `search_terms` -> `distributions.term` (pelo termo)
+- Andamentos: `client_processes` -> `processes` -> `process_movements.process_id` (direto)
 

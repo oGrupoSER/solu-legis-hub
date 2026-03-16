@@ -52,7 +52,7 @@ interface ManageRequest {
           'rest_autenticar' | 'rest_cadastrar_nome' | 'rest_excluir_nome' | 'rest_consultar_nomes' |
           'rest_cadastrar_oab' | 'rest_consultar_oab' | 'rest_cadastrar_variacao' |
           'rest_cadastrar_termo_validacao' | 'rest_cadastrar_abrangencia' |
-          'rest_buscar_catalogo' | 'rest_buscar_publicacoes';
+          'rest_buscar_catalogo' | 'rest_buscar_publicacoes' | 'rest_confirmar_recebimento';
   data?: {
     nome?: string;
     cod_nome?: number;
@@ -976,6 +976,13 @@ async function handleRestV2Action(action: string, service: any, officeCode: numb
     case 'rest_buscar_publicacoes':
       return await restApiCall(`/Publicacao/publicacao_buscar?codEscritorio=${codEscritorio}`,
         'GET', tokenJWT, undefined, service.id, null);
+
+    case 'rest_confirmar_recebimento': {
+      const ids = data.ids || [];
+      const parsedIds = typeof ids === 'string' ? JSON.parse(ids) : ids;
+      return await restApiCall('/Publicacao/publicacao_confirmarRecebimento', 'POST', tokenJWT,
+        parsedIds, service.id, null);
+    }
 
     default:
       throw new Error(`Unknown REST V2 action: ${action}`);

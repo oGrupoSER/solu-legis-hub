@@ -473,6 +473,17 @@ const distributionEndpoints: EndpointDef[] = [
       { key: "serviceId", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
     ],
   },
+  {
+    id: "dis-confirmar-recebimento", label: "Confirmar Recebimento", method: "POST", path: "manage-distribution-terms",
+    category: "management", authType: "jwt",
+    description: "Confirma recebimento de distribuições na API V3 (ConfirmaRecebimentoDistribuicoes). Envie um array JSON de objetos com codEscritorio e codProcesso.",
+    params: [],
+    bodyParams: [
+      { key: "serviceId", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+      { key: "codEscritorio", label: "Código do Escritório", placeholder: "41", required: true, type: "number" },
+      { key: "distribuicoes", label: "Distribuições (JSON array)", placeholder: '[{"codEscritorio": 41, "codProcesso": 195148028}]', required: true },
+    ],
+  },
 ];
 
 // ─── PUBLICAÇÕES ──────────────────────────────────────────────
@@ -622,6 +633,16 @@ const publicationEndpoints: EndpointDef[] = [
       { key: "data.codEscritorio", label: "Código do Escritório", placeholder: "41", required: true, type: "number" },
     ],
   },
+  {
+    id: "rest-confirmar-recebimento", label: "Confirmar Recebimento", method: "POST", path: "manage-search-terms",
+    category: "management", authType: "jwt",
+    description: "Confirma recebimento de publicações na API REST V2 (publicacao_confirmarRecebimento). Envie um array JSON de IDs de publicações.",
+    params: [],
+    bodyParams: [
+      { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service (tipo terms)", required: true },
+      { key: "data.ids", label: "IDs das Publicações (JSON array)", placeholder: "[135040011, 479125026]", required: true },
+    ],
+  },
 ];
 
 // ─── Action map for management endpoints ──────────────────────
@@ -676,6 +697,8 @@ const managementActionMap: Record<string, string> = {
   "rest-cadastrar-abrangencia": "rest_cadastrar_abrangencia",
   "rest-buscar-catalogo": "rest_buscar_catalogo",
   "rest-buscar-publicacoes": "rest_buscar_publicacoes",
+  "rest-confirmar-recebimento": "rest_confirmar_recebimento",
+  "dis-confirmar-recebimento": "confirmDistributions",
 };
 
 const ApiTesting = () => {
