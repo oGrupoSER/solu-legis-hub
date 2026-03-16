@@ -114,6 +114,15 @@ Deno.serve(async (req) => {
           totalSynced = await syncNewPublications(restClient, supabase, service, terms, partnerOfficeCode);
         }
 
+        // Confirm receipt at Solucionare if confirm_receipt is enabled
+        if (totalSynced > 0 && service.confirm_receipt) {
+          try {
+            await confirmPublicationReceipt(service, supabase, totalSynced);
+          } catch (confirmError) {
+            console.error('Error confirming publication receipt:', confirmError);
+          }
+        }
+
         // Update last sync timestamp
         await updateLastSync(service.id);
         await logger.success(totalSynced);
@@ -384,5 +393,71 @@ async function processPublications(
   return insertedCount;
 }
 
-// Note: Confirmation function removed as REST API may not require it
-// If confirmation is needed, implement a new REST endpoint call here
+// ========== CONFIRM RECEIPT ==========
+
+const REST_V2_BASE = 'https://atacadoinformacaojudicial.com.br/WebApiPublicacoesV2/api';
+
+async function authenticateRestV2(service: any): Promise<string> {
+  const authUrl = `${REST_V2_BASE}/Autenticacao/AutenticaAPI`;
+  const response = await fetch(authUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nomeRelacional: service.nome_relacional, token: service.token }),
+  });
+  if (!response.ok) throw new Error(`REST V2 Auth failed: ${response.status}`);
+  const data = await response.json();
+  const tokenJWT = data?.tokenJWT;
+  if (!tokenJWT) throw new Error('REST V2 Auth: no tokenJWT returned');
+  return tokenJWT;
+}
+
+/**
+ * Confirm publication receipt at Solucionare REST V2
+ * Fetches cod_publicacao IDs from recently synced publications and confirms in batches of 100
+ */
+async function confirmPublicationReceipt(service: any, supabase: any, totalSynced: number): Promise<void> {
+  console.log(`Confirming receipt for publications from service ${service.service_name}...`);
+
+  // Get recently synced publications (last 10 min) to collect cod_publicacao IDs
+  const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const { data: recentPubs, error } = await supabase
+    .from('publications')
+    .select('cod_publicacao')
+    .eq('partner_service_id', service.id)
+    .gte('created_at', tenMinAgo)
+    .not('cod_publicacao', 'is', null);
+
+  if (error || !recentPubs?.length) {
+    console.log('No publications to confirm');
+    return;
+  }
+
+  const ids = recentPubs.map((p: any) => p.cod_publicacao).filter(Boolean);
+  console.log(`Found ${ids.length} publication IDs to confirm`);
+
+  const tokenJWT = await authenticateRestV2(service);
+
+  // Confirm in batches of 100
+  const batchSize = 100;
+  for (let i = 0; i < ids.length; i += batchSize) {
+    const batch = ids.slice(i, i + batchSize);
+    const confirmUrl = `${REST_V2_BASE}/Publicacao/publicacao_confirmarRecebimento`;
+    const response = await fetch(confirmUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${tokenJWT}`,
+      },
+      body: JSON.stringify(batch),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`Confirm batch failed: ${response.status} - ${errText}`);
+    } else {
+      console.log(`Confirmed batch ${Math.floor(i / batchSize) + 1}: ${batch.length} publications`);
+    }
+  }
+
+  console.log(`Publication receipt confirmation complete: ${ids.length} IDs`);
+}

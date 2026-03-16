@@ -209,6 +209,11 @@ export function generatePostmanCollection(baseUrl: string) {
         description: 'Lista abrangências disponíveis para monitoramento.',
         body: { action: 'listAbrangencias', serviceId: 'UUID_DO_SERVICO' },
       }),
+      buildRequest({
+        name: 'Confirmar Recebimento', method: 'POST', path: 'manage-distribution-terms', authType: 'jwt',
+        description: 'Confirma recebimento de distribuições na API V3 (ConfirmaRecebimentoDistribuicoes).',
+        body: { action: 'confirmDistributions', serviceId: 'UUID_DO_SERVICO', codEscritorio: 41, distribuicoes: [{ codEscritorio: 41, codProcesso: 195148028 }] },
+      }),
     ],
   };
 
@@ -296,6 +301,11 @@ export function generatePostmanCollection(baseUrl: string) {
         name: 'Pub - Buscar Publicações', method: 'POST', path: 'manage-search-terms', authType: 'jwt',
         description: 'Busca publicações por código de escritório.',
         body: { action: 'rest_buscar_publicacoes', service_id: 'UUID_DO_SERVICO', data: { codEscritorio: 41 } },
+      }),
+      buildRequest({
+        name: 'Pub - Confirmar Recebimento', method: 'POST', path: 'manage-search-terms', authType: 'jwt',
+        description: 'Confirma recebimento de publicações na API REST V2 (publicacao_confirmarRecebimento).',
+        body: { action: 'rest_confirmar_recebimento', service_id: 'UUID_DO_SERVICO', data: { ids: [135040011, 479125026] } },
       }),
     ],
   };

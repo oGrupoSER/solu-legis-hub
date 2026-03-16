@@ -319,8 +319,14 @@ async function syncGroupers(client: RestClient, supabase: any, service: any, off
       return 0;
     }
 
-    // DISABLED: Do not confirm receipt - legacy system is the official confirmer
-    console.log(`Skipping confirmation for ${data.length} groupers (legacy system handles confirmations)`);
+    // Confirm receipt if enabled
+    const { data: svcData } = await supabase.from('partner_services').select('confirm_receipt').eq('id', service.id).single();
+    if (svcData?.confirm_receipt) {
+      const grouperIds = data.map((g: any) => g.codAgrupador).filter(Boolean);
+      if (grouperIds.length > 0) await confirmReceipt(client, supabase, 'groupers', grouperIds);
+    } else {
+      console.log(`Skipping confirmation for ${data.length} groupers (confirm_receipt disabled)`);
+    }
 
     return data.length;
   } catch (error) {
@@ -403,8 +409,14 @@ async function syncDependencies(client: RestClient, supabase: any, service: any,
       return 0;
     }
 
-    // DISABLED: Do not confirm receipt - legacy system is the official confirmer
-    console.log(`Skipping confirmation for ${data.length} dependencies (legacy system handles confirmations)`);
+    // Confirm receipt if enabled
+    const { data: svcData2 } = await supabase.from('partner_services').select('confirm_receipt').eq('id', service.id).single();
+    if (svcData2?.confirm_receipt) {
+      const depIds = data.map((d: any) => d.codDependencia).filter(Boolean);
+      if (depIds.length > 0) await confirmReceipt(client, supabase, 'dependencies', depIds);
+    } else {
+      console.log(`Skipping confirmation for ${data.length} dependencies (confirm_receipt disabled)`);
+    }
 
     return data.length;
   } catch (error) {
@@ -461,8 +473,14 @@ async function syncMovements(client: RestClient, supabase: any, service: any, of
       return 0;
     }
 
-    // DISABLED: Do not confirm receipt - legacy system is the official confirmer
-    console.log(`Skipping confirmation for ${data.length} movements (legacy system handles confirmations)`);
+    // Confirm receipt if enabled
+    const { data: svcData3 } = await supabase.from('partner_services').select('confirm_receipt').eq('id', service.id).single();
+    if (svcData3?.confirm_receipt) {
+      const movIds = data.map((m: any) => m.codAndamento).filter(Boolean);
+      if (movIds.length > 0) await confirmReceipt(client, supabase, 'movements', movIds);
+    } else {
+      console.log(`Skipping confirmation for ${data.length} movements (confirm_receipt disabled)`);
+    }
 
     return data.length;
   } catch (error) {
@@ -674,8 +692,14 @@ async function syncDocuments(client: RestClient, supabase: any, service: any, of
       return 0;
     }
 
-    // DISABLED: Do not confirm receipt - legacy system is the official confirmer
-    console.log(`Skipping confirmation for ${data.length} documents (legacy system handles confirmations)`);
+    // Confirm receipt if enabled
+    const { data: svcData4 } = await supabase.from('partner_services').select('confirm_receipt').eq('id', service.id).single();
+    if (svcData4?.confirm_receipt) {
+      const docIds = data.map((d: any) => d.codDocumento).filter(Boolean);
+      if (docIds.length > 0) await confirmReceipt(client, supabase, 'documents', docIds);
+    } else {
+      console.log(`Skipping confirmation for ${data.length} documents (confirm_receipt disabled)`);
+    }
 
     return data.length;
   } catch (error) {
@@ -893,7 +917,8 @@ async function syncCovers(client: RestClient, supabase: any, service: any, offic
 }
 
 /**
- * Confirm receipt of synced items (DISABLED - legacy system handles confirmations)
+ * Confirm receipt of synced items
+ * Controlled by partner_services.confirm_receipt flag
  */
 async function confirmReceipt(client: RestClient, supabase: any, type: string, ids: number[]): Promise<void> {
   try {
