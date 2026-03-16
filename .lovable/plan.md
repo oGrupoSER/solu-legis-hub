@@ -1,129 +1,78 @@
 
 
-# Plano: Filtros Avancados e Indicador de Confirmacao por Registro
+## Plano: Adicionar todos os endpoints da Solucionare ao Playground
 
-## Contexto
+### Situação atual
 
-As telas de Publicacoes, Distribuicoes e Andamentos precisam de:
-1. Filtros por **cliente**, **parceiro** e **periodo** (algumas telas ja tem parceiro/periodo parcialmente)
-2. Indicador visual por registro mostrando se o cliente ja **confirmou o recebimento**
-3. Ao clicar no indicador, exibir **data/hora** e **IP de origem** da confirmacao
-4. Filtro por status de confirmacao (confirmado / nao confirmado)
+O Playground expõe **~20 endpoints** divididos em Processos, Distribuições e Publicações (consulta + gerenciamento). Porém, existem **~30 ações adicionais** nas edge functions que consomem a Solucionare mas não estão acessíveis pelo Playground.
 
-## Analise do Estado Atual
+### Endpoints faltantes por categoria
 
-| Tela | Filtro Cliente | Filtro Parceiro | Filtro Periodo | Confirmacao |
-|------|---------------|-----------------|----------------|-------------|
-| Publicacoes (PublicationsTable) | Nao tem | Tem | Tem | Nao tem |
-| Distribuicoes (Distributions) | Nao tem | Nao tem | Nao tem | Nao tem |
-| Andamentos (ProcessMovements) | Nao tem | Nao tem | Nao tem | Nao tem |
+**1. Processos (`sync-process-management`) — 2 faltantes:**
+- `sync` — Sincroniza status de todos os processos + busca novos via BuscaProcessos
+- `list` (BuscaProcessosCadastrados) — já existe no playground
 
-O modelo de confirmacao atual e por **lote** (tabela `api_delivery_cursors`), sem rastreamento por registro individual. Nao ha dados de IP nem timestamp por registro.
+**2. Distribuições (`manage-distribution-terms`) — 8 faltantes:**
+- `editNameScope` — Editar instâncias/abrangências de um nome
+- `registerOffice` — Cadastrar escritório
+- `activateOffice` / `deactivateOffice` — Ativar/desativar escritório
+- `listScopes` — Listar escritórios cadastrados (BuscaEscritoriosCadastrados)
+- `listSystems` — Listar status dos sistemas (BuscaStatusSistemas)
+- `listAllNames` — Listar todos os nomes (BuscaNomesCadastrados)
+- `listAbrangencias` — Listar abrangências disponíveis (SOAP/REST)
 
-## O Que Sera Feito
+**3. Publicações SOAP (`manage-search-terms`) — 15 faltantes:**
+- `cadastrar_nome` — Cadastrar nome de pesquisa (SOAP)
+- `editar_nome` — Editar nome (variações, bloqueios, abrangências)
+- `ativar_nome` / `desativar_nome` — Ativar/desativar nome
+- `excluir_nome` — Excluir nome (SOAP)
+- `excluir_nome_rest` — Excluir nome (REST V2)
+- `cadastrar_escritorio` — Cadastrar escritório
+- `ativar_escritorio` / `desativar_escritorio` — Ativar/desativar escritório
+- `listar_nomes` — Listar nomes cadastrados (SOAP)
+- `listar_escritorios` — Listar escritórios (SOAP)
+- `sync_all` — Sincronizar todos os nomes e escritórios
+- `gerar_variacoes` — Gerar variações automáticas de um nome
+- `buscar_abrangencias` — Buscar diários disponíveis
+- `visualizar_nome` — Visualizar configuração completa de um nome
 
-### 1. Nova Tabela: `record_confirmations`
+**4. API Management (Token-based) (`api-management`) — 9 faltantes (aba nova):**
+- `register-pub-term` / `delete-pub-term`
+- `register-dist-term` / `delete-dist-term`
+- `register-process` / `delete-process`
+- `list-services` / `list-my-terms` / `list-my-processes`
 
-Rastreia confirmacoes individuais por registro e por cliente:
+### Alterações
 
-| Coluna | Tipo | Descricao |
-|--------|------|-----------|
-| id | uuid PK | Identificador |
-| record_id | uuid NOT NULL | ID do registro (publicacao, distribuicao ou movimento) |
-| record_type | text NOT NULL | "publications", "distributions" ou "movements" |
-| client_system_id | uuid NOT NULL | Cliente que confirmou |
-| confirmed_at | timestamptz | Data/hora da confirmacao |
-| ip_address | text | IP de origem da requisicao |
-| created_at | timestamptz | Timestamp de criacao |
+**1. `src/pages/ApiTesting.tsx`**
 
-Indice unico em (record_id, record_type, client_system_id) para evitar duplicatas.
-RLS: SELECT para authenticated, INSERT para service role.
+Adicionar todos os endpoints faltantes nas respectivas arrays:
 
-### 2. Atualizar Endpoints de Confirmacao (api-processes, api-distributions, api-publications)
+- **`processEndpoints`**: Adicionar `sync` (Sincronizar Processos)
+- **`distributionEndpoints`**: Adicionar 8 novos endpoints (editNameScope, registerOffice, activateOffice, deactivateOffice, listScopes, listSystems, listAllNames, listAbrangencias)
+- **`publicationEndpoints`**: Adicionar 15 novos endpoints do `manage-search-terms` (cadastrar_nome, editar_nome, ativar_nome, desativar_nome, excluir_nome, excluir_nome_rest, cadastrar_escritorio, ativar_escritorio, desativar_escritorio, listar_nomes, listar_escritorios, sync_all, gerar_variacoes, buscar_abrangencias, visualizar_nome)
+- **Nova aba "Integração"**: Adicionar aba com os 9 endpoints do `api-management` (Token-based, não JWT)
+- **`managementActionMap`**: Adicionar mapeamento de todos os novos IDs para suas respectivas actions
 
-Quando o cliente chama `POST ?action=confirm`:
-- Alem de atualizar o `api_delivery_cursors`, inserir registros na tabela `record_confirmations` para cada item do lote entregue
-- Capturar o IP da requisicao via headers (`x-forwarded-for` ou `x-real-ip`)
-- Gravar o timestamp da confirmacao
+Cada endpoint segue o formato existente: `{ id, label, method, path, category, authType, description, params, bodyParams }` com os campos corretos.
 
-### 3. Adicionar Filtros nas 3 Telas
+**2. `src/lib/postman-collection.ts`**
 
-**Publicacoes (PublicationsTable.tsx):**
-- Adicionar filtro por **Cliente** (Select com client_systems)
-- Filtro de confirmacao ja e viavel apos a nova tabela
+Adicionar os mesmos endpoints nas respectivas pastas Postman:
+- Pasta Processos/Gerenciamento: +1 (sync)
+- Pasta Distribuições/Gerenciamento: +8
+- Pasta Publicações/Gerenciamento: +15
+- Nova pasta "Integração Sistema-a-Sistema": +9 endpoints api-management
 
-**Distribuicoes (Distributions.tsx):**
-- Adicionar filtro por **Parceiro** (Select com partners)
-- Adicionar filtro por **Cliente** (Select com client_systems)
-- Adicionar filtro por **Periodo** (DateRangePicker reutilizado)
+### Detalhes de implementação
 
-**Andamentos (ProcessMovements.tsx):**
-- Adicionar filtro por **Parceiro** (via processes.partner_id)
-- Adicionar filtro por **Cliente** (via client_processes)
-- Adicionar filtro por **Periodo** (DateRangePicker)
+- Todos os endpoints de `manage-search-terms` usam `path: "manage-search-terms"` e `authType: "jwt"`, com `bodyParams` contendo os campos: `service_id` (obrigatório), `action` (mapeado via managementActionMap), e campos específicos de cada ação
+- Os endpoints de `api-management` usam `path: "api-management"` e `authType: "token"`, com `bodyParams` contendo `action` e `data` (objeto aninhado)
+- A aba "Integração" usa icone `Link` e badge "Token" (não JWT)
+- Para a aba Integração, o `buildBody` precisa de ajuste para aninhar os parâmetros dentro de `{ action, data: {...} }` em vez de colocar tudo flat
 
-### 4. Indicador Visual de Confirmacao
-
-Em cada linha da tabela, adicionar uma coluna "Confirmacao" com:
-- Icone verde (CheckCircle) se pelo menos um cliente confirmou
-- Icone cinza (Circle) se nenhum cliente confirmou ainda
-- Ao clicar, abrir um **Popover/Dialog** com a lista de clientes que confirmaram, mostrando:
-  - Nome do cliente
-  - Data e hora da confirmacao
-  - IP de origem
-
-### 5. Filtro por Status de Confirmacao
-
-Adicionar Select com 3 opcoes em cada tela:
-- "Todos" (sem filtro)
-- "Confirmados" (registros com pelo menos 1 entrada em record_confirmations)
-- "Nao confirmados" (registros sem entrada)
-
-Para filtrar, utilizar subquery ou left join com record_confirmations.
-
----
-
-## Detalhes Tecnicos
-
-### Arquivos a Modificar
-
-| Arquivo | Acao |
-|---------|------|
-| Migracao SQL | Criar tabela `record_confirmations` com indices e RLS |
-| `src/components/publications/PublicationsTable.tsx` | Adicionar filtro por cliente e confirmacao, coluna de status |
-| `src/pages/Distributions.tsx` | Adicionar filtros por parceiro, cliente, periodo e confirmacao |
-| `src/pages/ProcessMovements.tsx` | Adicionar filtros por parceiro, cliente, periodo e confirmacao |
-| `supabase/functions/api-publications/index.ts` | Gravar record_confirmations no confirm |
-| `supabase/functions/api-distributions/index.ts` | Gravar record_confirmations no confirm |
-| `supabase/functions/api-processes/index.ts` | Gravar record_confirmations no confirm |
-
-### Componente Reutilizavel: ConfirmationBadge
-
-Criar componente `src/components/shared/ConfirmationBadge.tsx` que:
-- Recebe `recordId` e `recordType`
-- Consulta `record_confirmations` para esse registro
-- Exibe icone verde/cinza
-- Ao clicar, abre Popover com detalhes (cliente, data/hora, IP)
-
-### Logica de Filtragem por Confirmacao
-
-Para filtrar registros confirmados/nao confirmados sem degradar performance:
-- Buscar IDs confirmados via query separada em `record_confirmations` filtrada por `record_type`
-- Aplicar filtro `.in('id', confirmedIds)` ou `.not.in('id', confirmedIds)` na query principal
-- Limitar a subquery ao tipo de registro da tela atual
-
-### Captura de IP nos Endpoints
-
-```text
-const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-  || req.headers.get('x-real-ip')
-  || 'unknown';
-```
-
-### Filtro por Cliente nas Publicacoes/Distribuicoes
-
-Como publicacoes e distribuicoes nao tem link direto com `client_systems`, o filtro por cliente funcionara via:
-- Publicacoes: `client_search_terms` -> `search_terms` -> `publications.matched_terms` (pelo termo)
-- Distribuicoes: `client_search_terms` -> `search_terms` -> `distributions.term` (pelo termo)
-- Andamentos: `client_processes` -> `processes` -> `process_movements.process_id` (direto)
+### Escopo estimado
+- ~200 linhas adicionais em `ApiTesting.tsx` (definições de endpoints)
+- ~100 linhas adicionais em `postman-collection.ts`
+- Ajuste no `buildBody` para suportar o formato aninhado do `api-management`
 
