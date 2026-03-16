@@ -733,7 +733,6 @@ const ApiTesting = () => {
     processes: <Gavel className="h-4 w-4" />,
     distributions: <FileSearch className="h-4 w-4" />,
     publications: <BookOpen className="h-4 w-4" />,
-    integration: <Link className="h-4 w-4" />,
   };
 
   const renderEndpointList = (endpoints: EndpointDef[]) => {
