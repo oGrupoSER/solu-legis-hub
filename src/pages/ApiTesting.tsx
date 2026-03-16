@@ -316,7 +316,7 @@ const publicationEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "rest-cadastrar-oab", label: "Pub - Cadastrar OAB", method: "POST", path: "manage-search-terms",
+    id: "rest-cadastrar-oab", label: "Cadastrar OAB", method: "POST", path: "manage-search-terms",
     category: "management", authType: "jwt",
     description: "Cadastra uma OAB vinculada a um codNome. Número com 6 dígitos, letra 's' fixo.",
     params: [],
