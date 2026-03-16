@@ -329,7 +329,7 @@ const publicationEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "rest-consultar-oab", label: "Pub - Consultar OAB", method: "POST", path: "manage-search-terms",
+    id: "rest-consultar-oab", label: "Consultar OAB", method: "GET", path: "manage-search-terms",
     category: "management", authType: "jwt",
     description: "Consulta OABs vinculadas a um codNome. Use codUltimoOab para paginação.",
     params: [],
