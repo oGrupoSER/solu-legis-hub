@@ -86,6 +86,91 @@ async function linkProcessToClient(supabase: any, processId: string, clientSyste
   if (error) console.error('Error linking process to client:', error);
 }
 
+// ========== REST V3 Andamentos Proxy ==========
+const REST_V3_ACTION_MAP: Record<string, { endpoint: string; method: 'GET' | 'POST'; queryParams?: string[]; bodyFields?: string[] }> = {
+  rest_cadastrar_processo: { endpoint: '/CadastraNovoProcesso', method: 'POST', bodyFields: ['codEscritorio', 'numProcesso', 'Instancia'] },
+  rest_excluir_processo: { endpoint: '/ExcluirProcesso', method: 'POST', queryParams: ['codProcesso', 'codEscritorio'] },
+  rest_buscar_status: { endpoint: '/BuscaStatusProcesso', method: 'GET', queryParams: ['codProcesso'] },
+  rest_buscar_processos: { endpoint: '/BuscaProcessos', method: 'GET', queryParams: ['codEscritorio'] },
+  rest_buscar_novos_agrupadores: { endpoint: '/BuscaNovosAgrupadores', method: 'GET', queryParams: ['codEscritorio'] },
+  rest_buscar_agrupadores_escritorio: { endpoint: '/BuscaAgrupadoresPorEscritorio', method: 'GET', queryParams: ['codEscritorio'] },
+  rest_confirmar_agrupador: { endpoint: '/ConfirmaRecebimentoAgrupador', method: 'POST', bodyFields: ['codEscritorio', 'codAgrupador'] },
+  rest_buscar_novas_dependencias: { endpoint: '/BuscaNovasDependencias', method: 'GET', queryParams: ['codEscritorio'] },
+  rest_buscar_dependencias_escritorio: { endpoint: '/BuscaDependenciasPorEscritorio', method: 'GET', queryParams: ['codProcesso', 'codEscritorio'] },
+  rest_confirmar_dependencia: { endpoint: '/ConfirmaRecebimentoDependencia', method: 'POST', bodyFields: ['codEscritorio', 'codDependencia'] },
+  rest_buscar_novos_andamentos: { endpoint: '/BuscaNovosAndamentos', method: 'GET', queryParams: ['codEscritorio'] },
+  rest_buscar_andamentos_escritorio: { endpoint: '/BuscaNovosAndamentosPorEscritorio', method: 'GET', queryParams: ['codEscritorio'] },
+  rest_confirmar_andamento: { endpoint: '/ConfirmaRecebimentoAndamento', method: 'POST', bodyFields: ['codEscritorio', 'codAndamento', 'codProcesso', 'codAgrupador'] },
+  rest_buscar_capa: { endpoint: '/BuscaDadosCapaProcessoPorProcesso', method: 'GET', queryParams: ['codProcesso'] },
+  rest_buscar_novos_documentos: { endpoint: '/BuscaNovosDocumentos', method: 'GET' },
+  rest_buscar_documentos_escritorio: { endpoint: '/BuscaNovosDocumentos', method: 'GET', queryParams: ['codEscritorio'] },
+  rest_confirmar_documento: { endpoint: '/ConfirmaRecebimentoDocumento', method: 'POST', bodyFields: ['codEscritorio', 'codDocumento'] },
+  rest_todos_andamentos_processo: { endpoint: '/BuscaTodosAndamentosPorProcesso', method: 'GET', queryParams: ['codProcesso'] },
+  rest_todos_agrupadores_processo: { endpoint: '/BuscaTodosAgrupadoresPorProcesso', method: 'GET', queryParams: ['codProcesso'] },
+  rest_todos_documentos_processo: { endpoint: '/BuscaTodosDocumentosPorProcesso', method: 'GET', queryParams: ['codProcesso'] },
+  rest_processos_cadastrados: { endpoint: '/BuscaProcessosCadastrados', method: 'GET', queryParams: ['codEscritorio'] },
+  rest_qtd_andamentos: { endpoint: '/BuscaQuantidadeAndamentosDisponiveis', method: 'GET', queryParams: ['codEscritorio'] },
+};
+
+async function handleRestV3Action(client: RestClient, action: string, body: any): Promise<any> {
+  const config = REST_V3_ACTION_MAP[action];
+  if (!config) throw new Error(`Unknown REST V3 action: ${action}`);
+
+  console.log(`REST V3 proxy: ${action} -> ${config.method} ${config.endpoint}`);
+
+  if (config.method === 'GET') {
+    const params: Record<string, any> = {};
+    for (const key of (config.queryParams || [])) {
+      if (body[key] !== undefined) params[key] = body[key];
+    }
+    const data = await client.get(config.endpoint, params);
+    return { success: true, data, count: Array.isArray(data) ? data.length : undefined };
+  } else {
+    // POST: some use body, some use query params
+    if (config.queryParams && !config.bodyFields) {
+      // POST with query params only (like ExcluirProcesso)
+      const params: Record<string, any> = {};
+      for (const key of config.queryParams) {
+        if (body[key] !== undefined) params[key] = body[key];
+      }
+      const data = await client.post(config.endpoint, null, params);
+      return { success: true, data };
+    }
+
+    if (config.bodyFields) {
+      // Check if endpoint also uses query params
+      if (config.queryParams) {
+        const params: Record<string, any> = {};
+        for (const key of config.queryParams) {
+          if (body[key] !== undefined) params[key] = body[key];
+        }
+        const postBody: Record<string, any> = {};
+        for (const key of config.bodyFields) {
+          if (body[key] !== undefined) postBody[key] = body[key];
+        }
+        const data = await client.post(config.endpoint, postBody, params);
+        return { success: true, data };
+      }
+
+      // POST with body only
+      const postBody: Record<string, any> = {};
+      for (const key of config.bodyFields) {
+        if (body[key] !== undefined) postBody[key] = body[key];
+      }
+      // Confirmation endpoints expect array body
+      if (action.startsWith('rest_confirmar_')) {
+        const data = await client.post(config.endpoint, [postBody]);
+        return { success: true, data };
+      }
+      const data = await client.post(config.endpoint, postBody);
+      return { success: true, data };
+    }
+
+    const data = await client.post(config.endpoint);
+    return { success: true, data };
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -463,8 +548,14 @@ serve(async (req) => {
         break;
       }
 
-      default:
+      default: {
+        // ========== REST V3 Andamentos Proxy ==========
+        if (action.startsWith('rest_')) {
+          result = await handleRestV3Action(client, action, body);
+          break;
+        }
         throw new Error(`Unknown action: ${action}`);
+      }
     }
 
     return new Response(
