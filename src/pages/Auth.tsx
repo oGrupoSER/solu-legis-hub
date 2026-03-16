@@ -65,12 +65,9 @@ const Auth = () => {
       <Card className="w-full max-w-md shadow-xl">
         <CardHeader className="space-y-4 text-center">
           <div className="flex justify-center">
-            <img src={logo} alt="HUB Jurídico" className="h-16 w-16 object-contain" />
+            <img src={logo} alt="HUB Jurídico" className="h-24 w-24 object-contain" />
           </div>
           <CardTitle className="text-3xl font-bold">HUB Jurídico</CardTitle>
-          <CardDescription className="text-base">
-            Sistema de integração e distribuição de dados processuais
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="signin" className="w-full">
