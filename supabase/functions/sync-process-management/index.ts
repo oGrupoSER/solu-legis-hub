@@ -463,8 +463,14 @@ serve(async (req) => {
         break;
       }
 
-      default:
+      default: {
+        // ========== REST V3 Andamentos Proxy ==========
+        if (action.startsWith('rest_')) {
+          result = await handleRestV3Action(client, action, body);
+          break;
+        }
         throw new Error(`Unknown action: ${action}`);
+      }
     }
 
     return new Response(
