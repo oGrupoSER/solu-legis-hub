@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Scale, Shield } from "lucide-react";
+import logo from "@/assets/logo-orbo.png";
 
 const Auth = () => {
   const navigate = useNavigate();
