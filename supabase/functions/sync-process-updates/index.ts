@@ -917,7 +917,8 @@ async function syncCovers(client: RestClient, supabase: any, service: any, offic
 }
 
 /**
- * Confirm receipt of synced items (DISABLED - legacy system handles confirmations)
+ * Confirm receipt of synced items
+ * Controlled by partner_services.confirm_receipt flag
  */
 async function confirmReceipt(client: RestClient, supabase: any, type: string, ids: number[]): Promise<void> {
   try {
