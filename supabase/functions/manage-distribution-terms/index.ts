@@ -471,9 +471,16 @@ serve(async (req) => {
       }
 
       case 'registerOffice': {
-        const { nomeEscritorio, codAbrangencia } = params;
-        if (!nomeEscritorio) throw new Error('nomeEscritorio is required');
-        result = await apiRequest(service.service_url, '/CadastrarEscritorio', jwtToken, 'POST', { nomeEscritorio, codAbrangencia: codAbrangencia || 1 });
+        const { nomeEscritorio, codAbrangencia, codEscritorio: regCodEsc, utilizaDocumentosIniciais } = params;
+        // Support both legacy (nomeEscritorio) and V3 Postman format (codEscritorio + utilizaDocumentosIniciais)
+        if (regCodEsc) {
+          const body: any = { codEscritorio: regCodEsc };
+          if (utilizaDocumentosIniciais !== undefined) body.utilizaDocumentosIniciais = utilizaDocumentosIniciais;
+          result = await apiRequest(service.service_url, '/CadastrarEscritorio', jwtToken, 'POST', body);
+        } else {
+          if (!nomeEscritorio) throw new Error('nomeEscritorio or codEscritorio is required');
+          result = await apiRequest(service.service_url, '/CadastrarEscritorio', jwtToken, 'POST', { nomeEscritorio, codAbrangencia: codAbrangencia || 1 });
+        }
         break;
       }
 
