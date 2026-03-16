@@ -352,7 +352,7 @@ const publicationEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "rest-cadastrar-termo-validacao", label: "Pub - Cadastrar TermoValidação", method: "POST", path: "manage-search-terms",
+    id: "rest-cadastrar-termo-validacao", label: "Cadastrar TermoValidação", method: "POST", path: "manage-search-terms",
     category: "management", authType: "jwt",
     description: "Cadastra termos de validação para nomes e variações.",
     params: [],
