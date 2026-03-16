@@ -305,7 +305,7 @@ const publicationEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "rest-consultar-nomes", label: "Pub - Consultar Nomes", method: "POST", path: "manage-search-terms",
+    id: "rest-consultar-nomes", label: "Consultar Nomes", method: "GET", path: "manage-search-terms",
     category: "management", authType: "jwt",
     description: "Consulta nomes cadastrados por código de escritório. Use codUltimoNome para paginação.",
     params: [],
