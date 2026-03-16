@@ -334,9 +334,9 @@ serve(async (req) => {
 
         const metadata = {
           codTipoConsulta: codTipoConsulta || 1,
-          listInstancias: listInstancias || [1],
-          listAbrangencias: abrangencias || [],
-          qtdDiasCapturaRetroativa: qtdDiasCapturaRetroativa || null,
+          listInstancias: listInstancias || [4],
+          listAbrangencias: abrangencias || DEFAULT_ABRANGENCIAS,
+          qtdDiasCapturaRetroativa: qtdDiasCapturaRetroativa || 90,
           listDocumentos: listDocumentos || [],
           listOab: listOab || [],
         };
