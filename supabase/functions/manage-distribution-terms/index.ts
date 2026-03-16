@@ -120,6 +120,27 @@ serve(async (req) => {
     let result;
 
     switch (action) {
+      case 'rest_autenticar': {
+        // Just return the JWT token for isolated auth testing
+        result = { tokenJWT: jwtToken };
+        break;
+      }
+
+      case 'rest_buscar_distribuicoes': {
+        const { codEscritorio: codEscBusca } = params;
+        const escCode = codEscBusca || partnerOfficeCode;
+        try {
+          result = await apiRequest(service.service_url, `/BuscaNovasDistribuicoes?codEscritorio=${escCode}`, jwtToken);
+        } catch (e: any) {
+          if (e.apiStatus === 400 || e.message?.includes('400')) {
+            result = [];
+          } else {
+            throw e;
+          }
+        }
+        break;
+      }
+
       case 'listNames': {
         // Try fetching from API first
         let apiNames: any[] = [];
