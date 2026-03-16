@@ -173,7 +173,7 @@ const distributionEndpoints: EndpointDef[] = [
   },
   // Gerenciamento REST V3
   {
-    id: "dis-autenticar", label: "Dis - Autenticação", method: "POST", path: "manage-distribution-terms",
+    id: "dis-autenticar", label: "Autenticação", method: "POST", path: "manage-distribution-terms",
     category: "management", authType: "jwt",
     description: "Autentica na API REST V3 de Distribuições e retorna o tokenJWT.",
     params: [],
@@ -182,7 +182,7 @@ const distributionEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "dis-cadastrar-escritorio", label: "Dis - Cadastrar Escritório", method: "POST", path: "manage-distribution-terms",
+    id: "dis-cadastrar-escritorio", label: "Cadastrar Escritório", method: "POST", path: "manage-distribution-terms",
     category: "management", authType: "jwt",
     description: "Cadastra um novo escritório para monitoramento de distribuições (CadastrarEscritorio).",
     params: [],
@@ -193,7 +193,7 @@ const distributionEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "dis-ativar-escritorio", label: "Dis - Ativar Escritório", method: "POST", path: "manage-distribution-terms",
+    id: "dis-ativar-escritorio", label: "Ativar Escritório", method: "POST", path: "manage-distribution-terms",
     category: "management", authType: "jwt",
     description: "Ativa um escritório de distribuição na Solucionare (AtivarEscritorio).",
     params: [],
@@ -203,7 +203,7 @@ const distributionEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "dis-cadastrar-termo", label: "Dis - Cadastrar Termo", method: "POST", path: "manage-distribution-terms",
+    id: "dis-cadastrar-termo", label: "Cadastrar Termo", method: "POST", path: "manage-distribution-terms",
     category: "management", authType: "jwt",
     description: "Cadastra um novo nome/termo para monitoramento de distribuições (CadastrarNome).\nInstância fixa: Todas (4). Abrangências preenchidas automaticamente.",
     params: [],
@@ -215,7 +215,7 @@ const distributionEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "dis-desativar-termo", label: "Dis - Desativar Termo", method: "POST", path: "manage-distribution-terms",
+    id: "dis-desativar-termo", label: "Desativar Termo", method: "POST", path: "manage-distribution-terms",
     category: "management", authType: "jwt",
     description: "Desativa um nome/termo de distribuição na Solucionare (DesativarNome).",
     params: [],
@@ -225,7 +225,7 @@ const distributionEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "dis-buscar-distribuicoes", label: "Dis - Buscar Distribuições", method: "POST", path: "manage-distribution-terms",
+    id: "dis-buscar-distribuicoes", label: "Buscar Distribuições", method: "GET", path: "manage-distribution-terms",
     category: "management", authType: "jwt",
     description: "Busca novas distribuições diretamente da API Solucionare (BuscaNovasDistribuicoes).",
     params: [],
@@ -235,7 +235,7 @@ const distributionEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "dis-buscar-nomes", label: "Dis - Buscar Nomes Cadastrados", method: "POST", path: "manage-distribution-terms",
+    id: "dis-buscar-nomes", label: "Buscar Nomes Cadastrados", method: "GET", path: "manage-distribution-terms",
     category: "management", authType: "jwt",
     description: "Lista todos os nomes cadastrados na Solucionare (BuscaNomesCadastrados).",
     params: [],
@@ -275,7 +275,7 @@ const publicationEndpoints: EndpointDef[] = [
   },
   // Gerenciamento REST V2
   {
-    id: "rest-autenticar", label: "Pub - Autenticação", method: "POST", path: "manage-search-terms",
+    id: "rest-autenticar", label: "Autenticação", method: "POST", path: "manage-search-terms",
     category: "management", authType: "jwt",
     description: "Autentica na API REST V2 da Solucionare e retorna um tokenJWT.",
     params: [],
@@ -284,7 +284,7 @@ const publicationEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "rest-cadastrar-nome", label: "Pub - Cadastrar Nome", method: "POST", path: "manage-search-terms",
+    id: "rest-cadastrar-nome", label: "Cadastrar Nome", method: "POST", path: "manage-search-terms",
     category: "management", authType: "jwt",
     description: "Cadastra um novo nome (termo) para monitoramento de publicações. Retorna o codNome gerado.",
     params: [],
@@ -295,7 +295,7 @@ const publicationEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "rest-excluir-nome", label: "Pub - Excluir Nome", method: "POST", path: "manage-search-terms",
+    id: "rest-excluir-nome", label: "Excluir Nome", method: "POST", path: "manage-search-terms",
     category: "management", authType: "jwt",
     description: "Exclui um nome (termo) pelo codNome gerado no cadastro.",
     params: [],
@@ -305,7 +305,7 @@ const publicationEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "rest-consultar-nomes", label: "Pub - Consultar Nomes", method: "POST", path: "manage-search-terms",
+    id: "rest-consultar-nomes", label: "Consultar Nomes", method: "GET", path: "manage-search-terms",
     category: "management", authType: "jwt",
     description: "Consulta nomes cadastrados por código de escritório. Use codUltimoNome para paginação.",
     params: [],
@@ -316,7 +316,7 @@ const publicationEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "rest-cadastrar-oab", label: "Pub - Cadastrar OAB", method: "POST", path: "manage-search-terms",
+    id: "rest-cadastrar-oab", label: "Cadastrar OAB", method: "POST", path: "manage-search-terms",
     category: "management", authType: "jwt",
     description: "Cadastra uma OAB vinculada a um codNome. Número com 6 dígitos, letra 's' fixo.",
     params: [],
@@ -329,7 +329,7 @@ const publicationEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "rest-consultar-oab", label: "Pub - Consultar OAB", method: "POST", path: "manage-search-terms",
+    id: "rest-consultar-oab", label: "Consultar OAB", method: "GET", path: "manage-search-terms",
     category: "management", authType: "jwt",
     description: "Consulta OABs vinculadas a um codNome. Use codUltimoOab para paginação.",
     params: [],
@@ -340,7 +340,7 @@ const publicationEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "rest-cadastrar-variacao", label: "Pub - Cadastrar Variação", method: "POST", path: "manage-search-terms",
+    id: "rest-cadastrar-variacao", label: "Cadastrar Variação", method: "POST", path: "manage-search-terms",
     category: "management", authType: "jwt",
     description: "Cadastra variações de um nome para ampliar o monitoramento.",
     params: [],
@@ -352,7 +352,7 @@ const publicationEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "rest-cadastrar-termo-validacao", label: "Pub - Cadastrar TermoValidação", method: "POST", path: "manage-search-terms",
+    id: "rest-cadastrar-termo-validacao", label: "Cadastrar TermoValidação", method: "POST", path: "manage-search-terms",
     category: "management", authType: "jwt",
     description: "Cadastra termos de validação para nomes e variações.",
     params: [],
@@ -363,7 +363,7 @@ const publicationEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "rest-cadastrar-abrangencia", label: "Pub - Cadastrar Abrangência", method: "POST", path: "manage-search-terms",
+    id: "rest-cadastrar-abrangencia", label: "Cadastrar Abrangência", method: "POST", path: "manage-search-terms",
     category: "management", authType: "jwt",
     description: "Cadastra abrangências (diários) para um nome. Use os códigos do catálogo.",
     params: [],
@@ -374,7 +374,7 @@ const publicationEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "rest-buscar-catalogo", label: "Pub - Buscar Catálogo", method: "POST", path: "manage-search-terms",
+    id: "rest-buscar-catalogo", label: "Buscar Catálogo", method: "GET", path: "manage-search-terms",
     category: "management", authType: "jwt",
     description: "Busca o catálogo completo de diários/abrangências disponíveis na Solucionare.",
     params: [],
@@ -383,7 +383,7 @@ const publicationEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "rest-buscar-publicacoes", label: "Pub - Buscar Publicações", method: "POST", path: "manage-search-terms",
+    id: "rest-buscar-publicacoes", label: "Buscar Publicações", method: "GET", path: "manage-search-terms",
     category: "management", authType: "jwt",
     description: "Busca publicações diretamente da API REST V2 por código de escritório.",
     params: [],
