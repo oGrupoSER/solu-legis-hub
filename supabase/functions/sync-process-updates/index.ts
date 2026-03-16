@@ -319,8 +319,14 @@ async function syncGroupers(client: RestClient, supabase: any, service: any, off
       return 0;
     }
 
-    // DISABLED: Do not confirm receipt - legacy system is the official confirmer
-    console.log(`Skipping confirmation for ${data.length} groupers (legacy system handles confirmations)`);
+    // Confirm receipt if enabled
+    const { data: svcData } = await supabase.from('partner_services').select('confirm_receipt').eq('id', service.id).single();
+    if (svcData?.confirm_receipt) {
+      const grouperIds = data.map((g: any) => g.codAgrupador).filter(Boolean);
+      if (grouperIds.length > 0) await confirmReceipt(client, supabase, 'groupers', grouperIds);
+    } else {
+      console.log(`Skipping confirmation for ${data.length} groupers (confirm_receipt disabled)`);
+    }
 
     return data.length;
   } catch (error) {
