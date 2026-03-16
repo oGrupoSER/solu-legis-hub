@@ -24,6 +24,25 @@ interface ServiceConfig {
   token: string;
 }
 
+// Default abrangências list (all Brazilian courts)
+const DEFAULT_ABRANGENCIAS = [
+  "CJM-1","CJM-10","CJM-11","CJM-12","CJM-2","CJM-3","CJM-4","CJM-5","CJM-6","CJM-7","CJM-8","CJM-9",
+  "JF-AC","JF-AL","JF-AM","JF-AP","JF-BA","JF-CE","JF-DF","JF-ES","JF-GO","JF-MA","JF-MG","JF-MS","JF-MT",
+  "JF-PA","JF-PB","JF-PE","JF-PI","JF-PR","JF-RJ","JF-RN","JF-RO","JF-RR","JF-RS","JF-SC","JF-SE","JF-SP","JF-TO",
+  "STF","STJ",
+  "TJ-AC","TJ-AL","TJ-AM","TJ-AP","TJ-BA","TJ-CE","TJ-DF","TJ-DFT","TJ-ES","TJ-GO","TJ-MA","TJ-MG",
+  "TJM-MG","TJM-RS","TJ-MS","TJM-SP","TJ-MT","TJ-PA","TJ-PB","TJ-PE","TJ-PI","TJ-PR","TJ-RJ","TJ-RN","TJ-RO","TJ-RR",
+  "TJ-RS","TJ-SC","TJ-SE","TJ-SP","TJ-TO",
+  "TRE-AC","TRE-AL","TRE-AM","TRE-AP","TRE-BA","TRE-CE","TRE-DF","TRE-DFT","TRE-ES","TRE-GO","TRE-MA","TRE-MG",
+  "TRE-MS","TRE-MT","TRE-PA","TRE-PB","TRE-PE","TRE-PI","TRE-PR","TRE-RJ","TRE-RN","TRE-RO","TRE-RR","TRE-RS",
+  "TRE-SC","TRE-SE","TRE-SP","TRE-TO",
+  "TRF-1","TRF-2","TRF-3","TRF-4","TRF-5","TRF-6",
+  "TRT-1","TRT-10","TRT-11","TRT-12","TRT-13","TRT-14","TRT-15","TRT-16","TRT-17","TRT-18","TRT-19",
+  "TRT-2","TRT-20","TRT-21","TRT-22","TRT-23","TRT-24",
+  "TRT-3","TRT-4","TRT-5","TRT-6","TRT-7","TRT-8","TRT-9",
+  "TSE","TST"
+];
+
 async function authenticate(service: ServiceConfig): Promise<string> {
   const response = await fetch(`${service.service_url}/AutenticaAPI`, {
     method: 'POST',
@@ -120,6 +139,27 @@ serve(async (req) => {
     let result;
 
     switch (action) {
+      case 'rest_autenticar': {
+        // Just return the JWT token for isolated auth testing
+        result = { tokenJWT: jwtToken };
+        break;
+      }
+
+      case 'rest_buscar_distribuicoes': {
+        const { codEscritorio: codEscBusca } = params;
+        const escCode = codEscBusca || partnerOfficeCode;
+        try {
+          result = await apiRequest(service.service_url, `/BuscaNovasDistribuicoes?codEscritorio=${escCode}`, jwtToken);
+        } catch (e: any) {
+          if (e.apiStatus === 400 || e.message?.includes('400')) {
+            result = [];
+          } else {
+            throw e;
+          }
+        }
+        break;
+      }
+
       case 'listNames': {
         // Try fetching from API first
         let apiNames: any[] = [];
@@ -294,9 +334,9 @@ serve(async (req) => {
 
         const metadata = {
           codTipoConsulta: codTipoConsulta || 1,
-          listInstancias: listInstancias || [1],
-          listAbrangencias: abrangencias || [],
-          qtdDiasCapturaRetroativa: qtdDiasCapturaRetroativa || null,
+          listInstancias: listInstancias || [4],
+          listAbrangencias: abrangencias || DEFAULT_ABRANGENCIAS,
+          qtdDiasCapturaRetroativa: qtdDiasCapturaRetroativa || 90,
           listDocumentos: listDocumentos || [],
           listOab: listOab || [],
         };
@@ -450,16 +490,23 @@ serve(async (req) => {
       }
 
       case 'registerOffice': {
-        const { nomeEscritorio, codAbrangencia } = params;
-        if (!nomeEscritorio) throw new Error('nomeEscritorio is required');
-        result = await apiRequest(service.service_url, '/CadastrarEscritorio', jwtToken, 'POST', { nomeEscritorio, codAbrangencia: codAbrangencia || 1 });
+        const { nomeEscritorio, codAbrangencia, codEscritorio: regCodEsc, utilizaDocumentosIniciais } = params;
+        // Support both legacy (nomeEscritorio) and V3 Postman format (codEscritorio + utilizaDocumentosIniciais)
+        if (regCodEsc) {
+          const body: any = { codEscritorio: regCodEsc };
+          if (utilizaDocumentosIniciais !== undefined) body.utilizaDocumentosIniciais = utilizaDocumentosIniciais;
+          result = await apiRequest(service.service_url, '/CadastrarEscritorio', jwtToken, 'POST', body);
+        } else {
+          if (!nomeEscritorio) throw new Error('nomeEscritorio or codEscritorio is required');
+          result = await apiRequest(service.service_url, '/CadastrarEscritorio', jwtToken, 'POST', { nomeEscritorio, codAbrangencia: codAbrangencia || 1 });
+        }
         break;
       }
 
       case 'activateOffice': {
         const { codEscritorio: codEsc } = params;
         if (!codEsc) throw new Error('codEscritorio is required');
-        result = await apiRequest(service.service_url, `/AtivarEscritorio?codEscritorio=${codEsc}`, jwtToken, 'PUT');
+        result = await apiRequest(service.service_url, '/AtivarEscritorio', jwtToken, 'POST', { codEscritorio: codEsc });
         break;
       }
 
