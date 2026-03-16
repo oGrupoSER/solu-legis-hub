@@ -988,149 +988,196 @@ const ApiTesting = () => {
 
               {/* Right: Params + Execute + Response + Code */}
               <div className="space-y-4">
-
-                {/* Query Parameters */}
-                {selectedEndpoint.params.length > 0 && (
+                {!selectedEndpoint ? (
                   <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-lg">Parâmetros de Query</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {selectedEndpoint.params.map((p) => (
-                        <div key={p.key} className="space-y-1">
-                          <Label className="text-xs">
-                            {p.label} <span className="text-muted-foreground">({p.key})</span>
-                            {p.required && <span className="text-destructive ml-1">*</span>}
-                          </Label>
-                          <Input
-                            type={p.type || "text"}
-                            value={paramValues[p.key] || ""}
-                            onChange={(e) => setParamValues({ ...paramValues, [p.key]: e.target.value })}
-                            placeholder={p.placeholder}
-                          />
-                        </div>
-                      ))}
+                    <CardContent className="py-16">
+                      <div className="text-center text-muted-foreground">
+                        <FileText className="h-16 w-16 mx-auto mb-4 opacity-20" />
+                        <p className="text-lg font-medium">Selecione um endpoint</p>
+                        <p className="text-sm mt-1">Escolha um endpoint na lista à esquerda para começar</p>
+                      </div>
                     </CardContent>
                   </Card>
-                )}
-
-                {/* Body Parameters */}
-                {selectedEndpoint.bodyParams && selectedEndpoint.bodyParams.length > 0 && (
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        Body JSON
-                        <Badge variant="outline" className="text-xs font-normal">POST</Badge>
-                      </CardTitle>
-                      <CardDescription>Preencha os campos do body da requisição</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      {selectedEndpoint.bodyParams.map((p) => (
-                        <div key={p.key} className="space-y-1">
-                          <Label className="text-xs">
-                            {p.label} <span className="text-muted-foreground">({p.key.replace("data.", "")})</span>
-                            {p.required && <span className="text-destructive ml-1">*</span>}
-                          </Label>
-                          {(p.key === "serviceId" || p.key === "service_id") ? (
-                            <Select
-                              value={bodyValues[p.key] || ""}
-                              onValueChange={(val) => setBodyValues({ ...bodyValues, [p.key]: val })}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Selecione um serviço" />
-                              </SelectTrigger>
+                ) : (
+                  <>
+                    {/* Token selector for non-JWT endpoints */}
+                    {selectedEndpoint.authType !== "jwt" && (
+                      <Card>
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-lg">Autenticação</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="flex gap-2">
+                            <Select onValueChange={(v) => setToken(v)}>
+                              <SelectTrigger className="flex-1"><SelectValue placeholder="Selecione um token..." /></SelectTrigger>
                               <SelectContent>
-                                {getFilteredServices().map((s) => (
-                                  <SelectItem key={s.id} value={s.id}>
-                                    {(s.partners as any)?.name || "Parceiro"} — {s.service_name}
+                                {tokens?.map((t: any) => (
+                                  <SelectItem key={t.id} value={t.token}>
+                                    <div className="flex items-center gap-2">
+                                      {t.name} <span className="text-muted-foreground text-xs">({t.client_systems?.name || "sem cliente"})</span>
+                                      {t.is_blocked && <Badge variant="destructive" className="text-xs">Bloqueado</Badge>}
+                                    </div>
                                   </SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
-                          ) : (
-                            <Input
-                              type={p.type || "text"}
-                              value={bodyValues[p.key] || ""}
-                              onChange={(e) => setBodyValues({ ...bodyValues, [p.key]: e.target.value })}
-                              placeholder={p.placeholder}
-                            />
-                          )}
-                        </div>
-                      ))}
-                    </CardContent>
-                  </Card>
-                )}
-
-                <Button onClick={handleTest} disabled={isLoading} className="w-full gap-2">
-                  <Play className="h-4 w-4" />{isLoading ? "Executando..." : "Executar Requisição"}
-                </Button>
-
-                {/* Response */}
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="flex items-center gap-2"><FileText className="h-5 w-5" />Resposta</CardTitle>
-                      {response && (
-                        <div className="flex items-center gap-2">
-                          <Badge variant={response.status >= 200 && response.status < 300 ? "default" : "destructive"}>{response.status} {response.statusText}</Badge>
-                          <Badge variant="outline">{responseTime}ms</Badge>
-                        </div>
-                      )}
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    {!response ? (
-                      <div className="text-center py-12 text-muted-foreground">
-                        <FileText className="h-12 w-12 mx-auto mb-4 opacity-20" />
-                        <p>Execute uma requisição para ver a resposta</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {response.headers?.["X-RateLimit-Limit"] && (
-                          <div className="flex gap-2 text-xs">
-                            <Badge variant="outline">Limit: {response.headers["X-RateLimit-Limit"]}</Badge>
-                            <Badge variant="outline">Remaining: {response.headers["X-RateLimit-Remaining"]}</Badge>
+                            <Input value={token} onChange={(e) => setToken(e.target.value)} placeholder="Ou cole um token..." className="flex-1" type="password" />
                           </div>
-                        )}
-                        {response.data?.batch?.pending_confirmation && (
-                          <div className="bg-destructive/10 border border-destructive/30 rounded-md p-3 text-sm">
-                            <strong>⚠️ Lote pendente de confirmação.</strong> Confirme o recebimento antes de solicitar novos dados.
-                          </div>
-                        )}
-                        <div className="relative">
-                          <pre className="bg-muted p-4 rounded-lg text-xs overflow-x-auto max-h-[600px]">
-                            <code>{JSON.stringify(response.data, null, 2)}</code>
-                          </pre>
-                          <Button variant="ghost" size="icon" className="absolute top-2 right-2" onClick={() => copy(JSON.stringify(response.data, null, 2))}><Copy className="h-4 w-4" /></Button>
-                        </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {selectedEndpoint.authType === "jwt" && (
+                      <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-3 text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
+                        <Shield className="h-4 w-4 shrink-0" />
+                        Este endpoint usa autenticação JWT do usuário logado (automático)
                       </div>
                     )}
-                  </CardContent>
-                </Card>
 
-                {/* Code examples */}
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="flex items-center gap-2 text-lg"><Code className="h-4 w-4" />Exemplos de Código</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <Tabs defaultValue="curl">
-                      <TabsList className="grid w-full grid-cols-3">
-                        <TabsTrigger value="curl">cURL</TabsTrigger>
-                        <TabsTrigger value="javascript">JavaScript</TabsTrigger>
-                        <TabsTrigger value="python">Python</TabsTrigger>
-                      </TabsList>
-                      {(["curl", "javascript", "python"] as const).map((lang) => (
-                        <TabsContent key={lang} value={lang}>
-                          <div className="relative">
-                            <pre className="bg-muted p-4 rounded-lg text-xs overflow-x-auto"><code>{codeExamples[lang]}</code></pre>
-                            <Button variant="ghost" size="icon" className="absolute top-2 right-2" onClick={() => copy(codeExamples[lang])}><Copy className="h-4 w-4" /></Button>
+                    {/* Query Parameters */}
+                    {selectedEndpoint.params.length > 0 && (
+                      <Card>
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-lg">Parâmetros de Query</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          {selectedEndpoint.params.map((p) => (
+                            <div key={p.key} className="space-y-1">
+                              <Label className="text-xs">
+                                {p.label} <span className="text-muted-foreground">({p.key})</span>
+                                {p.required && <span className="text-destructive ml-1">*</span>}
+                              </Label>
+                              <Input
+                                type={p.type || "text"}
+                                value={paramValues[p.key] || ""}
+                                onChange={(e) => setParamValues({ ...paramValues, [p.key]: e.target.value })}
+                                placeholder={p.placeholder}
+                              />
+                            </div>
+                          ))}
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Body Parameters */}
+                    {selectedEndpoint.bodyParams && selectedEndpoint.bodyParams.length > 0 && (
+                      <Card>
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-lg flex items-center gap-2">
+                            Body JSON
+                            <Badge variant="outline" className="text-xs font-normal">POST</Badge>
+                          </CardTitle>
+                          <CardDescription>Preencha os campos do body da requisição</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          {selectedEndpoint.bodyParams.map((p) => (
+                            <div key={p.key} className="space-y-1">
+                              <Label className="text-xs">
+                                {p.label} <span className="text-muted-foreground">({p.key.replace("data.", "")})</span>
+                                {p.required && <span className="text-destructive ml-1">*</span>}
+                              </Label>
+                              {(p.key === "serviceId" || p.key === "service_id") ? (
+                                <Select
+                                  value={bodyValues[p.key] || ""}
+                                  onValueChange={(val) => setBodyValues({ ...bodyValues, [p.key]: val })}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Selecione um serviço" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {getFilteredServices().map((s) => (
+                                      <SelectItem key={s.id} value={s.id}>
+                                        {(s.partners as any)?.name || "Parceiro"} — {s.service_name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <Input
+                                  type={p.type || "text"}
+                                  value={bodyValues[p.key] || ""}
+                                  onChange={(e) => setBodyValues({ ...bodyValues, [p.key]: e.target.value })}
+                                  placeholder={p.placeholder}
+                                />
+                              )}
+                            </div>
+                          ))}
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    <Button onClick={handleTest} disabled={isLoading} className="w-full gap-2">
+                      <Play className="h-4 w-4" />{isLoading ? "Executando..." : "Executar Requisição"}
+                    </Button>
+
+                    {/* Response */}
+                    <Card>
+                      <CardHeader>
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="flex items-center gap-2"><FileText className="h-5 w-5" />Resposta</CardTitle>
+                          {response && (
+                            <div className="flex items-center gap-2">
+                              <Badge variant={response.status >= 200 && response.status < 300 ? "default" : "destructive"}>{response.status} {response.statusText}</Badge>
+                              <Badge variant="outline">{responseTime}ms</Badge>
+                            </div>
+                          )}
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        {!response ? (
+                          <div className="text-center py-12 text-muted-foreground">
+                            <FileText className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                            <p>Execute uma requisição para ver a resposta</p>
                           </div>
-                        </TabsContent>
-                      ))}
-                    </Tabs>
-                  </CardContent>
-                </Card>
+                        ) : (
+                          <div className="space-y-3">
+                            {response.headers?.["X-RateLimit-Limit"] && (
+                              <div className="flex gap-2 text-xs">
+                                <Badge variant="outline">Limit: {response.headers["X-RateLimit-Limit"]}</Badge>
+                                <Badge variant="outline">Remaining: {response.headers["X-RateLimit-Remaining"]}</Badge>
+                              </div>
+                            )}
+                            {response.data?.batch?.pending_confirmation && (
+                              <div className="bg-destructive/10 border border-destructive/30 rounded-md p-3 text-sm">
+                                <strong>⚠️ Lote pendente de confirmação.</strong> Confirme o recebimento antes de solicitar novos dados.
+                              </div>
+                            )}
+                            <div className="relative">
+                              <pre className="bg-muted p-4 rounded-lg text-xs overflow-x-auto max-h-[600px]">
+                                <code>{JSON.stringify(response.data, null, 2)}</code>
+                              </pre>
+                              <Button variant="ghost" size="icon" className="absolute top-2 right-2" onClick={() => copy(JSON.stringify(response.data, null, 2))}><Copy className="h-4 w-4" /></Button>
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    {/* Code examples */}
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-lg"><Code className="h-4 w-4" />Exemplos de Código</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <Tabs defaultValue="curl">
+                          <TabsList className="grid w-full grid-cols-3">
+                            <TabsTrigger value="curl">cURL</TabsTrigger>
+                            <TabsTrigger value="javascript">JavaScript</TabsTrigger>
+                            <TabsTrigger value="python">Python</TabsTrigger>
+                          </TabsList>
+                          {(["curl", "javascript", "python"] as const).map((lang) => (
+                            <TabsContent key={lang} value={lang}>
+                              <div className="relative">
+                                <pre className="bg-muted p-4 rounded-lg text-xs overflow-x-auto"><code>{codeExamples[lang]}</code></pre>
+                                <Button variant="ghost" size="icon" className="absolute top-2 right-2" onClick={() => copy(codeExamples[lang])}><Copy className="h-4 w-4" /></Button>
+                              </div>
+                            </TabsContent>
+                          ))}
+                        </Tabs>
+                      </CardContent>
+                    </Card>
+                  </>
+                )}
               </div>
             </div>
           </TabsContent>
