@@ -329,11 +329,13 @@ async function processPublications(
         continue;
       }
 
-      // Extract publication data according to Solucionare API docs (pages 13-14)
-      const codPublicacao = pub.codPublicacao; // Unique ID
-      const content = pub.conteudoPublicacao || ''; // Full content
-      const gazetteName = pub.nomeDiario || ''; // Gazette name
-      const publicationDate = pub.dataPublicacao ? String(pub.dataPublicacao).slice(0, 10) : null; // YYYY-MM-DD
+      // Extract publication data according to Solucionare API docs
+      const codPublicacao = pub.codPublicacao;
+      const content = pub.conteudoPublicacao || '';
+      const gazetteName = pub.nomeDiario || '';
+      const publicationDate = pub.dataPublicacao ? String(pub.dataPublicacao).slice(0, 10) : null;
+      const nomePesquisado = pub.nomePesquisado || null;
+      const termoPesquisado = pub.termoPesquisado || nomePesquisado || null;
       
       // Skip if no codPublicacao (required for deduplication)
       if (!codPublicacao) {
@@ -341,10 +343,17 @@ async function processPublications(
         continue;
       }
       
-      // Find matching terms (local matching)
-      const matchedTerms = terms
-        .filter((term) => content.toLowerCase().includes(term.term.toLowerCase()))
-        .map((term) => term.term);
+      // Build matched_terms: API nomePesquisado as primary, local matching as complement
+      const matchedTerms: string[] = [];
+      if (nomePesquisado) {
+        matchedTerms.push(nomePesquisado);
+      }
+      // Local matching as complement
+      for (const term of terms) {
+        if (content.toLowerCase().includes(term.term.toLowerCase()) && !matchedTerms.includes(term.term)) {
+          matchedTerms.push(term.term);
+        }
+      }
       
       publicationsToInsert.push({
         cod_publicacao: codPublicacao,
@@ -354,6 +363,32 @@ async function processPublications(
         content,
         publication_date: publicationDate,
         matched_terms: matchedTerms,
+        nome_pesquisado: nomePesquisado,
+        termo_pesquisado: termoPesquisado,
+        // Map additional metadata fields from API
+        cod_escritorio: pub.codEscritorio || null,
+        hash_publicacao: pub.hashPublicacao || null,
+        vara: pub.vara || null,
+        comarca: pub.comarca || null,
+        orgao: pub.orgao || null,
+        sigla_diario: pub.siglaDiario || null,
+        esfera_diario: pub.esferaDiario || null,
+        num_edicao: pub.numEdicao || null,
+        num_processo: pub.numProcesso || null,
+        oab: pub.oab || null,
+        estado: pub.estado || null,
+        uf: pub.uf || pub.estado || null,
+        nome_caderno: pub.nomeCaderno || null,
+        cod_mapa_diario: pub.codMapaDiario || null,
+        area: pub.area || null,
+        data_disponibilizacao: pub.dataDisponibilizacao || null,
+        data_vsap: pub.dataVsap || null,
+        id_nome: pub.idNome || null,
+        complemento: pub.complemento ?? null,
+        controle_pg: pub.controlePg || null,
+        tipo_fonte_conteudo: pub.tipoFonteConteudo || null,
+        perfil_contratante: pub.perfilContratante || null,
+        outros_termos: pub.outrosTermos || null,
         raw_data: pub,
       });
       
