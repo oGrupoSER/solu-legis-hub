@@ -814,7 +814,7 @@ const ApiTesting = () => {
         <CardContent className="pt-6">
           <div className="flex gap-4 items-end">
             <div className="flex-1 space-y-2">
-              <Label>Token de Autenticação <span className="text-xs text-muted-foreground">(para endpoints de consulta e integração)</span></Label>
+              <Label>Token de Autenticação <span className="text-xs text-muted-foreground">(para endpoints de consulta)</span></Label>
               <div className="flex gap-2">
                 <Select onValueChange={(v) => setToken(v)}>
                   <SelectTrigger className="flex-1"><SelectValue placeholder="Selecione um token..." /></SelectTrigger>
