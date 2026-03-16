@@ -845,14 +845,13 @@ const ApiTesting = () => {
       {/* Service tabs */}
       <Tabs value={serviceTab} onValueChange={(v) => {
         setServiceTab(v);
-        const eps = v === "processes" ? processEndpoints : v === "distributions" ? distributionEndpoints : v === "integration" ? integrationEndpoints : publicationEndpoints;
+        const eps = v === "processes" ? processEndpoints : v === "distributions" ? distributionEndpoints : publicationEndpoints;
         selectEndpoint(eps[0]);
       }}>
         <TabsList>
           <TabsTrigger value="processes" className="gap-2">{tabIcons.processes} Processos</TabsTrigger>
           <TabsTrigger value="distributions" className="gap-2">{tabIcons.distributions} Distribuições</TabsTrigger>
           <TabsTrigger value="publications" className="gap-2">{tabIcons.publications} Publicações</TabsTrigger>
-          <TabsTrigger value="integration" className="gap-2">{tabIcons.integration} Integração</TabsTrigger>
         </TabsList>
 
         {allTabs.map((tab) => (
