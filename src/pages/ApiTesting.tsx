@@ -922,7 +922,7 @@ const ApiTesting = () => {
           <button
             key={ep.id}
             onClick={() => selectEndpoint(ep)}
-            className={`w-full text-left p-3 rounded-lg border transition-colors ${selectedEndpoint.id === ep.id ? "bg-primary/10 border-primary" : "hover:bg-muted"}`}
+            className={`w-full text-left p-3 rounded-lg border transition-colors ${selectedEndpoint?.id === ep.id ? "bg-primary/10 border-primary" : "hover:bg-muted"}`}
           >
             <div className="flex items-center gap-2">
               <Badge 
