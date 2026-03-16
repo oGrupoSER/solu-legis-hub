@@ -557,30 +557,10 @@ const ApiTesting = () => {
   const buildBody = (): Record<string, any> | null => {
     if (!selectedEndpoint.bodyParams?.length && !managementActionMap[selectedEndpoint.id]) return null;
     
-    const isIntegration = selectedEndpoint.path === "api-management";
     const action = managementActionMap[selectedEndpoint.id];
     
-    if (isIntegration) {
-      // api-management uses nested { action, data: { ... } }
-      const data: Record<string, any> = {};
-      for (const p of (selectedEndpoint.bodyParams || [])) {
-        const val = bodyValues[p.key];
-        if (!val && !p.required) continue;
-        // Strip "data." prefix for nesting
-        const actualKey = p.key.startsWith("data.") ? p.key.slice(5) : p.key;
-        if (p.type === "number") {
-          data[actualKey] = val ? Number(val) : undefined;
-        } else if (val && (val.startsWith("[") || val.startsWith("{"))) {
-          try { data[actualKey] = JSON.parse(val); } catch { data[actualKey] = val; }
-        } else {
-          data[actualKey] = val || undefined;
-        }
-      }
-      return { action, data: Object.keys(data).length > 0 ? data : undefined };
-    }
-    
-    // manage-search-terms uses { action, service_id, data: { ... } } for SOAP endpoints
-    const isSearchTermsSoap = selectedEndpoint.path === "manage-search-terms" && selectedEndpoint.id !== "list-pub-terms";
+    // manage-search-terms uses { action, service_id, data: { ... } }
+    const isSearchTerms = selectedEndpoint.path === "manage-search-terms";
     
     const body: Record<string, any> = {};
     if (action) body.action = action;
