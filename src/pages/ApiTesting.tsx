@@ -828,10 +828,10 @@ const ApiTesting = () => {
         const eps = v === "processes" ? processEndpoints : v === "distributions" ? distributionEndpoints : publicationEndpoints;
         selectEndpoint(eps[0]);
       }}>
-        <TabsList>
-          <TabsTrigger value="processes" className="gap-2">{tabIcons.processes} Processos</TabsTrigger>
-          <TabsTrigger value="distributions" className="gap-2">{tabIcons.distributions} Distribuições</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="publications" className="gap-2">{tabIcons.publications} Publicações</TabsTrigger>
+          <TabsTrigger value="distributions" className="gap-2">{tabIcons.distributions} Distribuições</TabsTrigger>
+          <TabsTrigger value="processes" className="gap-2">{tabIcons.processes} Processos</TabsTrigger>
         </TabsList>
 
         {allTabs.map((tab) => (
