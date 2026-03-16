@@ -36,6 +36,14 @@ interface EndpointDef {
 }
 
 // ─── PROCESSOS ────────────────────────────────────────────────
+// Helper: determine service_type filter based on endpoint path
+const getServiceTypeFilter = (path: string): string | null => {
+  if (path.includes("search-terms") || path.includes("publication")) return "terms";
+  if (path.includes("distribution")) return "distributions";
+  if (path.includes("process")) return "processes";
+  return null;
+};
+
 const processEndpoints: EndpointDef[] = [
   // Consulta
   {
@@ -437,6 +445,24 @@ const ApiTesting = () => {
       return data;
     },
   });
+  const { data: partnerServices } = useQuery({
+    queryKey: ["partner-services-playground"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("partner_services")
+        .select("id, service_name, service_type, is_active, partners(name)")
+        .eq("is_active", true);
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const getFilteredServices = () => {
+    if (!partnerServices || !selectedEndpoint) return [];
+    const filterType = getServiceTypeFilter(selectedEndpoint.path);
+    if (!filterType) return partnerServices;
+    return partnerServices.filter((s) => s.service_type === filterType);
+  };
 
   const getEndpointsForTab = () => {
     if (serviceTab === "processes") return processEndpoints;
@@ -803,12 +829,30 @@ const ApiTesting = () => {
                             {p.label} <span className="text-muted-foreground">({p.key.replace("data.", "")})</span>
                             {p.required && <span className="text-destructive ml-1">*</span>}
                           </Label>
-                          <Input
-                            type={p.type || "text"}
-                            value={bodyValues[p.key] || ""}
-                            onChange={(e) => setBodyValues({ ...bodyValues, [p.key]: e.target.value })}
-                            placeholder={p.placeholder}
-                          />
+                          {(p.key === "serviceId" || p.key === "service_id") ? (
+                            <Select
+                              value={bodyValues[p.key] || ""}
+                              onValueChange={(val) => setBodyValues({ ...bodyValues, [p.key]: val })}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecione um serviço" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {getFilteredServices().map((s) => (
+                                  <SelectItem key={s.id} value={s.id}>
+                                    {(s.partners as any)?.name || "Parceiro"} — {s.service_name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Input
+                              type={p.type || "text"}
+                              value={bodyValues[p.key] || ""}
+                              onChange={(e) => setBodyValues({ ...bodyValues, [p.key]: e.target.value })}
+                              placeholder={p.placeholder}
+                            />
+                          )}
                         </div>
                       ))}
                     </CardContent>
