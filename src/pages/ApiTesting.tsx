@@ -844,11 +844,7 @@ const ApiTesting = () => {
                   <CardHeader className="pb-3">
                     <CardTitle className="text-lg flex items-center gap-2">
                       Endpoints
-                      {tab === "integration" && <Badge variant="outline" className="text-[10px] border-blue-500/50 text-blue-600">Token API</Badge>}
                     </CardTitle>
-                    {tab === "integration" && (
-                      <CardDescription>Endpoints para integração sistema-a-sistema via Token de API</CardDescription>
-                    )}
                   </CardHeader>
                   <CardContent>
                     {renderEndpointList(getEndpointsForTab())}
