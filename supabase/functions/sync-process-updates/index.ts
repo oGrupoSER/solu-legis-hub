@@ -692,8 +692,14 @@ async function syncDocuments(client: RestClient, supabase: any, service: any, of
       return 0;
     }
 
-    // DISABLED: Do not confirm receipt - legacy system is the official confirmer
-    console.log(`Skipping confirmation for ${data.length} documents (legacy system handles confirmations)`);
+    // Confirm receipt if enabled
+    const { data: svcData4 } = await supabase.from('partner_services').select('confirm_receipt').eq('id', service.id).single();
+    if (svcData4?.confirm_receipt) {
+      const docIds = data.map((d: any) => d.codDocumento).filter(Boolean);
+      if (docIds.length > 0) await confirmReceipt(client, supabase, 'documents', docIds);
+    } else {
+      console.log(`Skipping confirmation for ${data.length} documents (confirm_receipt disabled)`);
+    }
 
     return data.length;
   } catch (error) {
