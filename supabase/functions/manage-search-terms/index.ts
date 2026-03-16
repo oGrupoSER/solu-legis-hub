@@ -48,18 +48,34 @@ interface ManageRequest {
   action: 'cadastrar_nome' | 'editar_nome' | 'ativar_nome' | 'desativar_nome' | 'excluir_nome' | 'excluir_nome_rest' |
           'cadastrar_escritorio' | 'ativar_escritorio' | 'desativar_escritorio' |
           'listar_nomes' | 'listar_escritorios' | 'sync_all' |
-          'gerar_variacoes' | 'buscar_abrangencias' | 'visualizar_nome';
+          'gerar_variacoes' | 'buscar_abrangencias' | 'visualizar_nome' |
+          'rest_autenticar' | 'rest_cadastrar_nome' | 'rest_excluir_nome' | 'rest_consultar_nomes' |
+          'rest_cadastrar_oab' | 'rest_consultar_oab' | 'rest_cadastrar_variacao' |
+          'rest_cadastrar_termo_validacao' | 'rest_cadastrar_abrangencia' |
+          'rest_buscar_catalogo' | 'rest_buscar_publicacoes';
   data?: {
     nome?: string;
     cod_nome?: number;
+    codNome?: number;
     term_id?: string;
     escritorio?: string;
     cod_escritorio?: number;
+    codEscritorio?: number;
+    codUltimoNome?: number;
+    codUltimoOab?: number;
     instancias?: number[];
     variacoes?: string[];
+    listVariacoes?: string[];
+    variacaoTipoNumProcesso?: boolean;
     termos_bloqueio?: { termo: string; contido: boolean }[];
     abrangencias?: string[];
+    listCodDiarios?: number[];
+    listTermosValidacaoNome?: any[];
+    listTermosValidacaoVariacao?: any[];
     oab?: string;
+    uf?: string;
+    numero?: string;
+    letra?: string;
   };
 }
 
