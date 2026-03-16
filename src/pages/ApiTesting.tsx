@@ -173,7 +173,7 @@ const distributionEndpoints: EndpointDef[] = [
   },
   // Gerenciamento REST V3
   {
-    id: "dis-autenticar", label: "Dis - Autenticação", method: "POST", path: "manage-distribution-terms",
+    id: "dis-autenticar", label: "Autenticação", method: "POST", path: "manage-distribution-terms",
     category: "management", authType: "jwt",
     description: "Autentica na API REST V3 de Distribuições e retorna o tokenJWT.",
     params: [],
