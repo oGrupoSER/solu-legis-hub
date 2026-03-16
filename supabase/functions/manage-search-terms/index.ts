@@ -843,5 +843,141 @@ async function syncAll(soapClient: SoapClient, service: any, officeCode: number)
     stats.errors.push(`Failed to fetch names: ${error instanceof Error ? error.message : 'Unknown'}`);
   }
 
-  return stats;
+
+// ========== REST V2 ACTIONS ==========
+
+const REST_V2_BASE = 'https://atacadoinformacaojudicial.com.br/WebApiPublicacoesV2/api';
+
+async function restApiCall(
+  endpoint: string, method: string, tokenJWT: string,
+  body: any | undefined, serviceId: string, syncLogId: string | null,
+): Promise<any> {
+  const url = `${REST_V2_BASE}${endpoint}`;
+  const startTime = Date.now();
+  console.log(`[REST V2] ${method} ${url}`);
+
+  const options: RequestInit = {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(tokenJWT ? { 'Authorization': `Bearer ${tokenJWT}` } : {}),
+    },
+  };
+  if (body && method !== 'GET') options.body = JSON.stringify(body);
+
+  const response = await fetch(url, options);
+  const durationMs = Date.now() - startTime;
+  const responseText = await response.text();
+
+  console.log(`[REST V2] Response ${response.status} (${durationMs}ms): ${responseText.substring(0, 500)}`);
+
+  try {
+    await supabase.from('api_call_logs').insert({
+      sync_log_id: syncLogId,
+      method, url, call_type: 'REST',
+      partner_service_id: serviceId,
+      request_body: body ? JSON.stringify(body).substring(0, 10000) : null,
+      response_status: response.status,
+      response_status_text: response.statusText,
+      response_summary: responseText.substring(0, 2000),
+      duration_ms: durationMs,
+      error_message: response.ok ? null : responseText.substring(0, 500),
+    });
+  } catch (logErr) {
+    console.warn('Failed to log API call:', logErr);
+  }
+
+  if (!response.ok) throw new Error(`API error ${response.status}: ${responseText.substring(0, 300)}`);
+
+  try { return JSON.parse(responseText); } catch { return responseText; }
+}
+
+async function authenticateRestV2(service: any): Promise<string> {
+  const authResult = await restApiCall(
+    '/Autenticacao/AutenticaAPI', 'POST', '',
+    { nomeRelacional: service.nome_relacional, token: service.token },
+    service.id, null,
+  );
+  const tokenJWT = authResult?.tokenJWT;
+  if (!tokenJWT) throw new Error('Authentication failed: no tokenJWT returned');
+  return tokenJWT;
+}
+
+async function handleRestV2Action(action: string, service: any, officeCode: number, data: any): Promise<any> {
+  // For rest_autenticar, just authenticate and return the token
+  if (action === 'rest_autenticar') {
+    const tokenJWT = await authenticateRestV2(service);
+    return { tokenJWT };
+  }
+
+  // All other REST V2 actions auto-authenticate first
+  const tokenJWT = await authenticateRestV2(service);
+  const codEscritorio = data.codEscritorio || data.cod_escritorio || officeCode;
+
+  switch (action) {
+    case 'rest_cadastrar_nome':
+      return await restApiCall('/Nome/nome_cadastrar', 'POST', tokenJWT,
+        [{ codEscritorio, nome: data.nome }], service.id, null);
+
+    case 'rest_excluir_nome': {
+      const codNome = data.codNome || data.cod_nome;
+      if (!codNome) throw new Error('codNome is required');
+      return await restApiCall('/Nome/nome_excluir', 'POST', tokenJWT,
+        [codNome], service.id, null);
+    }
+
+    case 'rest_consultar_nomes': {
+      const codUltimo = data.codUltimoNome || 1;
+      const url = `/Nome/nome_buscarPorCodEscritorio?codEscritorio=${codEscritorio}&codUltimoNome=${codUltimo}`;
+      return await restApiCall(url, 'GET', tokenJWT, undefined, service.id, null);
+    }
+
+    case 'rest_cadastrar_oab': {
+      const codNome = data.codNome || data.cod_nome;
+      if (!codNome) throw new Error('codNome is required');
+      return await restApiCall('/Oab/oab_Cadastrar', 'POST', tokenJWT,
+        [{ codNome, uf: data.uf || 'SP', numero: (data.numero || '000000').padStart(6, '0'), letra: data.letra || 's' }],
+        service.id, null);
+    }
+
+    case 'rest_consultar_oab': {
+      const codNome = data.codNome || data.cod_nome;
+      if (!codNome) throw new Error('codNome is required');
+      const codUltimo = data.codUltimoOab || 1;
+      return await restApiCall(`/Oab/oab_buscar?codNome=${codNome}&codUltimoOab=${codUltimo}`,
+        'GET', tokenJWT, undefined, service.id, null);
+    }
+
+    case 'rest_cadastrar_variacao': {
+      const codNome = data.codNome || data.cod_nome;
+      if (!codNome) throw new Error('codNome is required');
+      return await restApiCall('/Variacao/variacao_cadastrar', 'POST', tokenJWT,
+        { codNome, listVariacoes: data.listVariacoes || [], variacaoTipoNumProcesso: data.variacaoTipoNumProcesso ?? true },
+        service.id, null);
+    }
+
+    case 'rest_cadastrar_termo_validacao':
+      return await restApiCall('/TermoValidacao/termoValidacao_cadastrar', 'POST', tokenJWT,
+        { listTermosValidacaoNome: data.listTermosValidacaoNome || [], listTermosValidacaoVariacao: data.listTermosValidacaoVariacao || [] },
+        service.id, null);
+
+    case 'rest_cadastrar_abrangencia': {
+      const codNome = data.codNome || data.cod_nome;
+      if (!codNome) throw new Error('codNome is required');
+      return await restApiCall('/Abrangencia/abrangencia_cadastrar', 'POST', tokenJWT,
+        { codNome, listCodDiarios: data.listCodDiarios || [] },
+        service.id, null);
+    }
+
+    case 'rest_buscar_catalogo':
+      return await restApiCall('/Abrangencia/abrangencia_buscarCatalogo', 'GET', tokenJWT,
+        undefined, service.id, null);
+
+    case 'rest_buscar_publicacoes':
+      return await restApiCall(`/Publicacao/publicacao_buscar?codEscritorio=${codEscritorio}`,
+        'GET', tokenJWT, undefined, service.id, null);
+
+    default:
+      throw new Error(`Unknown REST V2 action: ${action}`);
+  }
 }
