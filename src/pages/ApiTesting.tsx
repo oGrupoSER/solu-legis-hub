@@ -905,59 +905,34 @@ const ApiTesting = () => {
   };
 
   const renderEndpointList = (endpoints: EndpointDef[]) => {
-    const queryEps = endpoints.filter(ep => ep.category === "query");
     const mgmtEps = endpoints.filter(ep => ep.category === "management");
 
     return (
       <div className="space-y-2">
-        {/* Query endpoints */}
         <div className="flex items-center gap-2 px-1 pt-1">
-          <Key className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            Consulta
-          </span>
-          <Badge variant="outline" className="text-[10px] px-1.5 py-0">Token</Badge>
+          <Settings className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Gerenciamento</span>
+          <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500/50 text-amber-600">JWT</Badge>
         </div>
-        {queryEps.map((ep) => (
+        {mgmtEps.map((ep) => (
           <button
             key={ep.id}
             onClick={() => selectEndpoint(ep)}
             className={`w-full text-left p-3 rounded-lg border transition-colors ${selectedEndpoint.id === ep.id ? "bg-primary/10 border-primary" : "hover:bg-muted"}`}
           >
             <div className="flex items-center gap-2">
-              <Badge variant={ep.method === "POST" ? "default" : "secondary"} className="text-xs font-mono">{ep.method}</Badge>
+              <Badge 
+                variant={ep.method === "GET" ? "secondary" : "default"} 
+                className={`text-xs font-mono ${ep.method === "GET" ? "bg-blue-100 text-blue-700" : "bg-amber-600"}`}
+              >
+                {ep.method}
+              </Badge>
               <span className="font-medium text-sm">{ep.label}</span>
-              {ep.method === "POST" && ep.category === "query" && <CheckCircle className="h-3.5 w-3.5 text-muted-foreground ml-auto" />}
+              <Shield className="h-3.5 w-3.5 text-amber-500 ml-auto" />
             </div>
             <p className="text-xs text-muted-foreground mt-1">{ep.description}</p>
           </button>
         ))}
-
-        {/* Separator */}
-        {mgmtEps.length > 0 && (
-          <>
-            <Separator className="my-3" />
-            <div className="flex items-center gap-2 px-1">
-              <Settings className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Gerenciamento</span>
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500/50 text-amber-600">JWT</Badge>
-            </div>
-            {mgmtEps.map((ep) => (
-              <button
-                key={ep.id}
-                onClick={() => selectEndpoint(ep)}
-                className={`w-full text-left p-3 rounded-lg border transition-colors ${selectedEndpoint.id === ep.id ? "bg-primary/10 border-primary" : "hover:bg-muted"}`}
-              >
-                <div className="flex items-center gap-2">
-                  <Badge variant="default" className="text-xs font-mono bg-amber-600">{ep.method}</Badge>
-                  <span className="font-medium text-sm">{ep.label}</span>
-                  <Shield className="h-3.5 w-3.5 text-amber-500 ml-auto" />
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">{ep.description}</p>
-              </button>
-            ))}
-          </>
-        )}
       </div>
     );
   };
