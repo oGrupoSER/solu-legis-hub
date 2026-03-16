@@ -828,12 +828,30 @@ const ApiTesting = () => {
                             {p.label} <span className="text-muted-foreground">({p.key.replace("data.", "")})</span>
                             {p.required && <span className="text-destructive ml-1">*</span>}
                           </Label>
-                          <Input
-                            type={p.type || "text"}
-                            value={bodyValues[p.key] || ""}
-                            onChange={(e) => setBodyValues({ ...bodyValues, [p.key]: e.target.value })}
-                            placeholder={p.placeholder}
-                          />
+                          {(p.key === "serviceId" || p.key === "service_id") ? (
+                            <Select
+                              value={bodyValues[p.key] || ""}
+                              onValueChange={(val) => setBodyValues({ ...bodyValues, [p.key]: val })}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecione um serviço" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {getFilteredServices().map((s) => (
+                                  <SelectItem key={s.id} value={s.id}>
+                                    {(s.partners as any)?.name || "Parceiro"} — {s.service_name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Input
+                              type={p.type || "text"}
+                              value={bodyValues[p.key] || ""}
+                              onChange={(e) => setBodyValues({ ...bodyValues, [p.key]: e.target.value })}
+                              placeholder={p.placeholder}
+                            />
+                          )}
                         </div>
                       ))}
                     </CardContent>
