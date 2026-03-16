@@ -487,7 +487,7 @@ serve(async (req) => {
       case 'activateOffice': {
         const { codEscritorio: codEsc } = params;
         if (!codEsc) throw new Error('codEscritorio is required');
-        result = await apiRequest(service.service_url, `/AtivarEscritorio?codEscritorio=${codEsc}`, jwtToken, 'PUT');
+        result = await apiRequest(service.service_url, '/AtivarEscritorio', jwtToken, 'POST', { codEscritorio: codEsc });
         break;
       }
 
