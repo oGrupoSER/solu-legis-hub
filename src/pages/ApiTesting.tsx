@@ -383,7 +383,7 @@ const publicationEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "rest-buscar-publicacoes", label: "Pub - Buscar Publicações", method: "POST", path: "manage-search-terms",
+    id: "rest-buscar-publicacoes", label: "Buscar Publicações", method: "GET", path: "manage-search-terms",
     category: "management", authType: "jwt",
     description: "Busca publicações diretamente da API REST V2 por código de escritório.",
     params: [],
