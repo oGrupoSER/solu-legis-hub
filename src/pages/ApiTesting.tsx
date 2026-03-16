@@ -340,7 +340,7 @@ const publicationEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "rest-cadastrar-variacao", label: "Pub - Cadastrar Variação", method: "POST", path: "manage-search-terms",
+    id: "rest-cadastrar-variacao", label: "Cadastrar Variação", method: "POST", path: "manage-search-terms",
     category: "management", authType: "jwt",
     description: "Cadastra variações de um nome para ampliar o monitoramento.",
     params: [],
