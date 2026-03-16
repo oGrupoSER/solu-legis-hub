@@ -193,7 +193,7 @@ const distributionEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "dis-ativar-escritorio", label: "Dis - Ativar Escritório", method: "POST", path: "manage-distribution-terms",
+    id: "dis-ativar-escritorio", label: "Ativar Escritório", method: "POST", path: "manage-distribution-terms",
     category: "management", authType: "jwt",
     description: "Ativa um escritório de distribuição na Solucionare (AtivarEscritorio).",
     params: [],
