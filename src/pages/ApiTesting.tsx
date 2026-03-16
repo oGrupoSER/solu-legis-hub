@@ -622,6 +622,16 @@ const publicationEndpoints: EndpointDef[] = [
       { key: "data.codEscritorio", label: "Código do Escritório", placeholder: "41", required: true, type: "number" },
     ],
   },
+  {
+    id: "rest-confirmar-recebimento", label: "Confirmar Recebimento", method: "POST", path: "manage-search-terms",
+    category: "management", authType: "jwt",
+    description: "Confirma recebimento de publicações na API REST V2 (publicacao_confirmarRecebimento). Envie um array JSON de IDs de publicações.",
+    params: [],
+    bodyParams: [
+      { key: "service_id", label: "ID do Serviço", placeholder: "uuid do partner_service (tipo terms)", required: true },
+      { key: "data.ids", label: "IDs das Publicações (JSON array)", placeholder: "[135040011, 479125026]", required: true },
+    ],
+  },
 ];
 
 // ─── Action map for management endpoints ──────────────────────
