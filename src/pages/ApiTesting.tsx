@@ -295,7 +295,7 @@ const publicationEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "rest-excluir-nome", label: "Pub - Excluir Nome", method: "POST", path: "manage-search-terms",
+    id: "rest-excluir-nome", label: "Excluir Nome", method: "POST", path: "manage-search-terms",
     category: "management", authType: "jwt",
     description: "Exclui um nome (termo) pelo codNome gerado no cadastro.",
     params: [],
