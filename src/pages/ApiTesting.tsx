@@ -284,7 +284,7 @@ const publicationEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "rest-cadastrar-nome", label: "Pub - Cadastrar Nome", method: "POST", path: "manage-search-terms",
+    id: "rest-cadastrar-nome", label: "Cadastrar Nome", method: "POST", path: "manage-search-terms",
     category: "management", authType: "jwt",
     description: "Cadastra um novo nome (termo) para monitoramento de publicações. Retorna o codNome gerado.",
     params: [],
