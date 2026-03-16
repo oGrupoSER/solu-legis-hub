@@ -225,7 +225,7 @@ const distributionEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "dis-buscar-distribuicoes", label: "Dis - Buscar Distribuições", method: "POST", path: "manage-distribution-terms",
+    id: "dis-buscar-distribuicoes", label: "Buscar Distribuições", method: "GET", path: "manage-distribution-terms",
     category: "management", authType: "jwt",
     description: "Busca novas distribuições diretamente da API Solucionare (BuscaNovasDistribuicoes).",
     params: [],
