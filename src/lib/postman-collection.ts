@@ -306,63 +306,10 @@ export function generatePostmanCollection(baseUrl: string) {
     item: [publicationsQueryFolder, publicationsManagementFolder],
   };
 
-  // ─── INTEGRAÇÃO SISTEMA-A-SISTEMA ──────────────────
-  const integrationFolder = {
-    name: '🔗 Integração Sistema-a-Sistema',
-    description: 'Endpoints para integração via API Token (sistema-a-sistema). Usam o mesmo token dos endpoints de consulta.',
-    item: [
-      buildRequest({
-        name: 'Cadastrar Termo Publicação', method: 'POST', path: 'api-management',
-        description: 'Cadastra termo de publicação via Token. Deduplicação automática.',
-        body: { action: 'register-pub-term', data: { nome: 'Nome a Monitorar', service_id: 'UUID_DO_SERVICO' } },
-      }),
-      buildRequest({
-        name: 'Excluir Termo Publicação', method: 'POST', path: 'api-management',
-        description: 'Desvincula termo de publicação. Remove da Solucionare se último cliente.',
-        body: { action: 'delete-pub-term', data: { term_id: 'UUID_DO_TERMO', service_id: 'UUID_DO_SERVICO' } },
-      }),
-      buildRequest({
-        name: 'Cadastrar Termo Distribuição', method: 'POST', path: 'api-management',
-        description: 'Cadastra termo de distribuição via Token. Deduplicação automática.',
-        body: { action: 'register-dist-term', data: { nome: 'Nome a Monitorar', service_id: 'UUID_DO_SERVICO', codTipoConsulta: 1, listInstancias: [1, 2], abrangencias: [{ codEstado: 26 }] } },
-      }),
-      buildRequest({
-        name: 'Excluir Termo Distribuição', method: 'POST', path: 'api-management',
-        description: 'Desvincula termo de distribuição. Remove se último cliente.',
-        body: { action: 'delete-dist-term', data: { term_id: 'UUID_DO_TERMO', service_id: 'UUID_DO_SERVICO' } },
-      }),
-      buildRequest({
-        name: 'Cadastrar Processo', method: 'POST', path: 'api-management',
-        description: 'Cadastra processo para monitoramento via Token. Deduplicação automática.',
-        body: { action: 'register-process', data: { processNumber: '0000000-00.0000.0.00.0000', instance: 1, uf: 'SP', service_id: 'UUID_DO_SERVICO' } },
-      }),
-      buildRequest({
-        name: 'Excluir Processo', method: 'POST', path: 'api-management',
-        description: 'Desvincula processo. Remove da Solucionare se último cliente.',
-        body: { action: 'delete-process', data: { processNumber: '0000000-00.0000.0.00.0000', service_id: 'UUID_DO_SERVICO' } },
-      }),
-      buildRequest({
-        name: 'Listar Serviços', method: 'POST', path: 'api-management',
-        description: 'Lista serviços de parceiros disponíveis para o cliente.',
-        body: { action: 'list-services' },
-      }),
-      buildRequest({
-        name: 'Listar Meus Termos', method: 'POST', path: 'api-management',
-        description: 'Lista termos vinculados ao cliente do token.',
-        body: { action: 'list-my-terms', data: { term_type: 'name' } },
-      }),
-      buildRequest({
-        name: 'Listar Meus Processos', method: 'POST', path: 'api-management',
-        description: 'Lista processos vinculados ao cliente do token.',
-        body: { action: 'list-my-processes' },
-      }),
-    ],
-  };
-
   return {
     info: {
       name: 'Hub Jurídico - API',
-      description: 'Coleção completa da API do Hub Jurídico para consumo e gerenciamento de processos, distribuições e publicações.\n\n## Autenticação\n\n### Endpoints de Consulta e Integração\nRequerem um token Bearer customizado (obtido via painel do Hub Jurídico).\n\n### Endpoints de Gerenciamento\nRequerem JWT do usuário autenticado (Supabase Auth).\n\n## Controle de Volumetria\nOs dados são entregues em lotes de até 500 registros. Após receber um lote, é necessário confirmar o recebimento via POST antes de solicitar novos dados.\n\n## Rate Limit\nPadrão: 1000 requisições/hora por token. Verifique os headers X-RateLimit-* na resposta.',
+      description: 'Coleção completa da API do Hub Jurídico para consumo e gerenciamento de processos, distribuições e publicações.\n\n## Autenticação\n\n### Endpoints de Consulta\nRequerem um token Bearer customizado (obtido via painel do Hub Jurídico).\n\n### Endpoints de Gerenciamento\nRequerem JWT do usuário autenticado (Supabase Auth).\n\n## Controle de Volumetria\nOs dados são entregues em lotes de até 500 registros. Após receber um lote, é necessário confirmar o recebimento via POST antes de solicitar novos dados.\n\n## Rate Limit\nPadrão: 1000 requisições/hora por token. Verifique os headers X-RateLimit-* na resposta.',
       schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',
     },
     variable: [
@@ -370,7 +317,7 @@ export function generatePostmanCollection(baseUrl: string) {
       { key: 'api_token', value: 'SEU_TOKEN_AQUI', type: 'string' },
       { key: 'jwt_token', value: 'SEU_JWT_AQUI', type: 'string' },
     ],
-    item: [processesFolder, distributionsFolder, publicationsFolder, integrationFolder],
+    item: [processesFolder, distributionsFolder, publicationsFolder],
   };
 }
 
