@@ -114,6 +114,15 @@ Deno.serve(async (req) => {
           totalSynced = await syncNewPublications(restClient, supabase, service, terms, partnerOfficeCode);
         }
 
+        // Confirm receipt at Solucionare if confirm_receipt is enabled
+        if (totalSynced > 0 && service.confirm_receipt) {
+          try {
+            await confirmPublicationReceipt(service, supabase, totalSynced);
+          } catch (confirmError) {
+            console.error('Error confirming publication receipt:', confirmError);
+          }
+        }
+
         // Update last sync timestamp
         await updateLastSync(service.id);
         await logger.success(totalSynced);
