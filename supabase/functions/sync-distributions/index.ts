@@ -167,7 +167,46 @@ async function syncDistributions(
     }
   }
 
-  console.log(`Skipping confirmation for ${distributions.length} distributions (legacy system handles confirmations)`);
+  // Confirm receipt at Solucionare if service has confirm_receipt enabled
+  if (syncedCount > 0) {
+    // Check confirm_receipt flag
+    const { data: svcData } = await supabase
+      .from('partner_services')
+      .select('confirm_receipt')
+      .eq('id', service.id)
+      .single();
+
+    if (svcData?.confirm_receipt) {
+      try {
+        const confirmItems = distributions
+          .filter((d: any) => d.codProcesso && (d.codEscritorio || officeCode))
+          .map((d: any) => ({
+            codEscritorio: d.codEscritorio || officeCode,
+            codProcesso: d.codProcesso,
+          }));
+
+        if (confirmItems.length > 0) {
+          console.log(`Confirming receipt for ${confirmItems.length} distributions...`);
+          const batchSize = 100;
+          for (let i = 0; i < confirmItems.length; i += batchSize) {
+            const batch = confirmItems.slice(i, i + batchSize);
+            await apiRequest(
+              service.service_url,
+              `/ConfirmaRecebimentoDistribuicoes?codEscritorio=${officeCode}`,
+              jwtToken,
+              'POST',
+              { distribuicoes: batch }
+            );
+            console.log(`Confirmed batch ${Math.floor(i / batchSize) + 1}: ${batch.length} distributions`);
+          }
+        }
+      } catch (confirmError) {
+        console.error('Error confirming distribution receipt:', confirmError);
+      }
+    } else {
+      console.log(`Skipping confirmation for ${distributions.length} distributions (confirm_receipt disabled)`);
+    }
+  }
 
   return syncedCount;
 }
