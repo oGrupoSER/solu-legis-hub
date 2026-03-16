@@ -445,8 +445,25 @@ const ApiTesting = () => {
       return data;
     },
   });
+  const { data: partnerServices } = useQuery({
+    queryKey: ["partner-services-playground"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("partner_services")
+        .select("id, service_name, service_type, is_active, partners(name)")
+        .eq("is_active", true);
+      if (error) throw error;
+      return data;
+    },
+  });
 
-  const getEndpointsForTab = () => {
+  const getFilteredServices = () => {
+    if (!partnerServices || !selectedEndpoint) return [];
+    const filterType = getServiceTypeFilter(selectedEndpoint.path);
+    if (!filterType) return partnerServices;
+    return partnerServices.filter((s) => s.service_type === filterType);
+  };
+
     if (serviceTab === "processes") return processEndpoints;
     if (serviceTab === "distributions") return distributionEndpoints;
     return publicationEndpoints;
