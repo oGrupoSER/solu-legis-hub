@@ -842,11 +842,11 @@ async function syncAll(soapClient: SoapClient, service: any, officeCode: number)
   } catch (error) {
     stats.errors.push(`Failed to fetch names: ${error instanceof Error ? error.message : 'Unknown'}`);
   }
-
+  return stats;
+}
 
 // ========== REST V2 ACTIONS ==========
 
-const REST_V2_BASE = 'https://atacadoinformacaojudicial.com.br/WebApiPublicacoesV2/api';
 
 async function restApiCall(
   endpoint: string, method: string, tokenJWT: string,
