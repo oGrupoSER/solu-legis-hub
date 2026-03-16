@@ -885,20 +885,21 @@ const ApiTesting = () => {
   const copy = (text: string) => { navigator.clipboard.writeText(text); toast.success("Copiado!"); };
 
   // Build code examples including body if present
-  const queryString = selectedEndpoint.params
-    .filter(p => paramValues[p.key])
+  const queryString = selectedEndpoint?.params
+    ?.filter(p => paramValues[p.key])
     .map(p => `${p.key}=${encodeURIComponent(paramValues[p.key])}`)
-    .join("&");
-  const fullPath = `${selectedEndpoint.path}${queryString ? (selectedEndpoint.path.includes("?") ? "&" : "?") + queryString : ""}`;
+    .join("&") || "";
+  const fullPath = selectedEndpoint ? `${selectedEndpoint.path}${queryString ? (selectedEndpoint.path.includes("?") ? "&" : "?") + queryString : ""}` : "";
   const exampleBody = buildBody();
   const bodyJsonStr = exampleBody ? JSON.stringify(exampleBody, null, 2) : null;
-  const isJwt = selectedEndpoint.authType === "jwt";
+  const isJwt = selectedEndpoint?.authType === "jwt";
   const tokenLabel = isJwt ? "SEU_JWT_TOKEN" : (token || "SEU_TOKEN");
+  const epMethod = selectedEndpoint?.method || "GET";
 
   const codeExamples = {
-    curl: `curl -X ${exampleBody ? "POST" : selectedEndpoint.method} "${baseUrl}/${fullPath}" \\\n  -H "Authorization: Bearer ${tokenLabel}" \\\n  -H "Content-Type: application/json"${bodyJsonStr ? ` \\\n  -d '${bodyJsonStr}'` : ""}`,
-    javascript: `const response = await fetch('${baseUrl}/${fullPath}', {\n  method: '${exampleBody ? "POST" : selectedEndpoint.method}',\n  headers: {\n    'Authorization': 'Bearer ${tokenLabel}',\n    'Content-Type': 'application/json'\n  }${bodyJsonStr ? `,\n  body: JSON.stringify(${bodyJsonStr})` : ""}\n});\nconst data = await response.json();\nconsole.log(data);`,
-    python: `import requests\n\nresponse = requests.${(exampleBody ? "post" : selectedEndpoint.method.toLowerCase())}(\n    '${baseUrl}/${fullPath}',\n    headers={\n        'Authorization': 'Bearer ${tokenLabel}',\n        'Content-Type': 'application/json'\n    }${bodyJsonStr ? `,\n    json=${bodyJsonStr}` : ""}\n)\nprint(response.json())`,
+    curl: `curl -X ${exampleBody ? "POST" : epMethod} "${baseUrl}/${fullPath}" \\\n  -H "Authorization: Bearer ${tokenLabel}" \\\n  -H "Content-Type: application/json"${bodyJsonStr ? ` \\\n  -d '${bodyJsonStr}'` : ""}`,
+    javascript: `const response = await fetch('${baseUrl}/${fullPath}', {\n  method: '${exampleBody ? "POST" : epMethod}',\n  headers: {\n    'Authorization': 'Bearer ${tokenLabel}',\n    'Content-Type': 'application/json'\n  }${bodyJsonStr ? `,\n  body: JSON.stringify(${bodyJsonStr})` : ""}\n});\nconst data = await response.json();\nconsole.log(data);`,
+    python: `import requests\n\nresponse = requests.${(exampleBody ? "post" : epMethod.toLowerCase())}(\n    '${baseUrl}/${fullPath}',\n    headers={\n        'Authorization': 'Bearer ${tokenLabel}',\n        'Content-Type': 'application/json'\n    }${bodyJsonStr ? `,\n    json=${bodyJsonStr}` : ""}\n)\nprint(response.json())`,
   };
 
   const tabIcons: Record<string, React.ReactNode> = {
