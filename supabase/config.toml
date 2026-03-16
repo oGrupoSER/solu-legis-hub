@@ -40,7 +40,7 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.manage-search-terms]
-verify_jwt = true
+verify_jwt = false
 
 [functions.sync-search-terms]
 verify_jwt = true
