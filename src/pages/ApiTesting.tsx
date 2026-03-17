@@ -45,7 +45,7 @@ const getServiceTypeFilter = (path: string): string | null => {
   return null;
 };
 
-const processEndpoints: EndpointDef[] = [
+export const processEndpoints: EndpointDef[] = [
   // Consulta
   {
     id: "list-processes", label: "Listar Processos", method: "GET", path: "api-processes",
@@ -375,7 +375,7 @@ const processEndpoints: EndpointDef[] = [
 ];
 
 // ─── DISTRIBUIÇÕES ────────────────────────────────────────────
-const distributionEndpoints: EndpointDef[] = [
+export const distributionEndpoints: EndpointDef[] = [
   // Consulta
   {
     id: "list-distributions", label: "Listar Distribuições", method: "GET", path: "api-distributions",
@@ -488,7 +488,7 @@ const distributionEndpoints: EndpointDef[] = [
 ];
 
 // ─── PUBLICAÇÕES ──────────────────────────────────────────────
-const publicationEndpoints: EndpointDef[] = [
+export const publicationEndpoints: EndpointDef[] = [
   // Consulta
   {
     id: "list-publications", label: "Listar Publicações", method: "GET", path: "api-publications",
@@ -647,7 +647,7 @@ const publicationEndpoints: EndpointDef[] = [
 ];
 
 // ─── Action map for management endpoints ──────────────────────
-const managementActionMap: Record<string, string> = {
+export const managementActionMap: Record<string, string> = {
   // Processos
   "register-process": "register",
   "delete-process": "delete",
@@ -977,7 +977,7 @@ const ApiTesting = () => {
           <p className="text-muted-foreground mt-1">Teste endpoints, visualize respostas e exporte para Postman</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="gap-2" onClick={async () => { await downloadPlaygroundExport(import.meta.env.VITE_SUPABASE_URL); toast.success("Playground exportado para Postman!"); }}>
+          <Button variant="outline" className="gap-2" onClick={async () => { const activeServiceId = bodyValues["serviceId"] || bodyValues["service_id"]; await downloadPlaygroundExport(import.meta.env.VITE_SUPABASE_URL, activeServiceId); toast.success("Playground exportado para Postman!"); }}>
             <Download className="h-4 w-4" />Exportar Playground
           </Button>
         </div>
