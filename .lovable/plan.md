@@ -1,129 +1,37 @@
 
 
-# Plano: Filtros Avancados e Indicador de Confirmacao por Registro
+## Plano: Exportar Playground apenas com endpoints visíveis + defaults automáticos
 
-## Contexto
+### Problema
+1. O export Postman (`postman-collection.ts`) inclui endpoints de **Consulta** (query) que **não aparecem na tela** — a UI só mostra "Gerenciamento"
+2. `codEscritorio` nos payloads de exemplo usa placeholders genéricos em vez do valor fixo `41`
+3. `serviceId`/`service_id` nos payloads usa `UUID_DO_SERVICO` em vez do ID do serviço selecionado atualmente
 
-As telas de Publicacoes, Distribuicoes e Andamentos precisam de:
-1. Filtros por **cliente**, **parceiro** e **periodo** (algumas telas ja tem parceiro/periodo parcialmente)
-2. Indicador visual por registro mostrando se o cliente ja **confirmou o recebimento**
-3. Ao clicar no indicador, exibir **data/hora** e **IP de origem** da confirmacao
-4. Filtro por status de confirmacao (confirmado / nao confirmado)
+### Solução
 
-## Analise do Estado Atual
+**Reescrever `playground-export.ts`** para gerar a Postman Collection diretamente a partir dos arrays de endpoints que a UI usa (`processEndpoints`, `distributionEndpoints`, `publicationEndpoints`), filtrando apenas `category === "management"` (exatamente o que o `renderEndpointList` mostra). Eliminar `postman-collection.ts` que é a fonte dos endpoints extras.
 
-| Tela | Filtro Cliente | Filtro Parceiro | Filtro Periodo | Confirmacao |
-|------|---------------|-----------------|----------------|-------------|
-| Publicacoes (PublicationsTable) | Nao tem | Tem | Tem | Nao tem |
-| Distribuicoes (Distributions) | Nao tem | Nao tem | Nao tem | Nao tem |
-| Andamentos (ProcessMovements) | Nao tem | Nao tem | Nao tem | Nao tem |
+### Alterações
 
-O modelo de confirmacao atual e por **lote** (tabela `api_delivery_cursors`), sem rastreamento por registro individual. Nao ha dados de IP nem timestamp por registro.
+**1. `src/pages/ApiTesting.tsx`**
+- Exportar os arrays de endpoints (`processEndpoints`, `distributionEndpoints`, `publicationEndpoints`) e o `managementActionMap` para uso externo
+- Passar o ID do serviço selecionado para a função de export
 
-## O Que Sera Feito
+**2. `src/lib/playground-export.ts`** — Reescrever completamente:
+- Importar os arrays de endpoints e o action map de `ApiTesting.tsx`
+- Filtrar apenas `category === "management"` (o que está visível na tela)
+- Gerar Postman Collection v2.1 a partir desses endpoints filtrados
+- Em todos os payloads de exemplo, substituir:
+  - `codEscritorio` → valor fixo `41`
+  - `serviceId` / `service_id` → receber como parâmetro o ID do serviço selecionado e usar como default
+- Organizar em pastas por categoria (Publicações, Distribuições, Processos) com subfolder "Gerenciamento" apenas
 
-### 1. Nova Tabela: `record_confirmations`
+**3. `src/lib/postman-collection.ts`** — Remover (não será mais usado)
 
-Rastreia confirmacoes individuais por registro e por cliente:
+**4. `src/pages/ApiTesting.tsx` (botão export)**
+- Atualizar a chamada para passar o service ID selecionado junto com a baseUrl
+- Se nenhum serviço estiver selecionado, usar placeholder
 
-| Coluna | Tipo | Descricao |
-|--------|------|-----------|
-| id | uuid PK | Identificador |
-| record_id | uuid NOT NULL | ID do registro (publicacao, distribuicao ou movimento) |
-| record_type | text NOT NULL | "publications", "distributions" ou "movements" |
-| client_system_id | uuid NOT NULL | Cliente que confirmou |
-| confirmed_at | timestamptz | Data/hora da confirmacao |
-| ip_address | text | IP de origem da requisicao |
-| created_at | timestamptz | Timestamp de criacao |
-
-Indice unico em (record_id, record_type, client_system_id) para evitar duplicatas.
-RLS: SELECT para authenticated, INSERT para service role.
-
-### 2. Atualizar Endpoints de Confirmacao (api-processes, api-distributions, api-publications)
-
-Quando o cliente chama `POST ?action=confirm`:
-- Alem de atualizar o `api_delivery_cursors`, inserir registros na tabela `record_confirmations` para cada item do lote entregue
-- Capturar o IP da requisicao via headers (`x-forwarded-for` ou `x-real-ip`)
-- Gravar o timestamp da confirmacao
-
-### 3. Adicionar Filtros nas 3 Telas
-
-**Publicacoes (PublicationsTable.tsx):**
-- Adicionar filtro por **Cliente** (Select com client_systems)
-- Filtro de confirmacao ja e viavel apos a nova tabela
-
-**Distribuicoes (Distributions.tsx):**
-- Adicionar filtro por **Parceiro** (Select com partners)
-- Adicionar filtro por **Cliente** (Select com client_systems)
-- Adicionar filtro por **Periodo** (DateRangePicker reutilizado)
-
-**Andamentos (ProcessMovements.tsx):**
-- Adicionar filtro por **Parceiro** (via processes.partner_id)
-- Adicionar filtro por **Cliente** (via client_processes)
-- Adicionar filtro por **Periodo** (DateRangePicker)
-
-### 4. Indicador Visual de Confirmacao
-
-Em cada linha da tabela, adicionar uma coluna "Confirmacao" com:
-- Icone verde (CheckCircle) se pelo menos um cliente confirmou
-- Icone cinza (Circle) se nenhum cliente confirmou ainda
-- Ao clicar, abrir um **Popover/Dialog** com a lista de clientes que confirmaram, mostrando:
-  - Nome do cliente
-  - Data e hora da confirmacao
-  - IP de origem
-
-### 5. Filtro por Status de Confirmacao
-
-Adicionar Select com 3 opcoes em cada tela:
-- "Todos" (sem filtro)
-- "Confirmados" (registros com pelo menos 1 entrada em record_confirmations)
-- "Nao confirmados" (registros sem entrada)
-
-Para filtrar, utilizar subquery ou left join com record_confirmations.
-
----
-
-## Detalhes Tecnicos
-
-### Arquivos a Modificar
-
-| Arquivo | Acao |
-|---------|------|
-| Migracao SQL | Criar tabela `record_confirmations` com indices e RLS |
-| `src/components/publications/PublicationsTable.tsx` | Adicionar filtro por cliente e confirmacao, coluna de status |
-| `src/pages/Distributions.tsx` | Adicionar filtros por parceiro, cliente, periodo e confirmacao |
-| `src/pages/ProcessMovements.tsx` | Adicionar filtros por parceiro, cliente, periodo e confirmacao |
-| `supabase/functions/api-publications/index.ts` | Gravar record_confirmations no confirm |
-| `supabase/functions/api-distributions/index.ts` | Gravar record_confirmations no confirm |
-| `supabase/functions/api-processes/index.ts` | Gravar record_confirmations no confirm |
-
-### Componente Reutilizavel: ConfirmationBadge
-
-Criar componente `src/components/shared/ConfirmationBadge.tsx` que:
-- Recebe `recordId` e `recordType`
-- Consulta `record_confirmations` para esse registro
-- Exibe icone verde/cinza
-- Ao clicar, abre Popover com detalhes (cliente, data/hora, IP)
-
-### Logica de Filtragem por Confirmacao
-
-Para filtrar registros confirmados/nao confirmados sem degradar performance:
-- Buscar IDs confirmados via query separada em `record_confirmations` filtrada por `record_type`
-- Aplicar filtro `.in('id', confirmedIds)` ou `.not.in('id', confirmedIds)` na query principal
-- Limitar a subquery ao tipo de registro da tela atual
-
-### Captura de IP nos Endpoints
-
-```text
-const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-  || req.headers.get('x-real-ip')
-  || 'unknown';
-```
-
-### Filtro por Cliente nas Publicacoes/Distribuicoes
-
-Como publicacoes e distribuicoes nao tem link direto com `client_systems`, o filtro por cliente funcionara via:
-- Publicacoes: `client_search_terms` -> `search_terms` -> `publications.matched_terms` (pelo termo)
-- Distribuicoes: `client_search_terms` -> `search_terms` -> `distributions.term` (pelo termo)
-- Andamentos: `client_processes` -> `processes` -> `process_movements.process_id` (direto)
+### Resultado
+O arquivo `.postman_collection.json` exportado terá **exatamente** os mesmos endpoints visíveis na sidebar do Playground, com `codEscritorio: 41` e o `serviceId` do serviço ativo preenchidos automaticamente.
 
