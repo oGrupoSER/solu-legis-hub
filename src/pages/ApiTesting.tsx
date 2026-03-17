@@ -375,7 +375,7 @@ export const processEndpoints: EndpointDef[] = [
 ];
 
 // ─── DISTRIBUIÇÕES ────────────────────────────────────────────
-const distributionEndpoints: EndpointDef[] = [
+export const distributionEndpoints: EndpointDef[] = [
   // Consulta
   {
     id: "list-distributions", label: "Listar Distribuições", method: "GET", path: "api-distributions",
