@@ -520,7 +520,7 @@ export function generatePlaygroundExport(baseUrl: string): PlaygroundExport {
   };
 }
 
-export function downloadPlaygroundExport(baseUrl: string) {
+export async function downloadPlaygroundExport(baseUrl: string) {
   // Import and use the Postman collection generator for a complete, importable file
   const { generatePostmanCollection } = await import('./postman-collection');
   const collection = generatePostmanCollection(baseUrl);
