@@ -521,12 +521,14 @@ export function generatePlaygroundExport(baseUrl: string): PlaygroundExport {
 }
 
 export function downloadPlaygroundExport(baseUrl: string) {
-  const exportData = generatePlaygroundExport(baseUrl);
-  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+  // Import and use the Postman collection generator for a complete, importable file
+  const { generatePostmanCollection } = await import('./postman-collection');
+  const collection = generatePostmanCollection(baseUrl);
+  const blob = new Blob([JSON.stringify(collection, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `hub-juridico-playground-export-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `hub-juridico-playground.postman_collection.json`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

@@ -977,11 +977,8 @@ const ApiTesting = () => {
           <p className="text-muted-foreground mt-1">Teste endpoints, visualize respostas e exporte para Postman</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="gap-2" onClick={() => { downloadPlaygroundExport(import.meta.env.VITE_SUPABASE_URL); toast.success("Playground exportado!"); }}>
-            <FileText className="h-4 w-4" />Exportar Playground
-          </Button>
-          <Button variant="outline" className="gap-2" onClick={() => { downloadPostmanCollection(import.meta.env.VITE_SUPABASE_URL); toast.success("Coleção Postman exportada!"); }}>
-            <Download className="h-4 w-4" />Exportar Postman
+          <Button variant="outline" className="gap-2" onClick={async () => { await downloadPlaygroundExport(import.meta.env.VITE_SUPABASE_URL); toast.success("Playground exportado para Postman!"); }}>
+            <Download className="h-4 w-4" />Exportar Playground
           </Button>
         </div>
       </div>
