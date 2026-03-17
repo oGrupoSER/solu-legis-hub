@@ -488,7 +488,7 @@ export const distributionEndpoints: EndpointDef[] = [
 ];
 
 // ─── PUBLICAÇÕES ──────────────────────────────────────────────
-const publicationEndpoints: EndpointDef[] = [
+export const publicationEndpoints: EndpointDef[] = [
   // Consulta
   {
     id: "list-publications", label: "Listar Publicações", method: "GET", path: "api-publications",
