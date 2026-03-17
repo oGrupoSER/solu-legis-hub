@@ -647,7 +647,7 @@ export const publicationEndpoints: EndpointDef[] = [
 ];
 
 // ─── Action map for management endpoints ──────────────────────
-const managementActionMap: Record<string, string> = {
+export const managementActionMap: Record<string, string> = {
   // Processos
   "register-process": "register",
   "delete-process": "delete",
