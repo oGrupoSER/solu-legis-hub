@@ -45,7 +45,7 @@ const getServiceTypeFilter = (path: string): string | null => {
   return null;
 };
 
-const processEndpoints: EndpointDef[] = [
+export const processEndpoints: EndpointDef[] = [
   // Consulta
   {
     id: "list-processes", label: "Listar Processos", method: "GET", path: "api-processes",
