@@ -647,7 +647,9 @@ export const managementActionMap: Record<string, string> = {
   "register-process": "register-process",
   "delete-process": "delete-process",
   "status-process": "status-process",
-  // Andamentos REST V3
+  "list-registered-processes": "list",
+  "resend-pending-processes": "send-pending",
+  "sync-processes": "sync",
   "and-cadastrar-processo": "rest_cadastrar_processo",
   "and-excluir-processo": "rest_excluir_processo",
   "and-buscar-status": "rest_buscar_status",
