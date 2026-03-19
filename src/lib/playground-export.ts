@@ -69,6 +69,12 @@ function buildPostmanItem(
         body[p.key] = getDefaultValue(p, selectedServiceId);
       }
     }
+
+    // Inject distribution term defaults for Postman export
+    if (ep.id === 'dis-cadastrar-termo' && body) {
+      body.listInstancias = [1, 2, 3];
+      body.listAbrangencias = DEFAULT_ABRANGENCIAS_EXPORT;
+    }
   }
 
   return {
