@@ -774,7 +774,7 @@ const ApiTesting = () => {
     const body: Record<string, any> = {};
     if (action) body.action = action;
 
-    if (isSearchTerms) {
+    if (usesDataWrapper) {
       const data: Record<string, any> = {};
       for (const p of (selectedEndpoint.bodyParams || [])) {
         const val = bodyValues[p.key];
