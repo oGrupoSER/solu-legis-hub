@@ -643,13 +643,10 @@ export const publicationEndpoints: EndpointDef[] = [
 
 // ─── Action map for management endpoints ──────────────────────
 export const managementActionMap: Record<string, string> = {
-  // Processos
-  "register-process": "register",
-  "delete-process": "delete",
-  "status-process": "status",
-  "list-registered-processes": "list",
-  "resend-pending-processes": "send-pending",
-  "sync-processes": "sync",
+  // Processos (via api-management)
+  "register-process": "register-process",
+  "delete-process": "delete-process",
+  "status-process": "status-process",
   // Andamentos REST V3
   "and-cadastrar-processo": "rest_cadastrar_processo",
   "and-excluir-processo": "rest_excluir_processo",
