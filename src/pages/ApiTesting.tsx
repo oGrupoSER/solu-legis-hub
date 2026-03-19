@@ -1102,7 +1102,7 @@ const ApiTesting = () => {
                                 {p.label} <span className="text-muted-foreground">({p.key.replace("data.", "")})</span>
                                 {p.required && <span className="text-destructive ml-1">*</span>}
                               </Label>
-                              {(p.key === "serviceId" || p.key === "service_id") ? (
+                              {(p.key === "serviceId" || p.key === "service_id" || p.key === "data.service_id") ? (
                                 <Select
                                   value={bodyValues[p.key] || ""}
                                   onValueChange={(val) => setBodyValues({ ...bodyValues, [p.key]: val })}
