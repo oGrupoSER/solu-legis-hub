@@ -443,6 +443,7 @@ export const distributionEndpoints: EndpointDef[] = [
       { key: "nome", label: "Nome", placeholder: "VPM ESTACIONAMENTOS LTDA  11482194000125", required: true },
       { key: "codTipoConsulta", label: "Código Tipo Consulta", placeholder: "1", type: "number" },
       { key: "qtdDiasCapturaRetroativa", label: "Dias Captura Retroativa", placeholder: "90", type: "number" },
+      { key: "listInstancias", label: "Instâncias (auto: [1,2,3])", placeholder: "[1, 2, 3]" },
     ],
   },
   {

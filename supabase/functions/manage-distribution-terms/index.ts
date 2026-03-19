@@ -298,9 +298,9 @@ serve(async (req) => {
               await apiRequest(service.service_url, '/CadastrarNome', jwtToken, 'POST', {
                 codEscritorio: officeCode,
                 nome: pt.term,
-                codTipoConsulta: meta.codTipoConsulta || 3,
-                listInstancias: meta.listInstancias?.length ? meta.listInstancias : [1],
-                listAbrangencias: meta.listAbrangencias || [],
+                codTipoConsulta: meta.codTipoConsulta || 1,
+                listInstancias: meta.listInstancias?.length ? meta.listInstancias : [1, 2, 3],
+                listAbrangencias: meta.listAbrangencias?.length ? meta.listAbrangencias : DEFAULT_ABRANGENCIAS,
               });
               await supabase.from('search_terms').update({ solucionare_status: 'synced', updated_at: new Date().toISOString() }).eq('id', pt.id);
               retriedCount++;
