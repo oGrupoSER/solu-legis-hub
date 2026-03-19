@@ -1,40 +1,36 @@
 
 
-## Plano: Corrigir Cadastro de Termos de Distribuição via Playground e API Externa
+## Plano: Rotear endpoints de Processo via api-management com API Token
 
 ### Problema
-Quando o "Cadastrar Termo" de distribuições é chamado via Playground ou via API externa (Info → `api-management`), os campos `listInstancias` e `listAbrangencias` não são enviados. A edge function usa defaults incorretos/vazios, resultando em falha no cadastro na Solucionare.
+Os endpoints de gerenciamento de processos no Playground (`register-process`, `delete-process`, `status-process`) apontam para `sync-process-management` com `authType: "jwt"`. Quando o Info tenta consumir, não funciona porque usa API Token (`ljhub_...`), não JWT de sessão.
 
-A tela `/distributions/terms` funciona porque injeta `listInstancias: [4]` e `FIXED_ABRANGENCIAS` hardcoded antes de chamar a edge function. Mas o Playground e a API externa não fazem isso.
+As ações de processo já existem no `api-management` (register-process, delete-process — linhas 354-451), que aceita API Token. O Playground só precisa apontar para lá.
 
-### Correção
+### Alterações
 
-**1. `supabase/functions/manage-distribution-terms/index.ts`** — Garantir defaults corretos no `registerName`
-- Linha 337: `listInstancias` default deve ser `[4]` (já está)
-- Linha 338: `listAbrangencias` default deve ser `DEFAULT_ABRANGENCIAS` em vez de array vazio
-- Linha 354: A conversão `[4] → [1,2,3]` deve mudar para enviar `[1, 2, 3]` diretamente como valor padrão
-- Linha 279 (api-management): `listInstancias` default deve ser `[4]` e `abrangencias` deve usar a lista completa
+**1. `src/pages/ApiTesting.tsx`** — Atualizar os 3 endpoints de processo de alto nível:
 
-**2. `supabase/functions/api-management/index.ts`** — Corrigir defaults no `register-dist-term`
-- Linha 279: `listInstancias` default de `[1]` → `[4]`
-- Linha 280: `abrangencias` default de `[]` → lista completa `DEFAULT_ABRANGENCIAS`
-- Importar/definir `DEFAULT_ABRANGENCIAS` neste arquivo
+| Endpoint | Antes | Depois |
+|---|---|---|
+| `register-process` | `path: "sync-process-management"`, `authType: "jwt"` | `path: "api-management"`, `authType: "token"` |
+| `delete-process` | `path: "sync-process-management"`, `authType: "jwt"` | `path: "api-management"`, `authType: "token"` |
+| `status-process` | `path: "sync-process-management"`, `authType: "jwt"` | `path: "api-management"`, `authType: "token"` |
 
-**3. `src/pages/ApiTesting.tsx`** — Adicionar `listInstancias` e `abrangencias` como campos visíveis (readonly/pré-preenchidos) no endpoint `dis-cadastrar-termo`
-- Adicionar `listInstancias` como bodyParam com placeholder `[4]` (informativo)
-- Não adicionar `abrangencias` visualmente (muito longo), mas documentar na description que é preenchido automaticamente
+- Ajustar `bodyParams` para usar a estrutura do `api-management` (campos dentro de `data: { ... }`)
+  - `register-process`: `data.processNumber`, `data.service_id`
+  - `delete-process`: `data.processNumber`, `data.service_id`
+  - `status-process`: `data.processNumber`, `data.service_id`
+- Atualizar `managementActionMap` para mapear os IDs corretos
+- Os endpoints REST V3 diretos (and-cadastrar-processo, etc.) permanecem como JWT — são ferramentas internas
 
-**4. `src/lib/playground-export.ts`** — No export Postman, injetar `listInstancias: [4]` e a lista completa de `listAbrangencias` no body do "Cadastrar Termo"
-- Tratar o endpoint `dis-cadastrar-termo` como caso especial no `buildPostmanItem`, adicionando esses campos ao body exportado
+**2. `src/pages/ApiTesting.tsx` (buildBody)** — Garantir que endpoints `api-management` de processos usem a estrutura `{ action, data: { ... } }` (mesma lógica já usada para `manage-search-terms`)
+
+**3. Code examples** — O badge muda de "JWT" para "Token" nos 3 endpoints, e o curl/JS/Python mostrarão `SEU_TOKEN` em vez de `SEU_JWT_TOKEN`
+
+### Endpoints que NÃO mudam
+Os endpoints REST V3 diretos (and-cadastrar-processo, and-buscar-status, etc.) continuam via `sync-process-management` com JWT — são endpoints internos de diagnóstico, não consumidos pelo Info.
 
 ### Resultado
-- Playground: ao executar "Cadastrar Termo", o registro chega corretamente à Solucionare
-- API externa (Info): ao chamar `register-dist-term`, os defaults são preenchidos automaticamente
-- Export Postman: o body já vem com `listInstancias` e `listAbrangencias` preenchidos
-
-### Arquivos alterados
-- `supabase/functions/manage-distribution-terms/index.ts`
-- `supabase/functions/api-management/index.ts`
-- `src/pages/ApiTesting.tsx`
-- `src/lib/playground-export.ts`
+O Info poderá chamar `api-management` com API Token para cadastrar, excluir e consultar status de processos, exatamente como já faz para publicações e distribuições.
 
