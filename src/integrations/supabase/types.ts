@@ -1736,7 +1736,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      exec_sql: { Args: { sql_query: string }; Returns: Json }
+      get_cron_job_details: { Args: { p_job_id: number }; Returns: Json }
     }
     Enums: {
       [_ in never]: never
