@@ -54,6 +54,7 @@ const App = () => (
                 <Route path="/publications/terms" element={<PublicationTerms />} />
                 <Route path="/court-status" element={<CourtStatus />} />
                 <Route path="/confirmation-reversal" element={<ConfirmationReversal />} />
+                <Route path="/scheduled-sync" element={<ScheduledSync />} />
                 <Route path="/sync-logs" element={<SyncLogs />} />
                 <Route path="/publications" element={<Publications />} />
                 <Route path="/api-monitoring" element={<ApiMonitoring />} />

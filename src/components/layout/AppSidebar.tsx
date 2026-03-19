@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Clock, Activity, Search, TestTube,
   FileText, Settings, HelpCircle, Newspaper, Gavel, FolderInput,
   AlertCircle, Building2, Users, RotateCcw, ChevronDown, Bookmark,
-  ArrowRightLeft, ListChecks,
+  ArrowRightLeft, ListChecks, CalendarClock,
 } from "lucide-react";
 import logo from "@/assets/logo-orbo.png";
 import { NavLink, useLocation } from "react-router-dom";
