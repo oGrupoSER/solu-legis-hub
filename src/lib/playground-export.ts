@@ -28,6 +28,25 @@ interface EndpointDef {
   bodyParams?: ParamDef[];
 }
 
+// ── Constants ────────────────────────────────────────────────────
+const DEFAULT_ABRANGENCIAS_EXPORT = [
+  "CJM-1","CJM-10","CJM-11","CJM-12","CJM-2","CJM-3","CJM-4","CJM-5","CJM-6","CJM-7","CJM-8","CJM-9",
+  "JF-AC","JF-AL","JF-AM","JF-AP","JF-BA","JF-CE","JF-DF","JF-ES","JF-GO","JF-MA","JF-MG","JF-MS","JF-MT",
+  "JF-PA","JF-PB","JF-PE","JF-PI","JF-PR","JF-RJ","JF-RN","JF-RO","JF-RR","JF-RS","JF-SC","JF-SE","JF-SP","JF-TO",
+  "STF","STJ",
+  "TJ-AC","TJ-AL","TJ-AM","TJ-AP","TJ-BA","TJ-CE","TJ-DF","TJ-DFT","TJ-ES","TJ-GO","TJ-MA","TJ-MG",
+  "TJM-MG","TJM-RS","TJ-MS","TJM-SP","TJ-MT","TJ-PA","TJ-PB","TJ-PE","TJ-PI","TJ-PR","TJ-RJ","TJ-RN","TJ-RO","TJ-RR",
+  "TJ-RS","TJ-SC","TJ-SE","TJ-SP","TJ-TO",
+  "TRE-AC","TRE-AL","TRE-AM","TRE-AP","TRE-BA","TRE-CE","TRE-DF","TRE-DFT","TRE-ES","TRE-GO","TRE-MA","TRE-MG",
+  "TRE-MS","TRE-MT","TRE-PA","TRE-PB","TRE-PE","TRE-PI","TRE-PR","TRE-RJ","TRE-RN","TRE-RO","TRE-RR","TRE-RS",
+  "TRE-SC","TRE-SE","TRE-SP","TRE-TO",
+  "TRF-1","TRF-2","TRF-3","TRF-4","TRF-5","TRF-6",
+  "TRT-1","TRT-10","TRT-11","TRT-12","TRT-13","TRT-14","TRT-15","TRT-16","TRT-17","TRT-18","TRT-19",
+  "TRT-2","TRT-20","TRT-21","TRT-22","TRT-23","TRT-24",
+  "TRT-3","TRT-4","TRT-5","TRT-6","TRT-7","TRT-8","TRT-9",
+  "TSE","TST"
+];
+
 // ── Postman helpers ──────────────────────────────────────────────
 
 const BASE_URL_VAR = '{{base_url}}';
@@ -68,6 +87,12 @@ function buildPostmanItem(
       for (const p of ep.bodyParams || []) {
         body[p.key] = getDefaultValue(p, selectedServiceId);
       }
+    }
+
+    // Inject distribution term defaults for Postman export
+    if (ep.id === 'dis-cadastrar-termo' && body) {
+      body.listInstancias = [1, 2, 3];
+      body.listAbrangencias = DEFAULT_ABRANGENCIAS_EXPORT;
     }
   }
 

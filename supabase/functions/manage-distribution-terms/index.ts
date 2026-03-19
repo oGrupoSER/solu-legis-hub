@@ -298,9 +298,9 @@ serve(async (req) => {
               await apiRequest(service.service_url, '/CadastrarNome', jwtToken, 'POST', {
                 codEscritorio: officeCode,
                 nome: pt.term,
-                codTipoConsulta: meta.codTipoConsulta || 3,
-                listInstancias: meta.listInstancias?.length ? meta.listInstancias : [1],
-                listAbrangencias: meta.listAbrangencias || [],
+                codTipoConsulta: meta.codTipoConsulta || 1,
+                listInstancias: meta.listInstancias?.length ? meta.listInstancias : [1, 2, 3],
+                listAbrangencias: meta.listAbrangencias?.length ? meta.listAbrangencias : DEFAULT_ABRANGENCIAS,
               });
               await supabase.from('search_terms').update({ solucionare_status: 'synced', updated_at: new Date().toISOString() }).eq('id', pt.id);
               retriedCount++;
@@ -346,12 +346,14 @@ serve(async (req) => {
           await supabase.from('search_terms').update({ metadata, updated_at: new Date().toISOString() }).eq('id', existing.id);
           termRecord = existing;
         } else {
-          const uniqueAbrangencias = [...new Set(abrangencias || [])];
+          const finalAbrangencias = abrangencias && abrangencias.length > 0 ? abrangencias : DEFAULT_ABRANGENCIAS;
+          const uniqueAbrangencias = [...new Set(finalAbrangencias)];
+          const finalInstancias = listInstancias && listInstancias.length > 0 ? listInstancias : [1, 2, 3];
           const requestBody: any = {
             codEscritorio: officeCode,
             nome,
             codTipoConsulta: codTipoConsulta || 1,
-            listInstancias: (listInstancias || [1]).includes(4) ? [1, 2, 3] : (listInstancias || [1]),
+            listInstancias: finalInstancias,
             listAbrangencias: uniqueAbrangencias,
           };
           if (qtdDiasCapturaRetroativa) requestBody.qtdDiasCapturaRetroativa = qtdDiasCapturaRetroativa;
