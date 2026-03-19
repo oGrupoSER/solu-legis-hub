@@ -59,6 +59,7 @@ const serviceGroups: ServiceGroup[] = [
 ];
 
 const integrationItems = [
+  { title: "Agendamentos", url: "/scheduled-sync", icon: CalendarClock },
   { title: "Status Tribunais", url: "/court-status", icon: AlertCircle },
   { title: "Reversão Confirmações", url: "/confirmation-reversal", icon: RotateCcw },
   { title: "Logs de Sincronização", url: "/sync-logs", icon: Clock },
