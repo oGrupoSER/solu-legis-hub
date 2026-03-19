@@ -1,73 +1,66 @@
 
 
-## Plano: Rotear TODOS os endpoints de Processo via api-management com API Token
+## Plano: Tela de Agendamento de Sincronizações com pg_cron
 
-### Problema
-Apenas 3 endpoints de processo (register, delete, status) foram migrados para `api-management` com Token. Os demais 17 endpoints (list, sync, send-pending, e todos os REST V3 — agrupadores, andamentos, dependências, documentos, capa, etc.) ainda apontam para `sync-process-management` com JWT, impedindo integração externa.
+### Objetivo
+Criar uma tela dedicada para configurar e consultar agendamentos automáticos de sincronização (publicações, distribuições, processos) usando pg_cron, eliminando a necessidade de clicar manualmente em "Sincronizar" nas 3 telas.
 
 ### Alterações
 
-**1. `supabase/functions/api-management/index.ts`** — Adicionar proxy para as ações restantes de processo:
+**1. Migration SQL** — Habilitar extensões e criar tabelas:
+- Habilitar `pg_cron` e `pg_net`
+- Criar tabela `scheduled_sync_jobs`: id, name, services (array), cron_expression, is_active, last_run_at, next_run_at, created_at, updated_at
+- Criar tabela `scheduled_sync_logs`: id, job_id, status (success/error), started_at, completed_at, result (jsonb), error_message
+- RLS: authenticated pode ler/inserir/atualizar/deletar jobs; authenticated pode ler logs
 
-Novas ações que delegam para `sync-process-management` via `callInternalFunction`:
-- `list-processes-registered` → action `list`
-- `resend-pending-processes` → action `send-pending`  
-- `sync-processes` → action `sync`
-- Todas as ações `rest_*` (20 ações REST V3): `rest_cadastrar_processo`, `rest_excluir_processo`, `rest_buscar_status`, `rest_buscar_processos`, `rest_buscar_novos_agrupadores`, etc.
+**2. SQL Insert (não migration)** — Registrar os cron jobs no pg_cron via `cron.schedule()` usando `net.http_post` para chamar `sync-orchestrator`. Os horários serão convertidos para UTC (BRT = UTC-3).
 
-Implementação: um bloco genérico que detecta ações começando com `rest_` ou as 3 ações novas e faz proxy:
+**3. Edge Function `manage-scheduled-sync`** — Gerenciar cron jobs:
+- `list`: listar jobs ativos
+- `create`: criar novo agendamento (insere na tabela + cria entrada pg_cron)
+- `update`: atualizar horários/serviços
+- `delete`: remover agendamento
+- `toggle`: ativar/desativar
+- `logs`: consultar histórico de execuções
+- Internamente executa SQL para `cron.schedule()` / `cron.unschedule()`
+
+**4. `supabase/config.toml`** — Adicionar `manage-scheduled-sync` com `verify_jwt = true`
+
+**5. Nova página `src/pages/ScheduledSync.tsx`**:
+- Breadcrumb: Dashboard > Agendamentos
+- Cards de resumo: total de jobs, ativos, última execução, próxima execução
+- Tabela principal com colunas: Nome, Serviços (badges), Expressão Cron, Horários legíveis, Status (ativo/inativo), Última execução, Ações
+- Dialog para criar/editar agendamento:
+  - Nome do agendamento
+  - Checkboxes para serviços: Publicações, Distribuições, Processos
+  - Seleção de horários via chips clicáveis (00h-23h) ou campo cron expression manual
+  - Toggle ativo/inativo
+- Tabela de logs de execução: data/hora, status, duração, registros sincronizados, erros
+- Botão "Executar Agora" para rodar manualmente
+
+**6. `src/App.tsx`** — Adicionar rota `/scheduled-sync`
+
+**7. `src/components/layout/AppSidebar.tsx`** — Adicionar item "Agendamentos" no grupo "Integração" com ícone `Clock`
+
+### Fluxo
 ```text
-case 'list-processes-registered':
-case 'resend-pending-processes':
-case 'sync-processes':
-  → callInternalFunction('sync-process-management', { action: mapped, serviceId, ...data })
-
-default (se action.startsWith('rest_')):
-  → callInternalFunction('sync-process-management', { action, serviceId, ...data })
+Usuário configura horários na UI
+  → Edge function cria/atualiza pg_cron job
+    → pg_cron dispara nos horários configurados
+      → pg_net faz HTTP POST para sync-orchestrator
+        → sync-orchestrator sincroniza tudo
+          → Resultado salvo em scheduled_sync_logs
 ```
 
-**2. `src/pages/ApiTesting.tsx`** — Atualizar TODOS os 17 endpoints restantes:
-- `path`: `"sync-process-management"` → `"api-management"`
-- `authType`: `"jwt"` → `"token"`
-- `bodyParams`: prefixar com `data.` (ex: `data.serviceId` → `data.service_id`, `data.codEscritorio`, `data.codProcesso`, etc.)
-- Atualizar `managementActionMap` para mapear os IDs aos nomes de ação corretos no proxy
+### Horários padrão (pré-configurados)
+O job padrão será criado com a expressão: `0 9,10,11,12,15,19,20,1 * * *` (UTC, equivalente a 06h,07h,08h,09h,12h,16h,17h,22h BRT)
 
-**3. `src/lib/playground-export.ts`** — Os endpoints já serão pegos automaticamente pela lógica existente (usam `api-management` com token).
-
-### Endpoints afetados (17)
-
-| ID | Ação no proxy |
-|---|---|
-| list-registered-processes | list |
-| resend-pending-processes | send-pending |
-| sync-processes | sync |
-| and-cadastrar-processo | rest_cadastrar_processo |
-| and-excluir-processo | rest_excluir_processo |
-| and-buscar-status | rest_buscar_status |
-| and-buscar-processos | rest_buscar_processos |
-| and-buscar-novos-agrupadores | rest_buscar_novos_agrupadores |
-| and-buscar-agrupadores-escritorio | rest_buscar_agrupadores_escritorio |
-| and-confirmar-agrupador | rest_confirmar_agrupador |
-| and-buscar-novas-dependencias | rest_buscar_novas_dependencias |
-| and-buscar-dependencias-escritorio | rest_buscar_dependencias_escritorio |
-| and-confirmar-dependencia | rest_confirmar_dependencia |
-| and-buscar-novos-andamentos | rest_buscar_novos_andamentos |
-| and-buscar-andamentos-escritorio | rest_buscar_andamentos_escritorio |
-| and-confirmar-andamento | rest_confirmar_andamento |
-| and-buscar-capa | rest_buscar_capa |
-| and-buscar-novos-documentos | rest_buscar_novos_documentos |
-| and-buscar-documentos-escritorio | rest_buscar_documentos_escritorio |
-| and-confirmar-documento | rest_confirmar_documento |
-| and-todos-andamentos-processo | rest_todos_andamentos_processo |
-| and-todos-agrupadores-processo | rest_todos_agrupadores_processo |
-| and-todos-documentos-processo | rest_todos_documentos_processo |
-| and-processos-cadastrados | rest_processos_cadastrados |
-| and-qtd-andamentos | rest_qtd_andamentos |
-
-### Resultado
-Todos os endpoints da aba Processos no Playground usarão API Token via `api-management`, sem exceção. O Info poderá consumir qualquer operação de processo com `ljhub_...`.
-
-### Arquivos alterados
-- `supabase/functions/api-management/index.ts`
-- `src/pages/ApiTesting.tsx`
+### Arquivos criados/alterados
+- 1 migration (extensões + tabelas)
+- 1 SQL insert (job padrão no pg_cron)
+- `supabase/functions/manage-scheduled-sync/index.ts` (novo)
+- `src/pages/ScheduledSync.tsx` (novo)
+- `src/App.tsx` (rota)
+- `src/components/layout/AppSidebar.tsx` (sidebar)
+- `supabase/config.toml` (função)
 
