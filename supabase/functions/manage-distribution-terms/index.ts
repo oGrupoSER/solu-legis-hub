@@ -346,12 +346,14 @@ serve(async (req) => {
           await supabase.from('search_terms').update({ metadata, updated_at: new Date().toISOString() }).eq('id', existing.id);
           termRecord = existing;
         } else {
-          const uniqueAbrangencias = [...new Set(abrangencias || [])];
+          const finalAbrangencias = abrangencias && abrangencias.length > 0 ? abrangencias : DEFAULT_ABRANGENCIAS;
+          const uniqueAbrangencias = [...new Set(finalAbrangencias)];
+          const finalInstancias = listInstancias && listInstancias.length > 0 ? listInstancias : [1, 2, 3];
           const requestBody: any = {
             codEscritorio: officeCode,
             nome,
             codTipoConsulta: codTipoConsulta || 1,
-            listInstancias: (listInstancias || [1]).includes(4) ? [1, 2, 3] : (listInstancias || [1]),
+            listInstancias: finalInstancias,
             listAbrangencias: uniqueAbrangencias,
           };
           if (qtdDiasCapturaRetroativa) requestBody.qtdDiasCapturaRetroativa = qtdDiasCapturaRetroativa;
