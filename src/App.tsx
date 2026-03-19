@@ -26,6 +26,7 @@ import ConfirmationReversal from "./pages/ConfirmationReversal";
 import PublicationTerms from "./pages/PublicationTerms";
 import DistributionTerms from "./pages/DistributionTerms";
 import ProcessMovements from "./pages/ProcessMovements";
+import ScheduledSync from "./pages/ScheduledSync";
 
 const queryClient = new QueryClient();
 
