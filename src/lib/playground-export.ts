@@ -63,9 +63,9 @@ function buildPostmanItem(
   // Build body from bodyParams with auto-filled defaults
   let body: Record<string, any> | undefined;
   if (ep.bodyParams?.length || action) {
-    const isSearchTerms = ep.path === 'manage-search-terms';
+    const usesDataWrapper = ep.path === 'manage-search-terms' || ep.path === 'api-management';
 
-    if (isSearchTerms) {
+    if (usesDataWrapper) {
       // manage-search-terms uses { action, service_id, data: { ... } }
       const data: Record<string, any> = {};
       body = {} as Record<string, any>;
