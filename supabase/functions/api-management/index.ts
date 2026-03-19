@@ -529,8 +529,42 @@ Deno.serve(async (req) => {
         break;
       }
 
+      // ═══════════════════════════════════════════════
+      // PROCESS PROXY (list, sync, send-pending, rest_*)
+      // ═══════════════════════════════════════════════
+      case 'list-processes-registered':
+      case 'resend-pending-processes':
+      case 'sync-processes': {
+        const { service_id: proxyServiceId, ...proxyData } = payload || {};
+        if (!proxyServiceId) throw new Error('service_id is required');
+        const actionMap: Record<string, string> = {
+          'list-processes-registered': 'list',
+          'resend-pending-processes': 'send-pending',
+          'sync-processes': 'sync',
+        };
+        const proxyResult = await callInternalFunction('sync-process-management', {
+          action: actionMap[action],
+          serviceId: proxyServiceId,
+          ...proxyData,
+        });
+        result = proxyResult;
+        break;
+      }
+
       default:
-        throw new Error(`Unknown action: ${action}. Available: register-pub-term, delete-pub-term, register-dist-term, delete-dist-term, register-process, delete-process, list-services, list-my-terms, list-my-processes`);
+        // Proxy all rest_* actions to sync-process-management
+        if (action.startsWith('rest_') && !['rest_autenticar', 'rest_cadastrar_nome', 'rest_excluir_nome', 'rest_consultar_nomes', 'rest_cadastrar_oab', 'rest_consultar_oab', 'rest_cadastrar_variacao', 'rest_cadastrar_termo_validacao', 'rest_cadastrar_abrangencia', 'rest_buscar_catalogo', 'rest_buscar_publicacoes', 'rest_confirmar_recebimento', 'rest_buscar_distribuicoes'].includes(action)) {
+          const { service_id: restServiceId, ...restData } = payload || {};
+          if (!restServiceId) throw new Error('service_id is required');
+          const proxyResult = await callInternalFunction('sync-process-management', {
+            action,
+            serviceId: restServiceId,
+            ...restData,
+          });
+          result = proxyResult;
+          break;
+        }
+        throw new Error(`Unknown action: ${action}`);
     }
 
     // Log the request
