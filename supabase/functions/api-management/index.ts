@@ -451,6 +451,25 @@ Deno.serve(async (req) => {
         break;
       }
 
+      case 'status-process': {
+        const { processNumber, service_id } = payload || {};
+        if (!processNumber?.trim()) throw new Error('processNumber is required');
+        if (!service_id) throw new Error('service_id is required');
+
+        const statusResult = await callInternalFunction('sync-process-management', {
+          action: 'status',
+          serviceId: service_id,
+          processNumber: processNumber.trim(),
+        });
+
+        if (!statusResult?.success) {
+          throw new Error(statusResult?.error || 'Failed to get process status');
+        }
+
+        result = { success: true, statuses: statusResult.statuses };
+        break;
+      }
+
       // ═══════════════════════════════════════════════
       // LIST AVAILABLE SERVICES
       // ═══════════════════════════════════════════════

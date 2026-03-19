@@ -63,9 +63,9 @@ function buildPostmanItem(
   // Build body from bodyParams with auto-filled defaults
   let body: Record<string, any> | undefined;
   if (ep.bodyParams?.length || action) {
-    const isSearchTerms = ep.path === 'manage-search-terms';
+    const usesDataWrapper = ep.path === 'manage-search-terms' || ep.path === 'api-management';
 
-    if (isSearchTerms) {
+    if (usesDataWrapper) {
       // manage-search-terms uses { action, service_id, data: { ... } }
       const data: Record<string, any> = {};
       body = {} as Record<string, any>;
@@ -120,7 +120,7 @@ function buildPostmanItem(
 
 function getDefaultValue(p: ParamDef, selectedServiceId: string): any {
   // serviceId / service_id → selected service
-  if (p.key === 'serviceId' || p.key === 'service_id') return selectedServiceId;
+  if (p.key === 'serviceId' || p.key === 'service_id' || p.key === 'data.service_id') return selectedServiceId;
 
   // codEscritorio → 41
   if (p.key === 'codEscritorio' || p.key === 'data.codEscritorio') return 41;

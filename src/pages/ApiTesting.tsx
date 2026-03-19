@@ -78,41 +78,35 @@ export const processEndpoints: EndpointDef[] = [
   },
   // Gerenciamento
   {
-    id: "register-process", label: "Cadastrar Processo", method: "POST", path: "sync-process-management",
-    category: "management", authType: "jwt",
-    description: "Cadastra um novo processo CNJ para monitoramento na Solucionare.",
+    id: "register-process", label: "Cadastrar Processo", method: "POST", path: "api-management",
+    category: "management", authType: "token",
+    description: "Cadastra um novo processo CNJ para monitoramento na Solucionare via API Token.",
     params: [],
     bodyParams: [
-      { key: "serviceId", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
-      { key: "processNumber", label: "Número do Processo (CNJ)", placeholder: "0000000-00.0000.0.00.0000", required: true },
-      { key: "instance", label: "Instância", placeholder: "1, 2, 3 ou 0 (todas)", required: true },
-      { key: "uf", label: "UF", placeholder: "SP" },
-      { key: "codTribunal", label: "Código do Tribunal", placeholder: "8", type: "number" },
-      { key: "comarca", label: "Comarca", placeholder: "São Paulo" },
-      { key: "autor", label: "Autor", placeholder: "Nome do autor" },
-      { key: "reu", label: "Réu", placeholder: "Nome do réu" },
-      { key: "clientSystemId", label: "ID do Sistema Cliente", placeholder: "uuid (opcional)" },
+      { key: "data.service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+      { key: "data.processNumber", label: "Número do Processo (CNJ)", placeholder: "0000000-00.0000.0.00.0000", required: true },
+      { key: "data.instance", label: "Instância", placeholder: "1, 2, 3 ou 0 (todas)" },
+      { key: "data.uf", label: "UF", placeholder: "SP" },
     ],
   },
   {
-    id: "delete-process", label: "Excluir Processo", method: "POST", path: "sync-process-management",
-    category: "management", authType: "jwt",
-    description: "Remove um processo do monitoramento na Solucionare.",
+    id: "delete-process", label: "Excluir Processo", method: "POST", path: "api-management",
+    category: "management", authType: "token",
+    description: "Remove um processo do monitoramento na Solucionare via API Token.",
     params: [],
     bodyParams: [
-      { key: "serviceId", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
-      { key: "processNumber", label: "Número do Processo (CNJ)", placeholder: "0000000-00.0000.0.00.0000", required: true },
-      { key: "clientSystemId", label: "ID do Sistema Cliente", placeholder: "uuid (opcional)" },
+      { key: "data.service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+      { key: "data.processNumber", label: "Número do Processo (CNJ)", placeholder: "0000000-00.0000.0.00.0000", required: true },
     ],
   },
   {
-    id: "status-process", label: "Status do Processo", method: "POST", path: "sync-process-management",
-    category: "management", authType: "jwt",
-    description: "Consulta o status de cadastro de um processo na Solucionare.",
+    id: "status-process", label: "Status do Processo", method: "POST", path: "api-management",
+    category: "management", authType: "token",
+    description: "Consulta o status de cadastro de um processo na Solucionare via API Token.",
     params: [],
     bodyParams: [
-      { key: "serviceId", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
-      { key: "processNumber", label: "Número do Processo (CNJ)", placeholder: "0000000-00.0000.0.00.0000", required: true },
+      { key: "data.service_id", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+      { key: "data.processNumber", label: "Número do Processo (CNJ)", placeholder: "0000000-00.0000.0.00.0000", required: true },
     ],
   },
   {
@@ -649,14 +643,13 @@ export const publicationEndpoints: EndpointDef[] = [
 
 // ─── Action map for management endpoints ──────────────────────
 export const managementActionMap: Record<string, string> = {
-  // Processos
-  "register-process": "register",
-  "delete-process": "delete",
-  "status-process": "status",
+  // Processos (via api-management)
+  "register-process": "register-process",
+  "delete-process": "delete-process",
+  "status-process": "status-process",
   "list-registered-processes": "list",
   "resend-pending-processes": "send-pending",
   "sync-processes": "sync",
-  // Andamentos REST V3
   "and-cadastrar-processo": "rest_cadastrar_processo",
   "and-excluir-processo": "rest_excluir_processo",
   "and-buscar-status": "rest_buscar_status",
@@ -737,7 +730,13 @@ const ApiTesting = () => {
 
   const getFilteredServices = () => {
     if (!partnerServices || !selectedEndpoint) return [];
-    const filterType = getServiceTypeFilter(selectedEndpoint!.path);
+    let filterType = getServiceTypeFilter(selectedEndpoint!.path);
+    // For api-management endpoints, determine service type from the current tab
+    if (!filterType && selectedEndpoint.path === "api-management") {
+      if (serviceTab === "processes") filterType = "processes";
+      else if (serviceTab === "distributions") filterType = "distributions";
+      else filterType = "terms";
+    }
     if (!filterType) return partnerServices;
     return partnerServices.filter((s) => s.service_type === filterType);
   };
@@ -776,12 +775,12 @@ const ApiTesting = () => {
     const action = managementActionMap[selectedEndpoint.id];
     
     // manage-search-terms uses { action, service_id, data: { ... } }
-    const isSearchTerms = selectedEndpoint.path === "manage-search-terms";
+    const usesDataWrapper = selectedEndpoint.path === "manage-search-terms" || selectedEndpoint.path === "api-management";
     
     const body: Record<string, any> = {};
     if (action) body.action = action;
 
-    if (isSearchTerms) {
+    if (usesDataWrapper) {
       const data: Record<string, any> = {};
       for (const p of (selectedEndpoint.bodyParams || [])) {
         const val = bodyValues[p.key];
