@@ -730,7 +730,13 @@ const ApiTesting = () => {
 
   const getFilteredServices = () => {
     if (!partnerServices || !selectedEndpoint) return [];
-    const filterType = getServiceTypeFilter(selectedEndpoint!.path);
+    let filterType = getServiceTypeFilter(selectedEndpoint!.path);
+    // For api-management endpoints, determine service type from the current tab
+    if (!filterType && selectedEndpoint.path === "api-management") {
+      if (serviceTab === "processes") filterType = "processes";
+      else if (serviceTab === "distributions") filterType = "distributions";
+      else filterType = "terms";
+    }
     if (!filterType) return partnerServices;
     return partnerServices.filter((s) => s.service_type === filterType);
   };
