@@ -120,7 +120,7 @@ function buildPostmanItem(
 
 function getDefaultValue(p: ParamDef, selectedServiceId: string): any {
   // serviceId / service_id → selected service
-  if (p.key === 'serviceId' || p.key === 'service_id') return selectedServiceId;
+  if (p.key === 'serviceId' || p.key === 'service_id' || p.key === 'data.service_id') return selectedServiceId;
 
   // codEscritorio → 41
   if (p.key === 'codEscritorio' || p.key === 'data.codEscritorio') return 41;
