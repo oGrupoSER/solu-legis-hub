@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Clock, Activity, Search, TestTube,
   FileText, Settings, HelpCircle, Newspaper, Gavel, FolderInput,
   AlertCircle, Building2, Users, RotateCcw, ChevronDown, Bookmark,
-  ArrowRightLeft, ListChecks,
+  ArrowRightLeft, ListChecks, CalendarClock,
 } from "lucide-react";
 import logo from "@/assets/logo-orbo.png";
 import { NavLink, useLocation } from "react-router-dom";
@@ -59,6 +59,7 @@ const serviceGroups: ServiceGroup[] = [
 ];
 
 const integrationItems = [
+  { title: "Agendamentos", url: "/scheduled-sync", icon: CalendarClock },
   { title: "Status Tribunais", url: "/court-status", icon: AlertCircle },
   { title: "Reversão Confirmações", url: "/confirmation-reversal", icon: RotateCcw },
   { title: "Logs de Sincronização", url: "/sync-logs", icon: Clock },

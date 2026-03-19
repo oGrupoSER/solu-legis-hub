@@ -26,6 +26,7 @@ import ConfirmationReversal from "./pages/ConfirmationReversal";
 import PublicationTerms from "./pages/PublicationTerms";
 import DistributionTerms from "./pages/DistributionTerms";
 import ProcessMovements from "./pages/ProcessMovements";
+import ScheduledSync from "./pages/ScheduledSync";
 
 const queryClient = new QueryClient();
 
@@ -53,6 +54,7 @@ const App = () => (
                 <Route path="/publications/terms" element={<PublicationTerms />} />
                 <Route path="/court-status" element={<CourtStatus />} />
                 <Route path="/confirmation-reversal" element={<ConfirmationReversal />} />
+                <Route path="/scheduled-sync" element={<ScheduledSync />} />
                 <Route path="/sync-logs" element={<SyncLogs />} />
                 <Route path="/publications" element={<Publications />} />
                 <Route path="/api-monitoring" element={<ApiMonitoring />} />

@@ -1543,6 +1543,86 @@ export type Database = {
           },
         ]
       }
+      scheduled_sync_jobs: {
+        Row: {
+          created_at: string
+          cron_expression: string
+          id: string
+          is_active: boolean
+          last_run_at: string | null
+          name: string
+          next_run_at: string | null
+          pg_cron_job_id: number | null
+          services: string[]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          cron_expression: string
+          id?: string
+          is_active?: boolean
+          last_run_at?: string | null
+          name: string
+          next_run_at?: string | null
+          pg_cron_job_id?: number | null
+          services?: string[]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          cron_expression?: string
+          id?: string
+          is_active?: boolean
+          last_run_at?: string | null
+          name?: string
+          next_run_at?: string | null
+          pg_cron_job_id?: number | null
+          services?: string[]
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      scheduled_sync_logs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          job_id: string | null
+          result: Json | null
+          started_at: string
+          status: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          job_id?: string | null
+          result?: Json | null
+          started_at?: string
+          status?: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          job_id?: string | null
+          result?: Json | null
+          started_at?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_sync_logs_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "scheduled_sync_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       search_terms: {
         Row: {
           created_at: string | null
@@ -1656,7 +1736,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      exec_sql: { Args: { sql_query: string }; Returns: Json }
+      get_cron_job_details: { Args: { p_job_id: number }; Returns: Json }
     }
     Enums: {
       [_ in never]: never
