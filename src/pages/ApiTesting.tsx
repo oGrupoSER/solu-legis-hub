@@ -769,7 +769,7 @@ const ApiTesting = () => {
     const action = managementActionMap[selectedEndpoint.id];
     
     // manage-search-terms uses { action, service_id, data: { ... } }
-    const isSearchTerms = selectedEndpoint.path === "manage-search-terms";
+    const usesDataWrapper = selectedEndpoint.path === "manage-search-terms" || selectedEndpoint.path === "api-management";
     
     const body: Record<string, any> = {};
     if (action) body.action = action;
