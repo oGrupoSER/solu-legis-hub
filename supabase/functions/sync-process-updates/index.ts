@@ -214,9 +214,17 @@ serve(async (req) => {
 
         // 5. Sync Covers (Capas) with Parties and Lawyers - BuscaProcessosComCapaAtualizada
         if (syncType === 'full' || syncType === 'covers') {
-          const coversSynced = await syncCovers(client, supabase, service, officeCode);
-          totalSynced += coversSynced;
-          console.log(`Synced ${coversSynced} covers`);
+          const coversResult = await syncCovers(client, supabase, service, officeCode, offset, limit);
+          totalSynced += coversResult.synced;
+          console.log(`Synced ${coversResult.synced} covers`);
+          if (syncType === 'covers' && typeof offset === 'number') {
+            await updateLastSync(service.id);
+            await logger.success(coversResult.synced);
+            return new Response(
+              JSON.stringify({ results: [{ service: service.service_name, success: true, recordsSynced: coversResult.synced }], hasMore: coversResult.hasMore, nextOffset: coversResult.nextOffset, totalProcesses: coversResult.totalProcesses }),
+              { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+            );
+          }
         }
 
         await updateLastSync(service.id);
