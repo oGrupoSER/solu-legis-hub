@@ -601,21 +601,33 @@ async function syncAllMovementsByProcess(client: RestClient, supabase: any, serv
  * GET /BuscaTodosDocumentosPorProcesso?codProcesso={code} - returns ALL documents for a specific process
  * Links documents to movements if codAndamento matches an existing movement, otherwise keeps as loose process documents
  */
-async function syncAllDocumentsByProcess(client: RestClient, supabase: any, service: any): Promise<number> {
+async function syncAllDocumentsByProcess(client: RestClient, supabase: any, service: any, offset?: number, limit?: number): Promise<{ synced: number; hasMore: boolean; nextOffset: number; totalProcesses: number }> {
   try {
-    // Get all processes with cod_processo
-    const { data: processes, error: procError } = await supabase
+    const { count: totalProcesses } = await supabase
       .from('processes')
-      .select('id, cod_processo')
+      .select('id', { count: 'exact', head: true })
       .not('cod_processo', 'is', null)
       .eq('partner_service_id', service.id);
 
-    if (procError || !processes?.length) {
-      console.log('No processes found for all-documents sync');
-      return 0;
+    let query = supabase
+      .from('processes')
+      .select('id, cod_processo')
+      .not('cod_processo', 'is', null)
+      .eq('partner_service_id', service.id)
+      .order('cod_processo', { ascending: true });
+
+    if (typeof offset === 'number' && typeof limit === 'number') {
+      query = query.range(offset, offset + limit - 1);
     }
 
-    console.log(`Fetching all documents for ${processes.length} processes`);
+    const { data: processes, error: procError } = await query;
+
+    if (procError || !processes?.length) {
+      console.log('No processes found for all-documents sync');
+      return { synced: 0, hasMore: false, nextOffset: 0, totalProcesses: totalProcesses || 0 };
+    }
+
+    console.log(`Fetching all documents for ${processes.length} processes (offset: ${offset ?? 'all'})`);
     let totalSynced = 0;
 
     for (const process of processes) {
@@ -628,7 +640,6 @@ async function syncAllDocumentsByProcess(client: RestClient, supabase: any, serv
           continue;
         }
 
-        // Lookup movement IDs for documents that have codAndamento
         const uniqueCodAndamentos = [...new Set(data.map((d: any) => d.codAndamento).filter(Boolean))];
         let movementMap = new Map<number, string>();
 
@@ -667,10 +678,13 @@ async function syncAllDocumentsByProcess(client: RestClient, supabase: any, serv
       }
     }
 
-    return totalSynced;
+    const nextOff = (offset ?? 0) + processes.length;
+    const hasMore = typeof offset === 'number' && typeof limit === 'number' && processes.length === limit && nextOff < (totalProcesses || 0);
+
+    return { synced: totalSynced, hasMore, nextOffset: nextOff, totalProcesses: totalProcesses || 0 };
   } catch (error) {
     console.error('Error in syncAllDocumentsByProcess:', error);
-    return 0;
+    return { synced: 0, hasMore: false, nextOffset: 0, totalProcesses: 0 };
   }
 }
 
