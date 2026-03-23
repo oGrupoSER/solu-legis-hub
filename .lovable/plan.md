@@ -1,42 +1,55 @@
 
 
-## Plano: Correção dos 3 Problemas nos Endpoints de Distribuição
+## Plano: Suporte a Token via Query Param no api-distributions
 
-### Problemas Identificados
+### Problema
+O Infojudiciais envia o token `ljhub_*` como query parameter (`?token=ljhub_...`), mas o `auth-middleware.ts` só lê do header `Authorization: Bearer <token>`.
 
-**Problema 1: `registerName` retorna `solucionare_code: null`**
-A API `/CadastrarNome` da Solucionare não retorna `codNome` na resposta de registro. O código na linha 381 tenta extrair `result?.codNome` mas o valor é `null`. Solução: após o registro bem-sucedido, chamar `/BuscaNomesCadastrados` para encontrar o nome recém-registrado e obter o `codNome`.
+### Solução
+Atualizar o `auth-middleware.ts` para também aceitar token via query parameter `token`, como fallback quando o header Authorization não está presente.
 
-**Problema 2: Cursor do batch não avança após confirm**
-O `confirm` apenas seta `pending_confirmation: false` no cursor. Porém, o próximo GET não exclui registros já confirmados — ele faz `SELECT * FROM distributions` filtrado por termos do cliente, sem considerar o que já foi entregue. Os mesmos 26 registros sempre voltam. Solução: no GET, excluir distribuições que já possuem entrada na tabela `record_confirmations` para aquele `client_system_id`.
+### Alteração
 
-**Problema 3: `term_type` inconsistente (BUG CRÍTICO)**
-- `manage-distribution-terms` salva termos com `term_type = 'distribution'` (singular)
-- `api-distributions` filtra por `term_type IN ['distributions', 'name', 'office']` (plural)
-- Como `'distribution' ≠ 'distributions'`, o isolamento de cliente retorna 0 termos e o endpoint entrega `data: []` ou ignora o filtro. Solução: incluir `'distribution'` no filtro.
+**`supabase/functions/_shared/auth-middleware.ts`** — na função `validateToken`:
+- Antes de retornar erro por header ausente, verificar `url.searchParams.get('token')`
+- Se encontrado, usar esse valor como o token
+- Manter o header `Authorization: Bearer` como método primário
 
----
+```
+// Lógica atual:
+const authHeader = request.headers.get('Authorization');
+// token = authHeader.substring(7)
 
-### Alterações
+// Nova lógica:
+const authHeader = request.headers.get('Authorization');
+let token = '';
+if (authHeader && authHeader.startsWith('Bearer ')) {
+  token = authHeader.substring(7);
+} else {
+  // Fallback: query param
+  const url = new URL(request.url);
+  token = url.searchParams.get('token') || '';
+}
+if (!token) {
+  return { authenticated: false, error: 'Missing token. Send via Authorization: Bearer <token> header or ?token= query param' };
+}
+```
 
-**1. `supabase/functions/manage-distribution-terms/index.ts`**
-- No `registerName` (após linha 368): após registro bem-sucedido na Solucionare, chamar `BuscaNomesCadastrados` com `partnerOfficeCode` para buscar o `codNome` do nome recém-cadastrado
-- Atualizar o `search_terms` local com o `solucionare_code` obtido
-- Incluir `codNome` na resposta final em `data.local.solucionare_code` e `data.codNome`
+### Instrução para o Infojudiciais
+Formato correto da chamada:
 
-**2. `supabase/functions/api-distributions/index.ts`**
-- **Fix term_type** (linha 41): mudar filtro para `['distribution', 'distributions', 'name', 'office']`
-- **Fix cursor/batch** (após linha 169): no GET de listagem, quando `clientSystemId` presente, excluir distribuições já confirmadas usando subquery em `record_confirmations`:
-  ```sql
-  -- Lógica: filtrar IDs que NÃO estão na record_confirmations para esse client
-  ```
-  Como o Supabase JS não suporta `NOT IN (subquery)`, buscar os IDs confirmados primeiro e usar `.not('id', 'in', confirmedIds)`
+**Opção 1 (recomendada) — Header:**
+```
+Authorization: Bearer ljhub_xxxxx
+apikey: <anon_key>
+```
 
-**3. Documentação de Auth na resposta** (sem mudança de código, apenas resposta ao Info):
-- `api-distributions`: usa `Authorization: Bearer ljhub_*` (API Token)
-- `manage-distribution-terms`: usa `Authorization: Bearer <supabase-jwt>` + `apikey: <anon-key>` (dashboard) OU `Authorization: Bearer ljhub_*` via `api-management` (sistema externo)
+**Opção 2 (fallback) — Query param:**
+```
+GET /functions/v1/api-distributions?token=ljhub_xxxxx&limit=500
+apikey: <anon_key>
+```
 
-### Arquivos alterados
-- `supabase/functions/manage-distribution-terms/index.ts`
-- `supabase/functions/api-distributions/index.ts`
+### Arquivo alterado
+- `supabase/functions/_shared/auth-middleware.ts`
 
