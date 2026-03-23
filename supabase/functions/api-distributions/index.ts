@@ -38,7 +38,7 @@ async function getClientTerms(clientSystemId: string): Promise<string[]> {
     .from('search_terms')
     .select('term')
     .in('id', termIds)
-    .in('term_type', ['distributions', 'name', 'office']);
+    .in('term_type', ['distribution', 'distributions', 'name', 'office']);
 
   return (terms || []).map(t => t.term);
 }
