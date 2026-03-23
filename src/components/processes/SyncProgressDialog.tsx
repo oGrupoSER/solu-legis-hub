@@ -70,8 +70,8 @@ export function SyncProgressDialog({ open, onOpenChange, onComplete }: SyncProgr
     // Stages 3-7: sync-process-updates individual types
     const updateStages: { id: string; syncType: string; paginated: boolean }[] = [
       { id: "groupers", syncType: "groupers", paginated: false },
-      { id: "all-movements", syncType: "all-movements", paginated: true },
-      { id: "all-documents", syncType: "all-documents", paginated: true },
+      { id: "new-movements", syncType: "new-movements", paginated: false },
+      { id: "new-documents", syncType: "new-documents", paginated: false },
       { id: "covers", syncType: "covers", paginated: true },
       { id: "dependencies", syncType: "dependencies", paginated: false },
     ];
@@ -103,7 +103,7 @@ export function SyncProgressDialog({ open, onOpenChange, onComplete }: SyncProgr
             offset = data.nextOffset;
           }
 
-          updateStage(stage.id, "success", `${totalRecords} registros`);
+          updateStage(stage.id, "success", totalProcesses === 0 ? "Todos já atualizados hoje" : `${totalRecords} registros`);
         } else {
           const { data, error } = await supabase.functions.invoke("sync-process-updates", {
             body: { syncType: stage.syncType },
