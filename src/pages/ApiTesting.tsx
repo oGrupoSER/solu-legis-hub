@@ -1173,7 +1173,17 @@ const ApiTesting = () => {
                               <pre className="bg-muted p-4 rounded-lg text-xs overflow-x-auto max-h-[600px]">
                                 <code>{JSON.stringify(response.data, null, 2)}</code>
                               </pre>
-                              <Button variant="ghost" size="icon" className="absolute top-2 right-2" onClick={() => copy(JSON.stringify(response.data, null, 2))}><Copy className="h-4 w-4" /></Button>
+                              <div className="absolute top-2 right-2 flex gap-1">
+                                {(() => {
+                                  const arr = findExportableArray(response.data);
+                                  return arr && arr.length > 0 ? (
+                                    <Button variant="ghost" size="icon" title="Baixar Excel" onClick={() => downloadExcel(response.data)}>
+                                      <Download className="h-4 w-4" />
+                                    </Button>
+                                  ) : null;
+                                })()}
+                                <Button variant="ghost" size="icon" onClick={() => copy(JSON.stringify(response.data, null, 2))}><Copy className="h-4 w-4" /></Button>
+                              </div>
                             </div>
                           </div>
                         )}
