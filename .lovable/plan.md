@@ -1,29 +1,31 @@
 
 
-## Plano: Limpar Processos COD-* e Impedir Importação Automática
+## Plano: Corrigir Filtro de Documentos na API de Processos
 
 ### Problema
-O `sync-processes` importa automaticamente todos os ~2.261 processos cadastrados na Solucionare, criando placeholders `COD-xxxxx`. Esses processos nunca foram cadastrados pelo usuário — foram importados em massa.
+Na linha 163 do `api-processes/index.ts`, o endpoint filtra documentos com `.not('storage_path', 'is', null)` — só retorna documentos já baixados para o storage local. Como nenhum dos 48 documentos foi baixado (todos têm `storage_path = null`), o Infojudiciais recebe lista vazia de documentos.
 
-### Correções
+Os documentos têm `documento_url` válida (links externos da Solucionare) e devem ser acessíveis mesmo sem download local.
 
-**1. Migration SQL — Deletar os 2.261 processos COD-***
+### Correção
 
-```sql
-DELETE FROM processes WHERE process_number LIKE 'COD-%';
+**`supabase/functions/api-processes/index.ts`** — Linha 158-164
+
+Remover o filtro `.not('storage_path', 'is', null)` e substituir por um filtro que retorne documentos que tenham **ou** `storage_path` **ou** `documento_url`:
+
+```typescript
+if (includes.includes('documents')) {
+  const { data: documents } = await supabase
+    .from('process_documents')
+    .select('*')
+    .eq('process_id', id)
+    .or('storage_path.not.is.null,documento_url.not.is.null');
+  result.documents = documents || [];
+}
 ```
 
-Isso remove apenas os placeholders importados automaticamente. Processos cadastrados manualmente (com número CNJ real) permanecem intactos.
+Isso garante que qualquer documento com URL externa ou arquivo local será retornado ao Infojudiciais.
 
-**2. `supabase/functions/sync-processes/index.ts` — Remover a lógica de auto-criação**
-
-Alterar a função para que ela apenas **atualize o status** de processos que já existem localmente (cadastrados pelo Hub ou pelo Infojudiciais), sem criar novos registros. A lógica do loop (linhas 103-130) será alterada de:
-
-- "Se não existe, cria placeholder" → "Se existe localmente, atualiza `cod_processo` se necessário"
-
-O sync passa a ser apenas uma verificação de paridade, não um importador.
-
-### Arquivos alterados
-- `supabase/functions/sync-processes/index.ts`
-- Nova migration SQL (DELETE dos COD-*)
+### Arquivo alterado
+- `supabase/functions/api-processes/index.ts`
 
