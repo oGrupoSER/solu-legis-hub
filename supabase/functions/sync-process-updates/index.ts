@@ -976,10 +976,12 @@ async function syncCovers(client: RestClient, supabase: any, service: any, offic
     }
 
     console.log(`Synced ${synced} covers`);
-    return synced;
+    const nextOff = (offset ?? 0) + localProcesses.length;
+    const hasMore = typeof offset === 'number' && typeof limit === 'number' && localProcesses.length === limit && nextOff < (totalProcesses || 0);
+    return { synced, hasMore, nextOffset: nextOff, totalProcesses: totalProcesses || 0 };
   } catch (error) {
     console.error('Error syncing covers:', error);
-    return 0;
+    return { synced: 0, hasMore: false, nextOffset: 0, totalProcesses: 0 };
   }
 }
 
