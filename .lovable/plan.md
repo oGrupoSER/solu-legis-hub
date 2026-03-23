@@ -1,45 +1,29 @@
 
 
-## Plano: Corrigir Confirmação de Distribuições e Limpar Dados Incorretos
+## Plano: Limpar Processos COD-* e Impedir Importação Automática
 
 ### Problema
-O endpoint `POST confirm` na linha 87-91 busca distribuições **sem filtrar por termos do cliente** — faz `SELECT id FROM distributions ORDER BY date LIMIT 500` e confirma tudo. Resultado: 59 registros foram confirmados para o Infojudiciais, incluindo distribuições de outros clientes. Como o GET exclui IDs confirmados, as 26 distribuições reais retornam vazias.
+O `sync-processes` importa automaticamente todos os ~2.261 processos cadastrados na Solucionare, criando placeholders `COD-xxxxx`. Esses processos nunca foram cadastrados pelo usuário — foram importados em massa.
 
 ### Correções
 
-**1. `supabase/functions/api-distributions/index.ts` — Fix no confirm (linhas 86-105)**
-
-Antes de buscar as distribuições para confirmar, filtrar pelos termos do cliente (mesma lógica do GET):
-
-```typescript
-// No POST confirm, após obter o cursor:
-const clientTerms = await getClientTerms(authResult.clientSystemId!);
-let confirmQuery = supabase.from('distributions').select('id');
-if (clientTerms.length > 0) {
-  confirmQuery = confirmQuery.in('term', clientTerms);
-}
-confirmQuery = confirmQuery.order('distribution_date', { ascending: false }).limit(batchSize);
-const { data: deliveredDists } = await confirmQuery;
-```
-
-**2. Migration — Limpar confirmações incorretas**
-
-Deletar as 59 confirmações existentes do Infojudiciais para distribuições, permitindo que o próximo GET retorne as 26 distribuições corretamente:
+**1. Migration SQL — Deletar os 2.261 processos COD-***
 
 ```sql
-DELETE FROM record_confirmations 
-WHERE client_system_id = '021ab6fc-2f57-4805-aa13-63d4219a12ca' 
-AND record_type = 'distributions';
+DELETE FROM processes WHERE process_number LIKE 'COD-%';
 ```
 
-E resetar o cursor:
-```sql
-DELETE FROM api_delivery_cursors 
-WHERE client_system_id = '021ab6fc-2f57-4805-aa13-63d4219a12ca' 
-AND service_type = 'distributions';
-```
+Isso remove apenas os placeholders importados automaticamente. Processos cadastrados manualmente (com número CNJ real) permanecem intactos.
 
-### Arquivos
-- `supabase/functions/api-distributions/index.ts` (fix no confirm)
-- Nova migration SQL (limpeza de dados)
+**2. `supabase/functions/sync-processes/index.ts` — Remover a lógica de auto-criação**
+
+Alterar a função para que ela apenas **atualize o status** de processos que já existem localmente (cadastrados pelo Hub ou pelo Infojudiciais), sem criar novos registros. A lógica do loop (linhas 103-130) será alterada de:
+
+- "Se não existe, cria placeholder" → "Se existe localmente, atualiza `cod_processo` se necessário"
+
+O sync passa a ser apenas uma verificação de paridade, não um importador.
+
+### Arquivos alterados
+- `supabase/functions/sync-processes/index.ts`
+- Nova migration SQL (DELETE dos COD-*)
 
