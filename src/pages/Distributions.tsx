@@ -242,7 +242,7 @@ export default function Distributions() {
                 </TableHeader>
                 <TableBody>
                   {paginatedDistributions.map((dist) => (
-                    <TableRow key={dist.id}>
+                    <TableRow key={dist.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedDistribution(dist)}>
                       <TableCell className="font-mono text-sm">{dist.process_number}</TableCell>
                       <TableCell>
                         <Badge variant="outline"><Building2 className="mr-1 h-3 w-3" />{dist.tribunal || "N/A"}</Badge>
