@@ -100,32 +100,18 @@ serve(async (req) => {
 
         let syncedCount = 0;
 
-        // For each codProcesso returned, ensure it exists in our database
+        // Only update cod_processo for processes that already exist locally
+        // Do NOT create new processes - they must be registered via Hub or client API
         for (const codProcesso of processesData) {
-          // Check if process already exists
+          // Check if process already exists locally (registered by user)
           const { data: existingProcess } = await supabase
             .from('processes')
-            .select('id')
+            .select('id, cod_processo')
             .eq('cod_processo', codProcesso)
             .maybeSingle();
 
-          if (!existingProcess) {
-            // Create a placeholder record - full data will be synced via sync-process-updates
-            const { error: insertError } = await supabase
-              .from('processes')
-              .insert({
-                process_number: `COD-${codProcesso}`, // Temporary, will be updated when syncing cover
-                cod_processo: codProcesso,
-                partner_service_id: service.id,
-                partner_id: service.partner_id,
-                status_code: 4, // Cadastrado
-                status_description: 'Cadastrado',
-                raw_data: { codProcesso },
-              });
-
-            if (!insertError) {
-              syncedCount++;
-            }
+          if (existingProcess) {
+            syncedCount++;
           }
         }
 
