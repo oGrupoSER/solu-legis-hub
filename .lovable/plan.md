@@ -1,43 +1,45 @@
 
 
-## Plano: Auto-Distribuição para Clientes Após Sincronização
+## Plano: Corrigir Confirmação de Distribuições e Limpar Dados Incorretos
 
-### Objetivo
-Após o sync-orchestrator baixar dados da Solucionare (publicações, distribuições, andamentos), automaticamente disparar webhooks para os sistemas clientes (Infojudiciais) notificando que há novos dados disponíveis.
+### Problema
+O endpoint `POST confirm` na linha 87-91 busca distribuições **sem filtrar por termos do cliente** — faz `SELECT id FROM distributions ORDER BY date LIMIT 500` e confirma tudo. Resultado: 59 registros foram confirmados para o Infojudiciais, incluindo distribuições de outros clientes. Como o GET exclui IDs confirmados, as 26 distribuições reais retornam vazias.
 
-### Como funciona hoje
-1. `sync-orchestrator` chama `sync-processes`, `sync-distributions`, `sync-publications`
-2. Dados são salvos no banco
-3. **Nada acontece** — o Infojudiciais precisa fazer polling manual via `api-distributions`, `api-publications`, etc.
+### Correções
 
-### O que será feito
-Após cada sync bem-sucedido no orchestrator, invocar `api-webhook` com o evento correspondente, notificando todos os clientes que têm webhooks registrados para aquele tipo de dado.
+**1. `supabase/functions/api-distributions/index.ts` — Fix no confirm (linhas 86-105)**
 
-### Alteração
-
-**`supabase/functions/sync-orchestrator/index.ts`**
-
-Após cada sync (linhas 149, 161, 201), quando houver registros sincronizados, chamar `api-webhook` com:
-- `distribution.new` → quando `distributions_synced > 0`
-- `publication.new` → quando `publications_synced > 0`  
-- `process.updated` → quando `processes_synced > 0`
-
-O payload do webhook incluirá um resumo (quantidade de novos registros, timestamp) para que o Infojudiciais saiba que deve chamar os endpoints `api-distributions`, `api-publications`, `api-processes` para buscar os dados completos.
+Antes de buscar as distribuições para confirmar, filtrar pelos termos do cliente (mesma lógica do GET):
 
 ```typescript
-// Após todos os syncs, disparar webhooks
-if (summary.distributions_synced > 0) {
-  await invokeFunction('api-webhook', {
-    event: 'distribution.new',
-    data: { count: summary.distributions_synced, timestamp: new Date().toISOString() }
-  });
+// No POST confirm, após obter o cursor:
+const clientTerms = await getClientTerms(authResult.clientSystemId!);
+let confirmQuery = supabase.from('distributions').select('id');
+if (clientTerms.length > 0) {
+  confirmQuery = confirmQuery.in('term', clientTerms);
 }
-// Similar para publications e processes
+confirmQuery = confirmQuery.order('distribution_date', { ascending: false }).limit(batchSize);
+const { data: deliveredDists } = await confirmQuery;
 ```
 
-### Pré-requisito para funcionar
-O Infojudiciais precisa ter um webhook registrado na tabela `client_webhooks` com a URL de callback e os eventos desejados (`['distributions', 'publications', 'processes']`). Isso já pode ser configurado pela interface de Clientes no Hub.
+**2. Migration — Limpar confirmações incorretas**
 
-### Arquivo alterado
-- `supabase/functions/sync-orchestrator/index.ts`
+Deletar as 59 confirmações existentes do Infojudiciais para distribuições, permitindo que o próximo GET retorne as 26 distribuições corretamente:
+
+```sql
+DELETE FROM record_confirmations 
+WHERE client_system_id = '021ab6fc-2f57-4805-aa13-63d4219a12ca' 
+AND record_type = 'distributions';
+```
+
+E resetar o cursor:
+```sql
+DELETE FROM api_delivery_cursors 
+WHERE client_system_id = '021ab6fc-2f57-4805-aa13-63d4219a12ca' 
+AND service_type = 'distributions';
+```
+
+### Arquivos
+- `supabase/functions/api-distributions/index.ts` (fix no confirm)
+- Nova migration SQL (limpeza de dados)
 
