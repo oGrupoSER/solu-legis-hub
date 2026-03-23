@@ -816,17 +816,24 @@ async function linkOrphanDocuments(supabase: any): Promise<number> {
  */
 async function syncCovers(client: RestClient, supabase: any, service: any, officeCode: number, offset?: number, limit?: number): Promise<{ synced: number; hasMore: boolean; nextOffset: number; totalProcesses: number }> {
   try {
+    // Get today's date start for filtering already-synced processes
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayISO = todayStart.toISOString();
+
     const { count: totalProcesses } = await supabase
       .from('processes')
       .select('id', { count: 'exact', head: true })
       .eq('cod_escritorio', officeCode)
-      .not('cod_processo', 'is', null);
+      .not('cod_processo', 'is', null)
+      .or(`last_cover_sync_at.is.null,last_cover_sync_at.lt.${todayISO}`);
 
     let query = supabase
       .from('processes')
       .select('id, cod_processo, process_number')
       .eq('cod_escritorio', officeCode)
       .not('cod_processo', 'is', null)
+      .or(`last_cover_sync_at.is.null,last_cover_sync_at.lt.${todayISO}`)
       .order('cod_processo', { ascending: true });
 
     if (typeof offset === 'number' && typeof limit === 'number') {
@@ -836,7 +843,7 @@ async function syncCovers(client: RestClient, supabase: any, service: any, offic
     const { data: localProcesses, error: procError } = await query;
 
     if (procError || !localProcesses?.length) {
-      console.log('No processes found for cover sync');
+      console.log('No processes found for cover sync (all already synced today)');
       return { synced: 0, hasMore: false, nextOffset: 0, totalProcesses: totalProcesses || 0 };
     }
 
