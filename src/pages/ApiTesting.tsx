@@ -909,6 +909,47 @@ const ApiTesting = () => {
 
   const copy = (text: string) => { navigator.clipboard.writeText(text); toast.success("Copiado!"); };
 
+  const findExportableArray = (data: any): any[] | null => {
+    if (Array.isArray(data)) return data;
+    if (data && typeof data === 'object') {
+      for (const key of Object.keys(data)) {
+        if (Array.isArray(data[key]) && data[key].length > 0 && typeof data[key][0] === 'object') {
+          return data[key];
+        }
+      }
+    }
+    return null;
+  };
+
+  const flattenObject = (obj: any, prefix = ''): Record<string, any> => {
+    const result: Record<string, any> = {};
+    for (const key of Object.keys(obj)) {
+      const fullKey = prefix ? `${prefix}.${key}` : key;
+      const val = obj[key];
+      if (val && typeof val === 'object' && !Array.isArray(val)) {
+        Object.assign(result, flattenObject(val, fullKey));
+      } else if (Array.isArray(val)) {
+        result[fullKey] = JSON.stringify(val);
+      } else {
+        result[fullKey] = val;
+      }
+    }
+    return result;
+  };
+
+  const downloadExcel = (data: any) => {
+    const arr = findExportableArray(data);
+    if (!arr || arr.length === 0) return;
+    const flat = arr.map((item) => flattenObject(item));
+    const ws = XLSX.utils.json_to_sheet(flat);
+    const cols = Object.keys(flat[0] || {});
+    ws['!cols'] = cols.map((c) => ({ wch: Math.max(c.length, 12) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Dados');
+    XLSX.writeFile(wb, `playground-export-${Date.now()}.xlsx`);
+    toast.success(`Excel gerado com ${arr.length} registros`);
+  };
+
   // Build code examples including body if present
   const queryString = selectedEndpoint?.params
     ?.filter(p => paramValues[p.key])
