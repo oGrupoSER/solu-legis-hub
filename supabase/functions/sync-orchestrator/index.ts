@@ -269,6 +269,7 @@ Deno.serve(async (req) => {
         success: results.errors.length === 0,
         summary,
         results,
+        webhooks: webhookResults.length > 0 ? webhookResults : undefined,
         timestamp: new Date().toISOString(),
       }),
       {
