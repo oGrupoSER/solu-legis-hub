@@ -33,6 +33,7 @@ export default function Distributions() {
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
   const [confirmedIds, setConfirmedIds] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedDistribution, setSelectedDistribution] = useState<any>(null);
   const itemsPerPage = 10;
 
   // Reset page when filters change
