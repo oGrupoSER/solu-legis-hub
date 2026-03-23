@@ -414,7 +414,7 @@ serve(async (req) => {
           await linkTermToClient(supabase, termRecord.id, client_system_id);
         }
 
-        result = { registeredInSolucionare, local: termRecord, linkedToClient: !!client_system_id, warning: !registeredInSolucionare ? 'Nome já existia no parceiro. Salvo localmente.' : undefined };
+        result = { registeredInSolucionare, codNome: solCode, local: termRecord, linkedToClient: !!client_system_id, warning: !registeredInSolucionare ? 'Nome já existia no parceiro. Salvo localmente.' : undefined };
         break;
       }
 

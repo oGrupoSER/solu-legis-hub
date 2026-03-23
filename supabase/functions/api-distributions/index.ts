@@ -145,7 +145,16 @@ serve(async (req) => {
     }
 
     // Check pending batch
+    // Fetch IDs already confirmed by this client to exclude from results
+    let confirmedIds: string[] = [];
     if (authResult.clientSystemId) {
+      const { data: confirmed } = await supabase
+        .from('record_confirmations')
+        .select('record_id')
+        .eq('client_system_id', authResult.clientSystemId)
+        .eq('record_type', 'distributions');
+      confirmedIds = (confirmed || []).map(c => c.record_id);
+
       const { data: cursor } = await supabase
         .from('api_delivery_cursors')
         .select('*')
