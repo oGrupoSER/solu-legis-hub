@@ -38,7 +38,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const { serviceId, syncType = 'full' } = body;
+    const { serviceId, syncType = 'full', offset, limit } = body;
 
     console.log(`Starting process updates sync (Macro Processo 2 - Andamentos). Type: ${syncType}`);
 
