@@ -733,13 +733,11 @@ async function syncDocuments(client: RestClient, supabase: any, service: any, of
       return 0;
     }
 
-    // Confirm receipt if enabled
-    const { data: svcData4 } = await supabase.from('partner_services').select('confirm_receipt').eq('id', service.id).single();
-    if (svcData4?.confirm_receipt) {
-      const docIds = data.map((d: any) => d.codDocumento).filter(Boolean);
-      if (docIds.length > 0) await confirmReceipt(client, supabase, 'documents', docIds);
-    } else {
-      console.log(`Skipping confirmation for ${data.length} documents (confirm_receipt disabled)`);
+    // Always confirm receipt for documents to enable incremental sync
+    const docIds = data.map((d: any) => d.codDocumento).filter(Boolean);
+    if (docIds.length > 0) {
+      console.log(`Confirming receipt for ${docIds.length} documents`);
+      await confirmReceipt(client, supabase, 'documents', docIds);
     }
 
     return data.length;
