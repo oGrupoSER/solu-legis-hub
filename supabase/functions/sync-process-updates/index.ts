@@ -117,8 +117,8 @@ serve(async (req) => {
           console.log(`Synced ${depsSynced} dependencies`);
         }
 
-        // 3. Sync Movements (Andamentos) - BuscaNovosAndamentosPorEscritorio - Loop until no more data
-        if (syncType === 'full' || syncType === 'movements') {
+        // 3. Sync Movements (Andamentos) - BuscaNovosAndamentosPorEscritorio - Loop until no more data + always confirm
+        if (syncType === 'full' || syncType === 'movements' || syncType === 'new-movements') {
           let totalMovements = 0;
           let batchCount = 0;
           const maxBatches = 20;
@@ -136,25 +136,19 @@ serve(async (req) => {
           
           totalSynced += totalMovements;
           console.log(`Total synced ${totalMovements} movements in ${batchCount} batches`);
-        }
 
-        // 3.1 Sync ALL Movements per Process - BuscaTodosAndamentosPorProcesso
-        if (syncType === 'full' || syncType === 'all-movements') {
-          const allMovementsSynced = await syncAllMovementsByProcess(client, supabase, service, offset, limit);
-          totalSynced += allMovementsSynced.synced;
-          console.log(`Synced ${allMovementsSynced.synced} movements via BuscaTodosAndamentosPorProcesso`);
-          if (syncType === 'all-movements' && typeof offset === 'number') {
+          if (syncType === 'new-movements') {
             await updateLastSync(service.id);
-            await logger.success(allMovementsSynced.synced);
+            await logger.success(totalMovements);
             return new Response(
-              JSON.stringify({ results: [{ service: service.service_name, success: true, recordsSynced: allMovementsSynced.synced }], hasMore: allMovementsSynced.hasMore, nextOffset: allMovementsSynced.nextOffset, totalProcesses: allMovementsSynced.totalProcesses }),
+              JSON.stringify({ results: [{ service: service.service_name, success: true, recordsSynced: totalMovements }] }),
               { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
             );
           }
         }
 
-        // 4. Sync Documents - BuscaNovosDocumentosPorEscritorio - Loop until no more data
-        if (syncType === 'full' || syncType === 'documents') {
+        // 4. Sync Documents - BuscaNovosDocumentosPorEscritorio - Loop until no more data + always confirm
+        if (syncType === 'full' || syncType === 'documents' || syncType === 'new-documents') {
           let totalDocs = 0;
           let batchCount = 0;
           const maxBatches = 20;
@@ -172,18 +166,12 @@ serve(async (req) => {
           
           totalSynced += totalDocs;
           console.log(`Total synced ${totalDocs} documents in ${batchCount} batches`);
-        }
 
-        // 4.1 Sync ALL Documents per Process - BuscaTodosDocumentosPorProcesso
-        if (syncType === 'full' || syncType === 'all-documents') {
-          const allDocsResult = await syncAllDocumentsByProcess(client, supabase, service, offset, limit);
-          totalSynced += allDocsResult.synced;
-          console.log(`Synced ${allDocsResult.synced} documents via BuscaTodosDocumentosPorProcesso`);
-          if (syncType === 'all-documents' && typeof offset === 'number') {
+          if (syncType === 'new-documents') {
             await updateLastSync(service.id);
-            await logger.success(allDocsResult.synced);
+            await logger.success(totalDocs);
             return new Response(
-              JSON.stringify({ results: [{ service: service.service_name, success: true, recordsSynced: allDocsResult.synced }], hasMore: allDocsResult.hasMore, nextOffset: allDocsResult.nextOffset, totalProcesses: allDocsResult.totalProcesses }),
+              JSON.stringify({ results: [{ service: service.service_name, success: true, recordsSynced: totalDocs }] }),
               { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
             );
           }
