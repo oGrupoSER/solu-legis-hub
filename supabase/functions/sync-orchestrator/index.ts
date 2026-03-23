@@ -221,11 +221,55 @@ Deno.serve(async (req) => {
     console.log('Orchestration completed');
     console.log('Summary:', summary);
 
+    // Dispatch webhooks to notify clients of new data
+    const webhookResults: any[] = [];
+    try {
+      const webhookTasks: Promise<void>[] = [];
+
+      if (summary.processes_synced > 0) {
+        webhookTasks.push(
+          invokeFunction('api-webhook', {
+            event: 'process.updated',
+            data: { count: summary.processes_synced, timestamp: new Date().toISOString() }
+          }).then(r => webhookResults.push({ event: 'process.updated', ...r }))
+            .catch(e => console.error('Webhook process.updated failed:', e.message))
+        );
+      }
+
+      if (summary.distributions_synced > 0) {
+        webhookTasks.push(
+          invokeFunction('api-webhook', {
+            event: 'distribution.new',
+            data: { count: summary.distributions_synced, timestamp: new Date().toISOString() }
+          }).then(r => webhookResults.push({ event: 'distribution.new', ...r }))
+            .catch(e => console.error('Webhook distribution.new failed:', e.message))
+        );
+      }
+
+      if (summary.publications_synced > 0) {
+        webhookTasks.push(
+          invokeFunction('api-webhook', {
+            event: 'publication.new',
+            data: { count: summary.publications_synced, timestamp: new Date().toISOString() }
+          }).then(r => webhookResults.push({ event: 'publication.new', ...r }))
+            .catch(e => console.error('Webhook publication.new failed:', e.message))
+        );
+      }
+
+      if (webhookTasks.length > 0) {
+        await Promise.allSettled(webhookTasks);
+        console.log(`Webhooks dispatched: ${webhookResults.length} events sent`);
+      }
+    } catch (webhookError) {
+      console.error('Webhook dispatch error:', webhookError);
+    }
+
     return new Response(
       JSON.stringify({
         success: results.errors.length === 0,
         summary,
         results,
+        webhooks: webhookResults.length > 0 ? webhookResults : undefined,
         timestamp: new Date().toISOString(),
       }),
       {
