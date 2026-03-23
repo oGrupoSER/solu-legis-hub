@@ -18,8 +18,8 @@ const INITIAL_STAGES: Omit<SyncStage, "status">[] = [
   { id: "send-pending", label: "Enviando processos pendentes" },
   { id: "sync-status", label: "Atualizando status dos processos" },
   { id: "groupers", label: "Buscando agrupadores" },
-  { id: "all-movements", label: "Buscando todos andamentos por processo" },
-  { id: "all-documents", label: "Buscando todos documentos por processo" },
+  { id: "new-movements", label: "Buscando novos andamentos" },
+  { id: "new-documents", label: "Buscando novos documentos" },
   { id: "covers", label: "Atualizando capas dos processos" },
   { id: "dependencies", label: "Buscando dependências" },
 ];
