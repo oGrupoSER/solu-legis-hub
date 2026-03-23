@@ -14,6 +14,7 @@ import { RefreshCw, Search, FileText, Building2, Loader2, X } from "lucide-react
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { DateRangePicker } from "@/components/publications/DateRangePicker";
 import { ConfirmationBadge } from "@/components/shared/ConfirmationBadge";
+import { DistributionDetailDialog } from "@/components/distributions/DistributionDetailDialog";
 import {
   Pagination,
   PaginationContent,
@@ -32,6 +33,7 @@ export default function Distributions() {
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
   const [confirmedIds, setConfirmedIds] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedDistribution, setSelectedDistribution] = useState<any>(null);
   const itemsPerPage = 10;
 
   // Reset page when filters change
@@ -240,7 +242,7 @@ export default function Distributions() {
                 </TableHeader>
                 <TableBody>
                   {paginatedDistributions.map((dist) => (
-                    <TableRow key={dist.id}>
+                    <TableRow key={dist.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedDistribution(dist)}>
                       <TableCell className="font-mono text-sm">{dist.process_number}</TableCell>
                       <TableCell>
                         <Badge variant="outline"><Building2 className="mr-1 h-3 w-3" />{dist.tribunal || "N/A"}</Badge>
@@ -306,6 +308,12 @@ export default function Distributions() {
           )}
         </CardContent>
       </Card>
+
+      <DistributionDetailDialog
+        distribution={selectedDistribution}
+        open={!!selectedDistribution}
+        onOpenChange={(open) => { if (!open) setSelectedDistribution(null); }}
+      />
     </div>
   );
 }
