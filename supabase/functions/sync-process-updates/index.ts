@@ -176,9 +176,17 @@ serve(async (req) => {
 
         // 4.1 Sync ALL Documents per Process - BuscaTodosDocumentosPorProcesso
         if (syncType === 'full' || syncType === 'all-documents') {
-          const allDocsSynced = await syncAllDocumentsByProcess(client, supabase, service);
-          totalSynced += allDocsSynced;
-          console.log(`Synced ${allDocsSynced} documents via BuscaTodosDocumentosPorProcesso`);
+          const allDocsResult = await syncAllDocumentsByProcess(client, supabase, service, offset, limit);
+          totalSynced += allDocsResult.synced;
+          console.log(`Synced ${allDocsResult.synced} documents via BuscaTodosDocumentosPorProcesso`);
+          if (syncType === 'all-documents' && typeof offset === 'number') {
+            await updateLastSync(service.id);
+            await logger.success(allDocsResult.synced);
+            return new Response(
+              JSON.stringify({ results: [{ service: service.service_name, success: true, recordsSynced: allDocsResult.synced }], hasMore: allDocsResult.hasMore, nextOffset: allDocsResult.nextOffset, totalProcesses: allDocsResult.totalProcesses }),
+              { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+            );
+          }
         }
 
         // 4.2 Link orphan documents to processes
