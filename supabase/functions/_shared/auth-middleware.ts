@@ -99,15 +99,19 @@ async function checkIpRules(ip: string, clientSystemId?: string): Promise<{ bloc
 export async function validateToken(request: Request, serviceType?: string): Promise<AuthResult> {
   const authHeader = request.headers.get('Authorization');
   const clientIp = getClientIp(request);
-  const endpoint = new URL(request.url).pathname;
+  const requestUrl = new URL(request.url);
+  const endpoint = requestUrl.pathname;
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return { authenticated: false, error: 'Missing or invalid Authorization header. Expected: Bearer <token>' };
+  // Try Authorization header first, then fallback to query param
+  let token = '';
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.substring(7);
+  } else {
+    token = requestUrl.searchParams.get('token') || '';
   }
 
-  const token = authHeader.substring(7);
   if (!token) {
-    return { authenticated: false, error: 'Token is empty' };
+    return { authenticated: false, error: 'Missing token. Send via Authorization: Bearer <token> header or ?token= query param' };
   }
 
   // 1. Try to validate as API token
