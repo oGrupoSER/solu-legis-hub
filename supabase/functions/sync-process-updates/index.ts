@@ -38,7 +38,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const { serviceId, syncType = 'full' } = body;
+    const { serviceId, syncType = 'full', offset, limit } = body;
 
     console.log(`Starting process updates sync (Macro Processo 2 - Andamentos). Type: ${syncType}`);
 
@@ -140,9 +140,17 @@ serve(async (req) => {
 
         // 3.1 Sync ALL Movements per Process - BuscaTodosAndamentosPorProcesso
         if (syncType === 'full' || syncType === 'all-movements') {
-          const allMovementsSynced = await syncAllMovementsByProcess(client, supabase, service);
-          totalSynced += allMovementsSynced;
-          console.log(`Synced ${allMovementsSynced} movements via BuscaTodosAndamentosPorProcesso`);
+          const allMovementsSynced = await syncAllMovementsByProcess(client, supabase, service, offset, limit);
+          totalSynced += allMovementsSynced.synced;
+          console.log(`Synced ${allMovementsSynced.synced} movements via BuscaTodosAndamentosPorProcesso`);
+          if (syncType === 'all-movements' && typeof offset === 'number') {
+            await updateLastSync(service.id);
+            await logger.success(allMovementsSynced.synced);
+            return new Response(
+              JSON.stringify({ results: [{ service: service.service_name, success: true, recordsSynced: allMovementsSynced.synced }], hasMore: allMovementsSynced.hasMore, nextOffset: allMovementsSynced.nextOffset, totalProcesses: allMovementsSynced.totalProcesses }),
+              { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+            );
+          }
         }
 
         // 4. Sync Documents - BuscaNovosDocumentosPorEscritorio - Loop until no more data
@@ -168,9 +176,17 @@ serve(async (req) => {
 
         // 4.1 Sync ALL Documents per Process - BuscaTodosDocumentosPorProcesso
         if (syncType === 'full' || syncType === 'all-documents') {
-          const allDocsSynced = await syncAllDocumentsByProcess(client, supabase, service);
-          totalSynced += allDocsSynced;
-          console.log(`Synced ${allDocsSynced} documents via BuscaTodosDocumentosPorProcesso`);
+          const allDocsResult = await syncAllDocumentsByProcess(client, supabase, service, offset, limit);
+          totalSynced += allDocsResult.synced;
+          console.log(`Synced ${allDocsResult.synced} documents via BuscaTodosDocumentosPorProcesso`);
+          if (syncType === 'all-documents' && typeof offset === 'number') {
+            await updateLastSync(service.id);
+            await logger.success(allDocsResult.synced);
+            return new Response(
+              JSON.stringify({ results: [{ service: service.service_name, success: true, recordsSynced: allDocsResult.synced }], hasMore: allDocsResult.hasMore, nextOffset: allDocsResult.nextOffset, totalProcesses: allDocsResult.totalProcesses }),
+              { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+            );
+          }
         }
 
         // 4.2 Link orphan documents to processes
@@ -198,9 +214,17 @@ serve(async (req) => {
 
         // 5. Sync Covers (Capas) with Parties and Lawyers - BuscaProcessosComCapaAtualizada
         if (syncType === 'full' || syncType === 'covers') {
-          const coversSynced = await syncCovers(client, supabase, service, officeCode);
-          totalSynced += coversSynced;
-          console.log(`Synced ${coversSynced} covers`);
+          const coversResult = await syncCovers(client, supabase, service, officeCode, offset, limit);
+          totalSynced += coversResult.synced;
+          console.log(`Synced ${coversResult.synced} covers`);
+          if (syncType === 'covers' && typeof offset === 'number') {
+            await updateLastSync(service.id);
+            await logger.success(coversResult.synced);
+            return new Response(
+              JSON.stringify({ results: [{ service: service.service_name, success: true, recordsSynced: coversResult.synced }], hasMore: coversResult.hasMore, nextOffset: coversResult.nextOffset, totalProcesses: coversResult.totalProcesses }),
+              { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+            );
+          }
         }
 
         await updateLastSync(service.id);
@@ -494,21 +518,35 @@ async function syncMovements(client: RestClient, supabase: any, service: any, of
  * GET /BuscaTodosAndamentosPorProcesso?codProcesso={code} - returns ALL movements for a specific process
  * Iterates over all processes with cod_processo and fetches their complete movement history
  */
-async function syncAllMovementsByProcess(client: RestClient, supabase: any, service: any): Promise<number> {
+async function syncAllMovementsByProcess(client: RestClient, supabase: any, service: any, offset?: number, limit?: number): Promise<{ synced: number; hasMore: boolean; nextOffset: number; totalProcesses: number }> {
   try {
-    // Get all processes with cod_processo
-    const { data: processes, error: procError } = await supabase
+    // Get total count first
+    const { count: totalProcesses } = await supabase
       .from('processes')
-      .select('id, cod_processo')
+      .select('id', { count: 'exact', head: true })
       .not('cod_processo', 'is', null)
       .eq('partner_service_id', service.id);
 
-    if (procError || !processes?.length) {
-      console.log('No processes found for all-movements sync');
-      return 0;
+    // Get processes with optional pagination
+    let query = supabase
+      .from('processes')
+      .select('id, cod_processo')
+      .not('cod_processo', 'is', null)
+      .eq('partner_service_id', service.id)
+      .order('cod_processo', { ascending: true });
+
+    if (typeof offset === 'number' && typeof limit === 'number') {
+      query = query.range(offset, offset + limit - 1);
     }
 
-    console.log(`Fetching all movements for ${processes.length} processes`);
+    const { data: processes, error: procError } = await query;
+
+    if (procError || !processes?.length) {
+      console.log('No processes found for all-movements sync');
+      return { synced: 0, hasMore: false, nextOffset: 0, totalProcesses: totalProcesses || 0 };
+    }
+
+    console.log(`Fetching all movements for ${processes.length} processes (offset: ${offset ?? 'all'})`);
     let totalSynced = 0;
 
     for (const process of processes) {
@@ -548,10 +586,13 @@ async function syncAllMovementsByProcess(client: RestClient, supabase: any, serv
       }
     }
 
-    return totalSynced;
+    const nextOff = (offset ?? 0) + processes.length;
+    const hasMore = typeof offset === 'number' && typeof limit === 'number' && processes.length === limit && nextOff < (totalProcesses || 0);
+
+    return { synced: totalSynced, hasMore, nextOffset: nextOff, totalProcesses: totalProcesses || 0 };
   } catch (error) {
     console.error('Error in syncAllMovementsByProcess:', error);
-    return 0;
+    return { synced: 0, hasMore: false, nextOffset: 0, totalProcesses: 0 };
   }
 }
 
@@ -560,21 +601,33 @@ async function syncAllMovementsByProcess(client: RestClient, supabase: any, serv
  * GET /BuscaTodosDocumentosPorProcesso?codProcesso={code} - returns ALL documents for a specific process
  * Links documents to movements if codAndamento matches an existing movement, otherwise keeps as loose process documents
  */
-async function syncAllDocumentsByProcess(client: RestClient, supabase: any, service: any): Promise<number> {
+async function syncAllDocumentsByProcess(client: RestClient, supabase: any, service: any, offset?: number, limit?: number): Promise<{ synced: number; hasMore: boolean; nextOffset: number; totalProcesses: number }> {
   try {
-    // Get all processes with cod_processo
-    const { data: processes, error: procError } = await supabase
+    const { count: totalProcesses } = await supabase
       .from('processes')
-      .select('id, cod_processo')
+      .select('id', { count: 'exact', head: true })
       .not('cod_processo', 'is', null)
       .eq('partner_service_id', service.id);
 
-    if (procError || !processes?.length) {
-      console.log('No processes found for all-documents sync');
-      return 0;
+    let query = supabase
+      .from('processes')
+      .select('id, cod_processo')
+      .not('cod_processo', 'is', null)
+      .eq('partner_service_id', service.id)
+      .order('cod_processo', { ascending: true });
+
+    if (typeof offset === 'number' && typeof limit === 'number') {
+      query = query.range(offset, offset + limit - 1);
     }
 
-    console.log(`Fetching all documents for ${processes.length} processes`);
+    const { data: processes, error: procError } = await query;
+
+    if (procError || !processes?.length) {
+      console.log('No processes found for all-documents sync');
+      return { synced: 0, hasMore: false, nextOffset: 0, totalProcesses: totalProcesses || 0 };
+    }
+
+    console.log(`Fetching all documents for ${processes.length} processes (offset: ${offset ?? 'all'})`);
     let totalSynced = 0;
 
     for (const process of processes) {
@@ -587,7 +640,6 @@ async function syncAllDocumentsByProcess(client: RestClient, supabase: any, serv
           continue;
         }
 
-        // Lookup movement IDs for documents that have codAndamento
         const uniqueCodAndamentos = [...new Set(data.map((d: any) => d.codAndamento).filter(Boolean))];
         let movementMap = new Map<number, string>();
 
@@ -626,10 +678,13 @@ async function syncAllDocumentsByProcess(client: RestClient, supabase: any, serv
       }
     }
 
-    return totalSynced;
+    const nextOff = (offset ?? 0) + processes.length;
+    const hasMore = typeof offset === 'number' && typeof limit === 'number' && processes.length === limit && nextOff < (totalProcesses || 0);
+
+    return { synced: totalSynced, hasMore, nextOffset: nextOff, totalProcesses: totalProcesses || 0 };
   } catch (error) {
     console.error('Error in syncAllDocumentsByProcess:', error);
-    return 0;
+    return { synced: 0, hasMore: false, nextOffset: 0, totalProcesses: 0 };
   }
 }
 
@@ -775,21 +830,33 @@ async function linkOrphanDocuments(supabase: any): Promise<number> {
  * For each CADASTRADO process with cod_processo, call GET /BuscaDadosCapaProcessoPorProcesso?codProcesso=X
  * Returns full cover data including autor, reu, advogados
  */
-async function syncCovers(client: RestClient, supabase: any, service: any, officeCode: number): Promise<number> {
+async function syncCovers(client: RestClient, supabase: any, service: any, officeCode: number, offset?: number, limit?: number): Promise<{ synced: number; hasMore: boolean; nextOffset: number; totalProcesses: number }> {
   try {
-    // Get all local processes with cod_processo that are CADASTRADO (status_code = 4)
-    const { data: localProcesses, error: procError } = await supabase
+    const { count: totalProcesses } = await supabase
       .from('processes')
-      .select('id, cod_processo, process_number')
+      .select('id', { count: 'exact', head: true })
       .eq('cod_escritorio', officeCode)
       .not('cod_processo', 'is', null);
 
-    if (procError || !localProcesses?.length) {
-      console.log('No processes found for cover sync');
-      return 0;
+    let query = supabase
+      .from('processes')
+      .select('id, cod_processo, process_number')
+      .eq('cod_escritorio', officeCode)
+      .not('cod_processo', 'is', null)
+      .order('cod_processo', { ascending: true });
+
+    if (typeof offset === 'number' && typeof limit === 'number') {
+      query = query.range(offset, offset + limit - 1);
     }
 
-    console.log(`Fetching covers for ${localProcesses.length} processes`);
+    const { data: localProcesses, error: procError } = await query;
+
+    if (procError || !localProcesses?.length) {
+      console.log('No processes found for cover sync');
+      return { synced: 0, hasMore: false, nextOffset: 0, totalProcesses: totalProcesses || 0 };
+    }
+
+    console.log(`Fetching covers for ${localProcesses.length} processes (offset: ${offset ?? 'all'})`);
 
     let synced = 0;
 
@@ -909,10 +976,12 @@ async function syncCovers(client: RestClient, supabase: any, service: any, offic
     }
 
     console.log(`Synced ${synced} covers`);
-    return synced;
+    const nextOff = (offset ?? 0) + localProcesses.length;
+    const hasMore = typeof offset === 'number' && typeof limit === 'number' && localProcesses.length === limit && nextOff < (totalProcesses || 0);
+    return { synced, hasMore, nextOffset: nextOff, totalProcesses: totalProcesses || 0 };
   } catch (error) {
     console.error('Error syncing covers:', error);
-    return 0;
+    return { synced: 0, hasMore: false, nextOffset: 0, totalProcesses: 0 };
   }
 }
 
