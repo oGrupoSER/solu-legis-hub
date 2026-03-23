@@ -160,7 +160,7 @@ serve(async (req) => {
             .from('process_documents')
             .select('*')
             .eq('process_id', id)
-            .not('storage_path', 'is', null);
+            .or('storage_path.not.is.null,documento_url.not.is.null');
           result.documents = documents || [];
         }
         if (includes.includes('parties')) {
