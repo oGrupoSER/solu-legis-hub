@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
+import * as XLSX from "xlsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -908,6 +909,47 @@ const ApiTesting = () => {
 
   const copy = (text: string) => { navigator.clipboard.writeText(text); toast.success("Copiado!"); };
 
+  const findExportableArray = (data: any): any[] | null => {
+    if (Array.isArray(data)) return data;
+    if (data && typeof data === 'object') {
+      for (const key of Object.keys(data)) {
+        if (Array.isArray(data[key]) && data[key].length > 0 && typeof data[key][0] === 'object') {
+          return data[key];
+        }
+      }
+    }
+    return null;
+  };
+
+  const flattenObject = (obj: any, prefix = ''): Record<string, any> => {
+    const result: Record<string, any> = {};
+    for (const key of Object.keys(obj)) {
+      const fullKey = prefix ? `${prefix}.${key}` : key;
+      const val = obj[key];
+      if (val && typeof val === 'object' && !Array.isArray(val)) {
+        Object.assign(result, flattenObject(val, fullKey));
+      } else if (Array.isArray(val)) {
+        result[fullKey] = JSON.stringify(val);
+      } else {
+        result[fullKey] = val;
+      }
+    }
+    return result;
+  };
+
+  const downloadExcel = (data: any) => {
+    const arr = findExportableArray(data);
+    if (!arr || arr.length === 0) return;
+    const flat = arr.map((item) => flattenObject(item));
+    const ws = XLSX.utils.json_to_sheet(flat);
+    const cols = Object.keys(flat[0] || {});
+    ws['!cols'] = cols.map((c) => ({ wch: Math.max(c.length, 12) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Dados');
+    XLSX.writeFile(wb, `playground-export-${Date.now()}.xlsx`);
+    toast.success(`Excel gerado com ${arr.length} registros`);
+  };
+
   // Build code examples including body if present
   const queryString = selectedEndpoint?.params
     ?.filter(p => paramValues[p.key])
@@ -1172,7 +1214,17 @@ const ApiTesting = () => {
                               <pre className="bg-muted p-4 rounded-lg text-xs overflow-x-auto max-h-[600px]">
                                 <code>{JSON.stringify(response.data, null, 2)}</code>
                               </pre>
-                              <Button variant="ghost" size="icon" className="absolute top-2 right-2" onClick={() => copy(JSON.stringify(response.data, null, 2))}><Copy className="h-4 w-4" /></Button>
+                              <div className="absolute top-2 right-2 flex gap-1">
+                                {(() => {
+                                  const arr = findExportableArray(response.data);
+                                  return arr && arr.length > 0 ? (
+                                    <Button variant="ghost" size="icon" title="Baixar Excel" onClick={() => downloadExcel(response.data)}>
+                                      <Download className="h-4 w-4" />
+                                    </Button>
+                                  ) : null;
+                                })()}
+                                <Button variant="ghost" size="icon" onClick={() => copy(JSON.stringify(response.data, null, 2))}><Copy className="h-4 w-4" /></Button>
+                              </div>
                             </div>
                           </div>
                         )}
