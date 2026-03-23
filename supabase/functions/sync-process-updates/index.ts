@@ -830,21 +830,33 @@ async function linkOrphanDocuments(supabase: any): Promise<number> {
  * For each CADASTRADO process with cod_processo, call GET /BuscaDadosCapaProcessoPorProcesso?codProcesso=X
  * Returns full cover data including autor, reu, advogados
  */
-async function syncCovers(client: RestClient, supabase: any, service: any, officeCode: number): Promise<number> {
+async function syncCovers(client: RestClient, supabase: any, service: any, officeCode: number, offset?: number, limit?: number): Promise<{ synced: number; hasMore: boolean; nextOffset: number; totalProcesses: number }> {
   try {
-    // Get all local processes with cod_processo that are CADASTRADO (status_code = 4)
-    const { data: localProcesses, error: procError } = await supabase
+    const { count: totalProcesses } = await supabase
       .from('processes')
-      .select('id, cod_processo, process_number')
+      .select('id', { count: 'exact', head: true })
       .eq('cod_escritorio', officeCode)
       .not('cod_processo', 'is', null);
 
-    if (procError || !localProcesses?.length) {
-      console.log('No processes found for cover sync');
-      return 0;
+    let query = supabase
+      .from('processes')
+      .select('id, cod_processo, process_number')
+      .eq('cod_escritorio', officeCode)
+      .not('cod_processo', 'is', null)
+      .order('cod_processo', { ascending: true });
+
+    if (typeof offset === 'number' && typeof limit === 'number') {
+      query = query.range(offset, offset + limit - 1);
     }
 
-    console.log(`Fetching covers for ${localProcesses.length} processes`);
+    const { data: localProcesses, error: procError } = await query;
+
+    if (procError || !localProcesses?.length) {
+      console.log('No processes found for cover sync');
+      return { synced: 0, hasMore: false, nextOffset: 0, totalProcesses: totalProcesses || 0 };
+    }
+
+    console.log(`Fetching covers for ${localProcesses.length} processes (offset: ${offset ?? 'all'})`);
 
     let synced = 0;
 
