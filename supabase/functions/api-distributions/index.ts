@@ -84,11 +84,24 @@ serve(async (req) => {
         || 'unknown';
 
       const batchSize = cursor.batch_size || 500;
-      const { data: deliveredDists } = await supabase
-        .from('distributions')
-        .select('id')
-        .order('distribution_date', { ascending: false })
-        .limit(batchSize);
+      const clientTerms = await getClientTerms(authResult.clientSystemId!);
+      let confirmQuery = supabase.from('distributions').select('id');
+      if (clientTerms.length > 0) {
+        confirmQuery = confirmQuery.in('term', clientTerms);
+      }
+      // Exclude already confirmed to only confirm new ones
+      const { data: alreadyConfirmed } = await supabase
+        .from('record_confirmations')
+        .select('record_id')
+        .eq('client_system_id', authResult.clientSystemId!)
+        .eq('record_type', 'distributions');
+      const alreadyConfirmedIds = (alreadyConfirmed || []).map(c => c.record_id);
+      if (alreadyConfirmedIds.length > 0) {
+        const idList = `(${alreadyConfirmedIds.join(',')})`;
+        confirmQuery = confirmQuery.not('id', 'in', idList);
+      }
+      confirmQuery = confirmQuery.order('distribution_date', { ascending: false }).limit(batchSize);
+      const { data: deliveredDists } = await confirmQuery;
 
       if (deliveredDists && deliveredDists.length > 0) {
         const confirmations = deliveredDists.map(d => ({
