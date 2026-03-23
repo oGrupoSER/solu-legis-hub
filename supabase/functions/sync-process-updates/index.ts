@@ -518,21 +518,35 @@ async function syncMovements(client: RestClient, supabase: any, service: any, of
  * GET /BuscaTodosAndamentosPorProcesso?codProcesso={code} - returns ALL movements for a specific process
  * Iterates over all processes with cod_processo and fetches their complete movement history
  */
-async function syncAllMovementsByProcess(client: RestClient, supabase: any, service: any): Promise<number> {
+async function syncAllMovementsByProcess(client: RestClient, supabase: any, service: any, offset?: number, limit?: number): Promise<{ synced: number; hasMore: boolean; nextOffset: number; totalProcesses: number }> {
   try {
-    // Get all processes with cod_processo
-    const { data: processes, error: procError } = await supabase
+    // Get total count first
+    const { count: totalProcesses } = await supabase
       .from('processes')
-      .select('id, cod_processo')
+      .select('id', { count: 'exact', head: true })
       .not('cod_processo', 'is', null)
       .eq('partner_service_id', service.id);
 
-    if (procError || !processes?.length) {
-      console.log('No processes found for all-movements sync');
-      return 0;
+    // Get processes with optional pagination
+    let query = supabase
+      .from('processes')
+      .select('id, cod_processo')
+      .not('cod_processo', 'is', null)
+      .eq('partner_service_id', service.id)
+      .order('cod_processo', { ascending: true });
+
+    if (typeof offset === 'number' && typeof limit === 'number') {
+      query = query.range(offset, offset + limit - 1);
     }
 
-    console.log(`Fetching all movements for ${processes.length} processes`);
+    const { data: processes, error: procError } = await query;
+
+    if (procError || !processes?.length) {
+      console.log('No processes found for all-movements sync');
+      return { synced: 0, hasMore: false, nextOffset: 0, totalProcesses: totalProcesses || 0 };
+    }
+
+    console.log(`Fetching all movements for ${processes.length} processes (offset: ${offset ?? 'all'})`);
     let totalSynced = 0;
 
     for (const process of processes) {
@@ -572,10 +586,13 @@ async function syncAllMovementsByProcess(client: RestClient, supabase: any, serv
       }
     }
 
-    return totalSynced;
+    const nextOff = (offset ?? 0) + processes.length;
+    const hasMore = typeof offset === 'number' && typeof limit === 'number' && processes.length === limit && nextOff < (totalProcesses || 0);
+
+    return { synced: totalSynced, hasMore, nextOffset: nextOff, totalProcesses: totalProcesses || 0 };
   } catch (error) {
     console.error('Error in syncAllMovementsByProcess:', error);
-    return 0;
+    return { synced: 0, hasMore: false, nextOffset: 0, totalProcesses: 0 };
   }
 }
 
