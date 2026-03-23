@@ -117,8 +117,8 @@ serve(async (req) => {
           console.log(`Synced ${depsSynced} dependencies`);
         }
 
-        // 3. Sync Movements (Andamentos) - BuscaNovosAndamentosPorEscritorio - Loop until no more data
-        if (syncType === 'full' || syncType === 'movements') {
+        // 3. Sync Movements (Andamentos) - BuscaNovosAndamentosPorEscritorio - Loop until no more data + always confirm
+        if (syncType === 'full' || syncType === 'movements' || syncType === 'new-movements') {
           let totalMovements = 0;
           let batchCount = 0;
           const maxBatches = 20;
@@ -136,25 +136,19 @@ serve(async (req) => {
           
           totalSynced += totalMovements;
           console.log(`Total synced ${totalMovements} movements in ${batchCount} batches`);
-        }
 
-        // 3.1 Sync ALL Movements per Process - BuscaTodosAndamentosPorProcesso
-        if (syncType === 'full' || syncType === 'all-movements') {
-          const allMovementsSynced = await syncAllMovementsByProcess(client, supabase, service, offset, limit);
-          totalSynced += allMovementsSynced.synced;
-          console.log(`Synced ${allMovementsSynced.synced} movements via BuscaTodosAndamentosPorProcesso`);
-          if (syncType === 'all-movements' && typeof offset === 'number') {
+          if (syncType === 'new-movements') {
             await updateLastSync(service.id);
-            await logger.success(allMovementsSynced.synced);
+            await logger.success(totalMovements);
             return new Response(
-              JSON.stringify({ results: [{ service: service.service_name, success: true, recordsSynced: allMovementsSynced.synced }], hasMore: allMovementsSynced.hasMore, nextOffset: allMovementsSynced.nextOffset, totalProcesses: allMovementsSynced.totalProcesses }),
+              JSON.stringify({ results: [{ service: service.service_name, success: true, recordsSynced: totalMovements }] }),
               { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
             );
           }
         }
 
-        // 4. Sync Documents - BuscaNovosDocumentosPorEscritorio - Loop until no more data
-        if (syncType === 'full' || syncType === 'documents') {
+        // 4. Sync Documents - BuscaNovosDocumentosPorEscritorio - Loop until no more data + always confirm
+        if (syncType === 'full' || syncType === 'documents' || syncType === 'new-documents') {
           let totalDocs = 0;
           let batchCount = 0;
           const maxBatches = 20;
@@ -172,18 +166,12 @@ serve(async (req) => {
           
           totalSynced += totalDocs;
           console.log(`Total synced ${totalDocs} documents in ${batchCount} batches`);
-        }
 
-        // 4.1 Sync ALL Documents per Process - BuscaTodosDocumentosPorProcesso
-        if (syncType === 'full' || syncType === 'all-documents') {
-          const allDocsResult = await syncAllDocumentsByProcess(client, supabase, service, offset, limit);
-          totalSynced += allDocsResult.synced;
-          console.log(`Synced ${allDocsResult.synced} documents via BuscaTodosDocumentosPorProcesso`);
-          if (syncType === 'all-documents' && typeof offset === 'number') {
+          if (syncType === 'new-documents') {
             await updateLastSync(service.id);
-            await logger.success(allDocsResult.synced);
+            await logger.success(totalDocs);
             return new Response(
-              JSON.stringify({ results: [{ service: service.service_name, success: true, recordsSynced: allDocsResult.synced }], hasMore: allDocsResult.hasMore, nextOffset: allDocsResult.nextOffset, totalProcesses: allDocsResult.totalProcesses }),
+              JSON.stringify({ results: [{ service: service.service_name, success: true, recordsSynced: totalDocs }] }),
               { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
             );
           }
@@ -497,13 +485,11 @@ async function syncMovements(client: RestClient, supabase: any, service: any, of
       return 0;
     }
 
-    // Confirm receipt if enabled
-    const { data: svcData3 } = await supabase.from('partner_services').select('confirm_receipt').eq('id', service.id).single();
-    if (svcData3?.confirm_receipt) {
-      const movIds = data.map((m: any) => m.codAndamento).filter(Boolean);
-      if (movIds.length > 0) await confirmReceipt(client, supabase, 'movements', movIds);
-    } else {
-      console.log(`Skipping confirmation for ${data.length} movements (confirm_receipt disabled)`);
+    // Always confirm receipt for movements to enable incremental sync
+    const movIds = data.map((m: any) => m.codAndamento).filter(Boolean);
+    if (movIds.length > 0) {
+      console.log(`Confirming receipt for ${movIds.length} movements`);
+      await confirmReceipt(client, supabase, 'movements', movIds);
     }
 
     return data.length;
@@ -747,13 +733,11 @@ async function syncDocuments(client: RestClient, supabase: any, service: any, of
       return 0;
     }
 
-    // Confirm receipt if enabled
-    const { data: svcData4 } = await supabase.from('partner_services').select('confirm_receipt').eq('id', service.id).single();
-    if (svcData4?.confirm_receipt) {
-      const docIds = data.map((d: any) => d.codDocumento).filter(Boolean);
-      if (docIds.length > 0) await confirmReceipt(client, supabase, 'documents', docIds);
-    } else {
-      console.log(`Skipping confirmation for ${data.length} documents (confirm_receipt disabled)`);
+    // Always confirm receipt for documents to enable incremental sync
+    const docIds = data.map((d: any) => d.codDocumento).filter(Boolean);
+    if (docIds.length > 0) {
+      console.log(`Confirming receipt for ${docIds.length} documents`);
+      await confirmReceipt(client, supabase, 'documents', docIds);
     }
 
     return data.length;
@@ -832,17 +816,24 @@ async function linkOrphanDocuments(supabase: any): Promise<number> {
  */
 async function syncCovers(client: RestClient, supabase: any, service: any, officeCode: number, offset?: number, limit?: number): Promise<{ synced: number; hasMore: boolean; nextOffset: number; totalProcesses: number }> {
   try {
+    // Get today's date start for filtering already-synced processes
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayISO = todayStart.toISOString();
+
     const { count: totalProcesses } = await supabase
       .from('processes')
       .select('id', { count: 'exact', head: true })
       .eq('cod_escritorio', officeCode)
-      .not('cod_processo', 'is', null);
+      .not('cod_processo', 'is', null)
+      .or(`last_cover_sync_at.is.null,last_cover_sync_at.lt.${todayISO}`);
 
     let query = supabase
       .from('processes')
       .select('id, cod_processo, process_number')
       .eq('cod_escritorio', officeCode)
       .not('cod_processo', 'is', null)
+      .or(`last_cover_sync_at.is.null,last_cover_sync_at.lt.${todayISO}`)
       .order('cod_processo', { ascending: true });
 
     if (typeof offset === 'number' && typeof limit === 'number') {
@@ -852,7 +843,7 @@ async function syncCovers(client: RestClient, supabase: any, service: any, offic
     const { data: localProcesses, error: procError } = await query;
 
     if (procError || !localProcesses?.length) {
-      console.log('No processes found for cover sync');
+      console.log('No processes found for cover sync (all already synced today)');
       return { synced: 0, hasMore: false, nextOffset: 0, totalProcesses: totalProcesses || 0 };
     }
 

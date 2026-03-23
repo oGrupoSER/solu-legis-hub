@@ -458,40 +458,7 @@ serve(async (req) => {
         await logger.start({ partner_service_id: service.id, sync_type: 'process_sync' });
         console.log(`Syncing processes for codEscritorio=${officeCode}`);
 
-        // Step 1: Check status for each local process with cod_processo
-        const { data: localProcesses } = await supabase
-          .from('processes')
-          .select('id, cod_processo, instance, process_number')
-          .eq('partner_service_id', service.id)
-          .not('cod_processo', 'is', null);
-
-        let statusUpdated = 0;
-        if (localProcesses && localProcesses.length > 0) {
-          console.log(`Checking status for ${localProcesses.length} local processes`);
-          for (const proc of localProcesses) {
-            try {
-              const rawStatusData = await client.get('/BuscaStatusProcesso', { codProcesso: proc.cod_processo });
-              const statusPayload = normalizeStatusPayload(rawStatusData);
-
-              if (statusPayload) {
-                const resolved = resolveStatus(statusPayload);
-                await supabase.from('processes').update({
-                  status: resolved.statusLabel,
-                  status_code: resolved.statusCode,
-                  status_description: resolved.statusLabel,
-                  cod_classificacao_status: resolved.codClassificacaoStatus,
-                  descricao_classificacao_status: resolved.descricaoClassificacaoStatus,
-                  updated_at: new Date().toISOString(),
-                }).eq('id', proc.id);
-                statusUpdated++;
-              }
-            } catch (err) {
-              console.error(`Error checking status for ${proc.process_number} inst ${proc.instance}:`, err);
-            }
-          }
-        }
-
-        // Step 2: Fetch all processes via BuscaProcessos
+        // Fetch all processes via BuscaProcessos (bulk - single call)
         const processesData = await client.get('/BuscaProcessos', { codEscritorio: officeCode });
 
         let synced = 0;
@@ -541,9 +508,8 @@ serve(async (req) => {
         await logger.success(synced);
         result = {
           success: true,
-          message: `Status checked: ${statusUpdated}, synced: ${synced}`,
+          message: `Synced: ${synced}`,
           synced,
-          statusUpdated,
         };
         break;
       }
