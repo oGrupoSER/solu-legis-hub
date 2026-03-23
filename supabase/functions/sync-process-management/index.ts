@@ -508,9 +508,8 @@ serve(async (req) => {
         await logger.success(synced);
         result = {
           success: true,
-          message: `Status checked: ${statusUpdated}, synced: ${synced}`,
+          message: `Synced: ${synced}`,
           synced,
-          statusUpdated,
         };
         break;
       }
