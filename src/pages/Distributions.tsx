@@ -308,6 +308,12 @@ export default function Distributions() {
           )}
         </CardContent>
       </Card>
+
+      <DistributionDetailDialog
+        distribution={selectedDistribution}
+        open={!!selectedDistribution}
+        onOpenChange={(open) => { if (!open) setSelectedDistribution(null); }}
+      />
     </div>
   );
 }
