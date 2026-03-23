@@ -378,7 +378,28 @@ serve(async (req) => {
             }
           }
 
-          const solCode = result?.codNome || null;
+          let solCode = result?.codNome || null;
+
+          // If registration succeeded but codNome is null, fetch it from BuscaNomesCadastrados
+          if (registeredInSolucionare && !solCode) {
+            try {
+              console.log(`[registerName] codNome not in response, fetching via BuscaNomesCadastrados with partnerOfficeCode=${partnerOfficeCode}`);
+              const allNames = await apiRequest(service.service_url, `/BuscaNomesCadastrados?codEscritorio=${partnerOfficeCode}`, jwtToken);
+              if (Array.isArray(allNames)) {
+                const match = allNames.find((n: any) => {
+                  const apiName = (n.nome || n.Nome || '').trim().toLowerCase();
+                  return apiName === nome.trim().toLowerCase();
+                });
+                if (match) {
+                  solCode = match.codNome || match.CodNome || null;
+                  console.log(`[registerName] Found codNome=${solCode} for "${nome}"`);
+                }
+              }
+            } catch (lookupErr) {
+              console.error(`[registerName] Failed to lookup codNome:`, lookupErr);
+            }
+          }
+
           const { data: inserted } = await supabase.from('search_terms').insert({
             term: nome, term_type: 'distribution',
             partner_service_id: serviceId, partner_id: service.partner_id,
@@ -393,7 +414,7 @@ serve(async (req) => {
           await linkTermToClient(supabase, termRecord.id, client_system_id);
         }
 
-        result = { registeredInSolucionare, local: termRecord, linkedToClient: !!client_system_id, warning: !registeredInSolucionare ? 'Nome já existia no parceiro. Salvo localmente.' : undefined };
+        result = { registeredInSolucionare, codNome: solCode, local: termRecord, linkedToClient: !!client_system_id, warning: !registeredInSolucionare ? 'Nome já existia no parceiro. Salvo localmente.' : undefined };
         break;
       }
 

@@ -38,7 +38,7 @@ async function getClientTerms(clientSystemId: string): Promise<string[]> {
     .from('search_terms')
     .select('term')
     .in('id', termIds)
-    .in('term_type', ['distributions', 'name', 'office']);
+    .in('term_type', ['distribution', 'distributions', 'name', 'office']);
 
   return (terms || []).map(t => t.term);
 }
@@ -145,7 +145,16 @@ serve(async (req) => {
     }
 
     // Check pending batch
+    // Fetch IDs already confirmed by this client to exclude from results
+    let confirmedIds: string[] = [];
     if (authResult.clientSystemId) {
+      const { data: confirmed } = await supabase
+        .from('record_confirmations')
+        .select('record_id')
+        .eq('client_system_id', authResult.clientSystemId)
+        .eq('record_type', 'distributions');
+      confirmedIds = (confirmed || []).map(c => c.record_id);
+
       const { data: cursor } = await supabase
         .from('api_delivery_cursors')
         .select('*')
@@ -182,6 +191,13 @@ serve(async (req) => {
         }, 200, rateLimitHeaders);
       }
       query = query.in('term', clientTerms);
+
+      // Exclude already confirmed distributions
+      if (confirmedIds.length > 0) {
+        // Supabase JS .not('id', 'in', ...) requires parenthesized comma list
+        const idList = `(${confirmedIds.join(',')})`;
+        query = query.not('id', 'in', idList);
+      }
     }
 
     if (termo) query = query.eq('term', termo);
