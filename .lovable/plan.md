@@ -1,31 +1,61 @@
 
 
-## Plano: Botão "Baixar Excel" na Resposta do Playground
+## Diagnóstico: Falhas na Sincronização de Andamentos, Documentos e Capas
 
-### Objetivo
-Adicionar um botão "Baixar Excel" ao lado do botão "Copiar" na área de resposta do Playground, para exportar dados JSON grandes como arquivo .xlsx.
+### Causa Raiz: Timeout da Edge Function
 
-### Como funciona
-1. Ao clicar, analisa `response.data` para encontrar o array principal (pode estar na raiz ou dentro de uma propriedade como `data`, `results`, etc.)
-2. Converte o array de objetos JSON em uma planilha Excel usando a biblioteca `xlsx` (SheetJS)
-3. Faz download automático do arquivo `.xlsx`
+As etapas que falham (`all-movements`, `all-documents`, `covers`) iteram **processo a processo**, fazendo uma chamada HTTP individual para cada um dos **309 processos**. Isso gera 309+ requests HTTP por etapa, facilmente ultrapassando o limite de execução da edge function (~60s).
 
-### Alterações
+As etapas que funcionam (`groupers`, `dependencies`) usam endpoints bulk (`PorEscritorio`) que retornam tudo em uma única chamada.
 
-**1. Instalar dependência `xlsx`**
-- Adicionar o pacote `xlsx` (SheetJS) para conversão JSON → Excel no client-side
+```text
+Etapa                    Endpoint                              Chamadas
+─────────────────────── ───────────────────────────────────── ────────
+✅ Agrupadores           BuscaAgrupadoresPorEscritorio          1
+✅ Dependências          BuscaDependenciasPorEscritorio          1
+❌ Todos andamentos      BuscaTodosAndamentosPorProcesso        309
+❌ Todos documentos      BuscaTodosDocumentosPorProcesso        309
+❌ Capas                 BuscaDadosCapaProcessoPorProcesso      309
+```
 
-**2. `src/pages/ApiTesting.tsx`**
-- Criar função `downloadExcel(data)` que:
-  - Detecta o array principal no JSON (raiz se for array, ou primeira propriedade que seja array)
-  - Achata objetos aninhados para colunas (ex: `cover.tribunal` → coluna `cover.tribunal`)
-  - Gera workbook com `xlsx.utils.json_to_sheet`
-  - Auto-ajusta largura das colunas
-  - Dispara download como `.xlsx`
-- Adicionar botão com ícone `Download` ao lado do botão `Copy` existente (linha 1175), visível apenas quando a resposta contém dados em array
+### Solução: Processar em lotes com paginação controlada pelo cliente
 
-### Detalhes técnicos
-- Biblioteca: `xlsx` (SheetJS) — funciona 100% client-side, sem backend
-- O botão aparece apenas quando há dados exportáveis (array com pelo menos 1 item)
-- Nome do arquivo: `playground-export-{timestamp}.xlsx`
+Em vez de processar todos os 309 processos em uma única invocação, o SyncProgressDialog passa a chamar a edge function em **lotes de N processos** (ex: 30), fazendo múltiplas invocações até cobrir todos.
+
+**1. `supabase/functions/sync-process-updates/index.ts`**
+
+Adicionar suporte a parâmetros `offset` e `limit` nas funções `syncAllMovementsByProcess`, `syncAllDocumentsByProcess` e `syncCovers`:
+
+- Aceitar `{ syncType, offset: 0, limit: 30 }` no body
+- Passar `offset`/`limit` para a query de processos (`.range(offset, offset + limit - 1)`)
+- Retornar `{ results, hasMore: true/false, nextOffset }` na resposta
+
+**2. `src/components/processes/SyncProgressDialog.tsx`**
+
+Para as 3 etapas problemáticas, implementar um loop de paginação:
+
+```typescript
+// Pseudocódigo para cada etapa paginada
+let offset = 0;
+const batchSize = 30;
+let totalRecords = 0;
+
+while (true) {
+  const { data } = await supabase.functions.invoke("sync-process-updates", {
+    body: { syncType: stage.syncType, offset, limit: batchSize },
+  });
+  totalRecords += data?.results?.[0]?.recordsSynced || 0;
+  if (!data?.hasMore) break;
+  offset = data.nextOffset;
+  // Atualizar UI com progresso parcial
+}
+```
+
+**3. Atualização do progresso em tempo real**
+
+Durante o loop, atualizar o `result` da etapa para mostrar progresso parcial (ex: "150 registros..." enquanto processa).
+
+### Arquivos alterados
+- `supabase/functions/sync-process-updates/index.ts` — suporte a offset/limit
+- `src/components/processes/SyncProgressDialog.tsx` — loop paginado no client
 
