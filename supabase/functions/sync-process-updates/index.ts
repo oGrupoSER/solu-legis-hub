@@ -485,13 +485,11 @@ async function syncMovements(client: RestClient, supabase: any, service: any, of
       return 0;
     }
 
-    // Confirm receipt if enabled
-    const { data: svcData3 } = await supabase.from('partner_services').select('confirm_receipt').eq('id', service.id).single();
-    if (svcData3?.confirm_receipt) {
-      const movIds = data.map((m: any) => m.codAndamento).filter(Boolean);
-      if (movIds.length > 0) await confirmReceipt(client, supabase, 'movements', movIds);
-    } else {
-      console.log(`Skipping confirmation for ${data.length} movements (confirm_receipt disabled)`);
+    // Always confirm receipt for movements to enable incremental sync
+    const movIds = data.map((m: any) => m.codAndamento).filter(Boolean);
+    if (movIds.length > 0) {
+      console.log(`Confirming receipt for ${movIds.length} movements`);
+      await confirmReceipt(client, supabase, 'movements', movIds);
     }
 
     return data.length;
