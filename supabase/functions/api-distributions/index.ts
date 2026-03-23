@@ -191,6 +191,13 @@ serve(async (req) => {
         }, 200, rateLimitHeaders);
       }
       query = query.in('term', clientTerms);
+
+      // Exclude already confirmed distributions
+      if (confirmedIds.length > 0) {
+        // Supabase JS .not('id', 'in', ...) requires parenthesized comma list
+        const idList = `(${confirmedIds.join(',')})`;
+        query = query.not('id', 'in', idList);
+      }
     }
 
     if (termo) query = query.eq('term', termo);
