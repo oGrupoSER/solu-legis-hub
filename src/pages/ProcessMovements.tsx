@@ -513,7 +513,7 @@ export default function ProcessMovements() {
         </Card>
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Total de Documentos</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{Object.values(documentCounts).reduce((a, b) => a + b, 0)}</div></CardContent>
+          <CardContent><div className="text-2xl font-bold">{totalDocumentsCount.toLocaleString("pt-BR")}</div></CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Com Andamentos</CardTitle></CardHeader>
