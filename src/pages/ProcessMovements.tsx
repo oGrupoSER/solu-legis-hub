@@ -244,15 +244,48 @@ export default function ProcessMovements() {
     enabled: processIds.length > 0,
     queryFn: async () => {
       // Only count documents NOT linked to a movement (process-level docs only)
-      const { data, error } = await supabase
+      // Paginate to avoid 1000-row limit
+      const counts: Record<string, number> = {};
+      let from = 0;
+      const pageSize = 1000;
+      while (true) {
+        const { data, error } = await supabase
+          .from("process_documents")
+          .select("process_id")
+          .in("process_id", processIds)
+          .is("cod_andamento", null)
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        data.forEach((d) => { if (d.process_id) counts[d.process_id] = (counts[d.process_id] || 0) + 1; });
+        if (data.length < pageSize) break;
+        from += pageSize;
+      }
+      return counts;
+    },
+  });
+
+  // Real total counts for stats (not limited by query filters/limits)
+  const { data: totalMovementsCount = 0 } = useQuery({
+    queryKey: ["total-movements-count"],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("process_movements")
+        .select("*", { count: "exact", head: true });
+      if (error) throw error;
+      return count || 0;
+    },
+  });
+
+  const { data: totalDocumentsCount = 0 } = useQuery({
+    queryKey: ["total-documents-count"],
+    queryFn: async () => {
+      const { count, error } = await supabase
         .from("process_documents")
-        .select("process_id")
-        .in("process_id", processIds)
+        .select("*", { count: "exact", head: true })
         .is("cod_andamento", null);
       if (error) throw error;
-      const counts: Record<string, number> = {};
-      data?.forEach((d) => { if (d.process_id) counts[d.process_id] = (counts[d.process_id] || 0) + 1; });
-      return counts;
+      return count || 0;
     },
   });
 
@@ -476,11 +509,11 @@ export default function ProcessMovements() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Total de Andamentos</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{movements.length}</div></CardContent>
+          <CardContent><div className="text-2xl font-bold">{totalMovementsCount.toLocaleString("pt-BR")}</div></CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Total de Documentos</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{Object.values(documentCounts).reduce((a, b) => a + b, 0)}</div></CardContent>
+          <CardContent><div className="text-2xl font-bold">{totalDocumentsCount.toLocaleString("pt-BR")}</div></CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Com Andamentos</CardTitle></CardHeader>
