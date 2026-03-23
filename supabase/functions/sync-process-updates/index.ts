@@ -140,9 +140,17 @@ serve(async (req) => {
 
         // 3.1 Sync ALL Movements per Process - BuscaTodosAndamentosPorProcesso
         if (syncType === 'full' || syncType === 'all-movements') {
-          const allMovementsSynced = await syncAllMovementsByProcess(client, supabase, service);
-          totalSynced += allMovementsSynced;
-          console.log(`Synced ${allMovementsSynced} movements via BuscaTodosAndamentosPorProcesso`);
+          const allMovementsSynced = await syncAllMovementsByProcess(client, supabase, service, offset, limit);
+          totalSynced += allMovementsSynced.synced;
+          console.log(`Synced ${allMovementsSynced.synced} movements via BuscaTodosAndamentosPorProcesso`);
+          if (syncType === 'all-movements' && typeof offset === 'number') {
+            await updateLastSync(service.id);
+            await logger.success(allMovementsSynced.synced);
+            return new Response(
+              JSON.stringify({ results: [{ service: service.service_name, success: true, recordsSynced: allMovementsSynced.synced }], hasMore: allMovementsSynced.hasMore, nextOffset: allMovementsSynced.nextOffset, totalProcesses: allMovementsSynced.totalProcesses }),
+              { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+            );
+          }
         }
 
         // 4. Sync Documents - BuscaNovosDocumentosPorEscritorio - Loop until no more data
