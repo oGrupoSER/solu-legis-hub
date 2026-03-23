@@ -72,9 +72,74 @@ export const processEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "confirm-processes", label: "Confirmar Lote", method: "POST", path: "api-processes?action=confirm",
+    id: "confirm-processes", label: "Confirmar Lote de Processos", method: "POST", path: "api-processes?action=confirm",
     category: "query", authType: "token",
     description: "Confirma recebimento do último lote de processos para liberar novos registros.",
+    params: [],
+  },
+  // ─── Bulk Sub-Resources ───────────────────────────────────────
+  {
+    id: "bulk-movements", label: "Andamentos (Bulk)", method: "GET", path: "api-processes",
+    category: "query", authType: "token",
+    description: "Retorna todos os andamentos dos processos do cliente, excluindo já confirmados. Máximo 500 por lote.",
+    params: [
+      { key: "action", label: "Action", placeholder: "movements" },
+      { key: "limit", label: "Limite", placeholder: "500" },
+      { key: "offset", label: "Offset", placeholder: "0" },
+    ],
+  },
+  {
+    id: "confirm-movements", label: "Confirmar Andamentos", method: "POST", path: "api-processes?action=confirm_movements",
+    category: "query", authType: "token",
+    description: "Confirma recebimento do lote de andamentos.",
+    params: [],
+  },
+  {
+    id: "bulk-documents", label: "Documentos (Bulk)", method: "GET", path: "api-processes",
+    category: "query", authType: "token",
+    description: "Retorna todos os documentos dos processos do cliente, excluindo já confirmados. Máximo 500 por lote.",
+    params: [
+      { key: "action", label: "Action", placeholder: "documents" },
+      { key: "limit", label: "Limite", placeholder: "500" },
+      { key: "offset", label: "Offset", placeholder: "0" },
+    ],
+  },
+  {
+    id: "confirm-documents", label: "Confirmar Documentos", method: "POST", path: "api-processes?action=confirm_documents",
+    category: "query", authType: "token",
+    description: "Confirma recebimento do lote de documentos.",
+    params: [],
+  },
+  {
+    id: "bulk-covers", label: "Capas (Bulk)", method: "GET", path: "api-processes",
+    category: "query", authType: "token",
+    description: "Retorna todas as capas dos processos do cliente com partes e advogados, excluindo já confirmadas. Máximo 500 por lote.",
+    params: [
+      { key: "action", label: "Action", placeholder: "covers" },
+      { key: "limit", label: "Limite", placeholder: "500" },
+      { key: "offset", label: "Offset", placeholder: "0" },
+    ],
+  },
+  {
+    id: "confirm-covers", label: "Confirmar Capas", method: "POST", path: "api-processes?action=confirm_covers",
+    category: "query", authType: "token",
+    description: "Confirma recebimento do lote de capas.",
+    params: [],
+  },
+  {
+    id: "bulk-parties", label: "Partes (Bulk)", method: "GET", path: "api-processes",
+    category: "query", authType: "token",
+    description: "Retorna todas as partes dos processos do cliente com advogados, excluindo já confirmadas. Máximo 500 por lote.",
+    params: [
+      { key: "action", label: "Action", placeholder: "parties" },
+      { key: "limit", label: "Limite", placeholder: "500" },
+      { key: "offset", label: "Offset", placeholder: "0" },
+    ],
+  },
+  {
+    id: "confirm-parties", label: "Confirmar Partes", method: "POST", path: "api-processes?action=confirm_parties",
+    category: "query", authType: "token",
+    description: "Confirma recebimento do lote de partes.",
     params: [],
   },
   // Gerenciamento
