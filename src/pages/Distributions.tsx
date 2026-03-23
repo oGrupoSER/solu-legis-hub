@@ -14,6 +14,7 @@ import { RefreshCw, Search, FileText, Building2, Loader2, X } from "lucide-react
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { DateRangePicker } from "@/components/publications/DateRangePicker";
 import { ConfirmationBadge } from "@/components/shared/ConfirmationBadge";
+import { DistributionDetailDialog } from "@/components/distributions/DistributionDetailDialog";
 import {
   Pagination,
   PaginationContent,
