@@ -456,15 +456,18 @@ serve(async (req) => {
 
       case 'sync': {
         await logger.start({ partner_service_id: service.id, sync_type: 'process_sync' });
-        console.log(`Syncing processes for codEscritorio=${officeCode}`);
+        const syncStart = new Date().toISOString();
+        console.log(`Syncing processes for codEscritorio=${officeCode} (start: ${syncStart})`);
 
-        // Fetch all processes via BuscaProcessos (bulk - single call)
+        // ===== PHASE 1: Bulk via BuscaProcessos =====
         const processesData = await client.get('/BuscaProcessos', { codEscritorio: officeCode });
 
         let synced = 0;
+        const batchSize = 50;
+        let upsertBatch: any[] = [];
+
         if (Array.isArray(processesData) && processesData.length > 0) {
           console.log(`BuscaProcessos returned ${processesData.length} records`);
-
           const filtered = processesData.filter((p: any) => p.codEscritorio === officeCode);
 
           for (const proc of filtered) {
@@ -474,7 +477,7 @@ serve(async (req) => {
             const inst = proc.instancia ? String(proc.instancia) : '1';
             const resolved = resolveStatus(proc);
 
-            const upsertData: any = {
+            upsertBatch.push({
               process_number: pn,
               instance: inst,
               partner_service_id: service.id,
@@ -491,25 +494,93 @@ serve(async (req) => {
               data_cadastro: proc.dataCadastro || null,
               cod_classificacao_status: resolved.codClassificacaoStatus,
               descricao_classificacao_status: resolved.descricaoClassificacaoStatus,
-            };
+            });
 
+            if (upsertBatch.length >= batchSize) {
+              const { error, data: upserted } = await supabase
+                .from('processes')
+                .upsert(upsertBatch, { onConflict: 'process_number,instance' });
+              if (error) {
+                console.error(`Batch upsert error:`, error);
+              } else {
+                synced += upsertBatch.length;
+              }
+              upsertBatch = [];
+            }
+          }
+
+          // Flush remaining batch
+          if (upsertBatch.length > 0) {
             const { error } = await supabase
               .from('processes')
-              .upsert(upsertData, { onConflict: 'process_number,instance' });
-
+              .upsert(upsertBatch, { onConflict: 'process_number,instance' });
             if (error) {
-              console.error(`Error upserting ${pn} inst ${inst}:`, error);
+              console.error(`Final batch upsert error:`, error);
             } else {
-              synced++;
+              synced += upsertBatch.length;
             }
           }
         }
 
-        await logger.success(synced);
+        console.log(`Phase 1 (bulk) complete: ${synced} synced`);
+
+        // ===== PHASE 2: Individual sweep for processes missed by bulk =====
+        let sweptCount = 0;
+        try {
+          // Find local processes with cod_processo that were NOT updated in this run
+          const { data: missedProcesses } = await supabase
+            .from('processes')
+            .select('id, process_number, instance, cod_processo, cod_escritorio')
+            .not('cod_processo', 'is', null)
+            .lt('updated_at', syncStart)
+            .limit(50);
+
+          if (missedProcesses && missedProcesses.length > 0) {
+            console.log(`Phase 2: ${missedProcesses.length} processes not covered by bulk, checking individually...`);
+
+            for (const proc of missedProcesses) {
+              try {
+                const rawStatusData = await client.get('/BuscaStatusProcesso', {
+                  codProcesso: proc.cod_processo,
+                  codEscritorio: officeCode,
+                });
+
+                // BuscaStatusProcesso can return array (multiple offices) — filter for our office
+                const statusArray = Array.isArray(rawStatusData) ? rawStatusData : [rawStatusData];
+                const ourStatus = statusArray.find((s: any) => s?.codEscritorio === officeCode);
+
+                if (ourStatus) {
+                  const resolved = resolveStatus(ourStatus);
+                  await supabase.from('processes').update({
+                    status: resolved.statusLabel,
+                    status_code: resolved.statusCode,
+                    status_description: resolved.statusLabel,
+                    cod_classificacao_status: resolved.codClassificacaoStatus,
+                    descricao_classificacao_status: resolved.descricaoClassificacaoStatus,
+                    solucionare_status: 'synced',
+                    data_cadastro: ourStatus.dataCadastro || null,
+                    uf: ourStatus.UF || ourStatus.uf || null,
+                    raw_data: ourStatus,
+                    updated_at: new Date().toISOString(),
+                  }).eq('id', proc.id);
+                  sweptCount++;
+                }
+              } catch (err) {
+                console.error(`Sweep error for ${proc.process_number} (cod=${proc.cod_processo}):`, err);
+              }
+            }
+            console.log(`Phase 2 (sweep) complete: ${sweptCount} updated individually`);
+          }
+        } catch (sweepErr) {
+          console.error('Phase 2 sweep failed:', sweepErr);
+        }
+
+        await logger.success(synced + sweptCount);
         result = {
           success: true,
-          message: `Synced: ${synced}`,
+          message: `Synced: ${synced} (bulk) + ${sweptCount} (individual)`,
           synced,
+          swept: sweptCount,
         };
         break;
       }
