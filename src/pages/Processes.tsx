@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RefreshCw, Plus, Gavel, Link2, Download, Search } from "lucide-react";
+import { RefreshCw, Plus, Gavel, Link2, Download, Search, CheckCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { ProcessesTable } from "@/components/processes/ProcessesTable";
@@ -43,6 +43,7 @@ const Processes = () => {
   const [syncDialogOpen, setSyncDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [isVerifying, setIsVerifying] = useState(false);
   const [statusOptions, setStatusOptions] = useState<{ code: number | null; description: string }[]>([]);
 
   useEffect(() => {
@@ -57,6 +58,28 @@ const Processes = () => {
 
   const handleStatusClick = (status: string) => {
     setFilterStatus(status);
+  };
+
+  const handleVerifyStatus = async () => {
+    setIsVerifying(true);
+    try {
+      const { data: sendData, error: sendErr } = await supabase.functions.invoke("sync-process-management", {
+        body: { action: "send-pending" },
+      });
+      const sent = sendErr ? 0 : (sendData?.results?.length || 0);
+
+      const { data: syncData, error: syncErr } = await supabase.functions.invoke("sync-process-management", {
+        body: { action: "sync" },
+      });
+      const synced = syncErr ? 0 : (syncData?.results?.[0]?.recordsSynced || 0);
+
+      toast.success(`${sent} enviados, ${synced} status atualizados`);
+      setRefreshTrigger(prev => prev + 1);
+    } catch {
+      toast.error("Erro ao verificar status");
+    } finally {
+      setIsVerifying(false);
+    }
   };
 
   const handleExport = async () => {
@@ -106,6 +129,16 @@ const Processes = () => {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button
+            onClick={handleVerifyStatus}
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            disabled={isVerifying}
+          >
+            {isVerifying ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+            Verificar Status
+          </Button>
           <Button
             onClick={() => setBulkLinkOpen(true)}
             variant="outline"
