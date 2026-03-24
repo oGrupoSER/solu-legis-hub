@@ -60,6 +60,28 @@ const Processes = () => {
     setFilterStatus(status);
   };
 
+  const handleVerifyStatus = async () => {
+    setIsVerifying(true);
+    try {
+      const { data: sendData, error: sendErr } = await supabase.functions.invoke("sync-process-management", {
+        body: { action: "send-pending" },
+      });
+      const sent = sendErr ? 0 : (sendData?.results?.length || 0);
+
+      const { data: syncData, error: syncErr } = await supabase.functions.invoke("sync-process-management", {
+        body: { action: "sync" },
+      });
+      const synced = syncErr ? 0 : (syncData?.results?.[0]?.recordsSynced || 0);
+
+      toast.success(`${sent} enviados, ${synced} status atualizados`);
+      setRefreshTrigger(prev => prev + 1);
+    } catch {
+      toast.error("Erro ao verificar status");
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
   const handleExport = async () => {
     try {
       const { data } = await supabase
