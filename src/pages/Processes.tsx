@@ -43,6 +43,7 @@ const Processes = () => {
   const [syncDialogOpen, setSyncDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [isVerifying, setIsVerifying] = useState(false);
   const [statusOptions, setStatusOptions] = useState<{ code: number | null; description: string }[]>([]);
 
   useEffect(() => {
