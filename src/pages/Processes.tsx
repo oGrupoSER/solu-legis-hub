@@ -130,6 +130,16 @@ const Processes = () => {
         </div>
         <div className="flex gap-2">
           <Button
+            onClick={handleVerifyStatus}
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            disabled={isVerifying}
+          >
+            {isVerifying ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+            Verificar Status
+          </Button>
+          <Button
             onClick={() => setBulkLinkOpen(true)}
             variant="outline"
             size="sm"
