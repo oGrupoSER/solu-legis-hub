@@ -379,7 +379,7 @@ serve(async (req) => {
             }
           }
 
-          let solCode = result?.codNome || null;
+          solCode = result?.codNome || solCode;
 
           // If registration succeeded but codNome is null, fetch it from BuscaNomesCadastrados
           if (registeredInSolucionare && !solCode) {
