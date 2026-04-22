@@ -331,10 +331,11 @@ serve(async (req) => {
 
         let termRecord;
         let registeredInSolucionare = false;
+        let solCode: number | null = existing?.solucionare_code ?? null;
 
         const metadata = {
           codTipoConsulta: codTipoConsulta || 1,
-          listInstancias: listInstancias || [4],
+          listInstancias: listInstancias || [1, 2, 3],
           listAbrangencias: abrangencias || DEFAULT_ABRANGENCIAS,
           qtdDiasCapturaRetroativa: qtdDiasCapturaRetroativa || 90,
           listDocumentos: listDocumentos || [],
