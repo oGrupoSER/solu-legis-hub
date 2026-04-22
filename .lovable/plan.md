@@ -1,27 +1,58 @@
 
 
-## Plano: Corrigir erro "solCode is not defined" no cadastro de termos de distribuição
+## Plano: Corrigir `office_code` do Cadastro de Termos de Distribuição
 
-### Problema
+### Causa raiz
 
-No `manage-distribution-terms/index.ts`, ação `registerName`:
+O `partner_services.config.office_code` está com valor `4` (incorreto), mas `partners.office_code = 41` (correto). A função `getOfficeCodes` prioriza o `config` do serviço → envia `codEscritorio: 4` ao Solucionare.
 
-1. **Bug de escopo (causa do erro)**: A variável `solCode` é declarada com `let` dentro do bloco `else` (linha 381), mas é usada fora dele na linha 417 (`result = { ..., codNome: solCode, ... }`). Quando o termo já existe localmente (`existing` é truthy), o código pula o bloco `else` e ao tentar montar o `result` lança `ReferenceError: solCode is not defined`.
+```
+[registerName] Request body: {"codEscritorio":4,"nome":"...", ...}
+[registerName] Name "..." already exists at Solucionare, saving locally only
+```
 
-2. **Default errado de instâncias**: Linha 337 usa `listInstancias: listInstancias || [4]` como fallback no metadata. Conforme a nova especificação do parceiro, o padrão correto é `[1, 2, 3]` (1º grau, 2º grau e Superior). Já está correto na construção do `requestBody` (linha 351), mas o metadata persistido fica errado.
+Resultado:
+1. Solucionare rejeita/duplica → termo salvo como `pending` sem `solucionare_code`
+2. No refresh, `listNames` consulta com escritório **41** (parceiro), não vê o termo local, e o orphan cleanup deleta
+
+Conforme memória [Office Code Default 41](mem://services/distribution-office-code-standardization), o padrão obrigatório para Distribuições V3 é **41**.
 
 ### Correções em `supabase/functions/manage-distribution-terms/index.ts`
 
-**1.** Declarar `solCode` no escopo da ação (antes do `if (existing)`), para que esteja sempre definido:
+**1. Padronizar `codEscritorio = 41` para todas operações de Distribuições V3**
+
+Alterar `getOfficeCodes` para forçar `41` em chamadas à API Solucionare V3 (ignorar `config.office_code` se diferente, ou usar sempre `partnerCode`):
 
 ```typescript
-let solCode: number | null = existing?.solucionare_code ?? null;
+async function getOfficeCodes(supabase, serviceId) {
+  // ... busca igual
+  // Para V3 distribuições: SEMPRE usar partnerCode (41), nunca config customizado
+  const serviceCode = partnerCode; // unificado
+  return { serviceCode, partnerCode };
+}
 ```
 
-**2.** Remover a redeclaração `let solCode = result?.codNome || null;` na linha 381 — usar atribuição: `solCode = result?.codNome || solCode;`
+Isso garante que `CadastrarNome`, `BuscaNomesCadastrados`, `BuscaNovasDistribuicoes`, `Confirma...` usem todos o mesmo `codEscritorio = 41`, eliminando a discrepância que causa o orphan cleanup.
 
-**3.** Trocar o default `[4]` por `[1, 2, 3]` na linha 337.
+**2. Corrigir o registro corrompido no banco**
 
-### Arquivo alterado
-- `supabase/functions/manage-distribution-terms/index.ts` (linhas 320-417 da ação `registerName`)
+Migration para limpar `partner_services.config.office_code = 4`:
+```sql
+UPDATE partner_services 
+SET config = config - 'office_code'
+WHERE service_type = 'distributions' AND config->>'office_code' = '4';
+```
+
+**3. Limpar termos órfãos `pending` sem `solucionare_code`** (opcional — sync seguinte vai re-tentar via retry block já existente nas linhas 280-313):
+
+Não é necessário — o bloco de retry no `listNames` (já implementado) vai re-enviar os termos `pending` ao Solucionare na próxima sincronização, agora com `codEscritorio = 41` correto.
+
+### Atualização de memória
+
+Atualizar `mem://services/distribution-office-code-standardization` para reforçar que `partner_services.config.office_code` NÃO deve sobrescrever o padrão 41 para distribuições.
+
+### Arquivos alterados
+- `supabase/functions/manage-distribution-terms/index.ts` — `getOfficeCodes` ignora config customizado, sempre usa partnerCode
+- Nova migration SQL — limpa `config.office_code` inválido
+- `mem://services/distribution-office-code-standardization` — reforço da regra
 
