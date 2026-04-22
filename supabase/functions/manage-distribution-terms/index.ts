@@ -92,12 +92,12 @@ async function getOfficeCodes(supabase: any, serviceId: string): Promise<{ servi
     .single();
   if (serviceError) throw serviceError;
   
-  const serviceConfig = serviceData?.config as Record<string, any> | null;
   const partnerCode = (serviceData?.partners as any)?.office_code as number | null;
   if (!partnerCode) throw new Error('Parceiro não possui código de escritório configurado.');
   
-  // serviceCode: used for CadastrarNome (from config or fallback to partner)
-  const serviceCode = serviceConfig?.office_code || partnerCode;
+  // V3 Distribuições: SEMPRE usar partnerCode (padrão 41), ignorando config.office_code customizado
+  // para evitar discrepância entre CadastrarNome e BuscaNomesCadastrados que causa orphan cleanup.
+  const serviceCode = partnerCode;
   
   return { serviceCode, partnerCode };
 }
