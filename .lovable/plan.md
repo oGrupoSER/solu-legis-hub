@@ -1,23 +1,27 @@
 
 
-## Plano: Corrigir CORS do sync-publications
+## Plano: Corrigir erro "solCode is not defined" no cadastro de termos de distribuição
 
 ### Problema
-O `corsHeaders` na linha 17-20 do `supabase/functions/sync-publications/index.ts` não inclui os headers `x-supabase-client-*` que o SDK Supabase envia automaticamente. O browser bloqueia a requisição preflight e retorna "NetworkError".
 
-### Correção
+No `manage-distribution-terms/index.ts`, ação `registerName`:
 
-**`supabase/functions/sync-publications/index.ts`** — Linha 17-20
+1. **Bug de escopo (causa do erro)**: A variável `solCode` é declarada com `let` dentro do bloco `else` (linha 381), mas é usada fora dele na linha 417 (`result = { ..., codNome: solCode, ... }`). Quando o termo já existe localmente (`existing` é truthy), o código pula o bloco `else` e ao tentar montar o `result` lança `ReferenceError: solCode is not defined`.
 
-Atualizar os CORS headers para o padrão completo:
+2. **Default errado de instâncias**: Linha 337 usa `listInstancias: listInstancias || [4]` como fallback no metadata. Conforme a nova especificação do parceiro, o padrão correto é `[1, 2, 3]` (1º grau, 2º grau e Superior). Já está correto na construção do `requestBody` (linha 351), mas o metadata persistido fica errado.
+
+### Correções em `supabase/functions/manage-distribution-terms/index.ts`
+
+**1.** Declarar `solCode` no escopo da ação (antes do `if (existing)`), para que esteja sempre definido:
 
 ```typescript
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-};
+let solCode: number | null = existing?.solucionare_code ?? null;
 ```
 
+**2.** Remover a redeclaração `let solCode = result?.codNome || null;` na linha 381 — usar atribuição: `solCode = result?.codNome || solCode;`
+
+**3.** Trocar o default `[4]` por `[1, 2, 3]` na linha 337.
+
 ### Arquivo alterado
-- `supabase/functions/sync-publications/index.ts` (linha 19)
+- `supabase/functions/manage-distribution-terms/index.ts` (linhas 320-417 da ação `registerName`)
 
