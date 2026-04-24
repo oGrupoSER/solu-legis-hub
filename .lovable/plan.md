@@ -1,58 +1,40 @@
+## Alterações em `src/pages/ApiTesting.tsx`
 
+### 1. `dis-desativar-termo`
+- Trocar `method: "POST"` → `method: "PATCH"` (reflete o verbo real da chamada Solucionare `DesativarNome`).
+- Manter `bodyParams`: `serviceId` + `codNome`. `nomeRelacional` (ORBO) e `token` continuam sendo injetados pelo edge function.
 
-## Plano: Corrigir `office_code` do Cadastro de Termos de Distribuição
-
-### Causa raiz
-
-O `partner_services.config.office_code` está com valor `4` (incorreto), mas `partners.office_code = 41` (correto). A função `getOfficeCodes` prioriza o `config` do serviço → envia `codEscritorio: 4` ao Solucionare.
-
-```
-[registerName] Request body: {"codEscritorio":4,"nome":"...", ...}
-[registerName] Name "..." already exists at Solucionare, saving locally only
-```
-
-Resultado:
-1. Solucionare rejeita/duplica → termo salvo como `pending` sem `solucionare_code`
-2. No refresh, `listNames` consulta com escritório **41** (parceiro), não vê o termo local, e o orphan cleanup deleta
-
-Conforme memória [Office Code Default 41](mem://services/distribution-office-code-standardization), o padrão obrigatório para Distribuições V3 é **41**.
-
-### Correções em `supabase/functions/manage-distribution-terms/index.ts`
-
-**1. Padronizar `codEscritorio = 41` para todas operações de Distribuições V3**
-
-Alterar `getOfficeCodes` para forçar `41` em chamadas à API Solucionare V3 (ignorar `config.office_code` se diferente, ou usar sempre `partnerCode`):
-
-```typescript
-async function getOfficeCodes(supabase, serviceId) {
-  // ... busca igual
-  // Para V3 distribuições: SEMPRE usar partnerCode (41), nunca config customizado
-  const serviceCode = partnerCode; // unificado
-  return { serviceCode, partnerCode };
+### 2. Novo endpoint `dis-excluir-termo`
+```ts
+{
+  id: "dis-excluir-termo",
+  label: "Excluir Termo",
+  method: "DELETE",
+  path: "manage-distribution-terms",
+  category: "management",
+  authType: "jwt",
+  description: "Exclui um nome/termo de distribuição na Solucionare (ExcluirNome). nomeRelacional e token injetados automaticamente.",
+  params: [],
+  bodyParams: [
+    { key: "serviceId", label: "ID do Serviço", required: true },
+    { key: "codNome", label: "Código do Nome (Solucionare)", placeholder: "83379", required: true, type: "number" },
+  ],
 }
 ```
 
-Isso garante que `CadastrarNome`, `BuscaNomesCadastrados`, `BuscaNovasDistribuicoes`, `Confirma...` usem todos o mesmo `codEscritorio = 41`, eliminando a discrepância que causa o orphan cleanup.
-
-**2. Corrigir o registro corrompido no banco**
-
-Migration para limpar `partner_services.config.office_code = 4`:
-```sql
-UPDATE partner_services 
-SET config = config - 'office_code'
-WHERE service_type = 'distributions' AND config->>'office_code' = '4';
+### 3. `managementActionMap`
+Adicionar:
+```ts
+"dis-excluir-termo": "deleteName",
 ```
 
-**3. Limpar termos órfãos `pending` sem `solucionare_code`** (opcional — sync seguinte vai re-tentar via retry block já existente nas linhas 280-313):
+## Verificação no edge function
+`supabase/functions/manage-distribution-terms/index.ts` já implementa a action `deleteName` corretamente (linhas 484-506):
+- Usa `DELETE /ExcluirNome` com body `{ codNome }`
+- `apiRequest` injeta automaticamente `nomeRelacional` e `token`
+- Aplica lógica de deduplicação (só remove na Solucionare se nenhum outro cliente Hub usar)
 
-Não é necessário — o bloco de retry no `listNames` (já implementado) vai re-enviar os termos `pending` ao Solucionare na próxima sincronização, agora com `codEscritorio = 41` correto.
+Nenhuma alteração no edge function é necessária.
 
-### Atualização de memória
-
-Atualizar `mem://services/distribution-office-code-standardization` para reforçar que `partner_services.config.office_code` NÃO deve sobrescrever o padrão 41 para distribuições.
-
-### Arquivos alterados
-- `supabase/functions/manage-distribution-terms/index.ts` — `getOfficeCodes` ignora config customizado, sempre usa partnerCode
-- Nova migration SQL — limpa `config.office_code` inválido
-- `mem://services/distribution-office-code-standardization` — reforço da regra
-
+## Arquivo alterado
+- `src/pages/ApiTesting.tsx`

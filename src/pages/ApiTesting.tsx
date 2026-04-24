@@ -507,13 +507,23 @@ export const distributionEndpoints: EndpointDef[] = [
     ],
   },
   {
-    id: "dis-desativar-termo", label: "Desativar Termo", method: "POST", path: "manage-distribution-terms",
+    id: "dis-desativar-termo", label: "Desativar Termo", method: "PATCH", path: "manage-distribution-terms",
     category: "management", authType: "jwt",
-    description: "Desativa um nome/termo de distribuição na Solucionare (DesativarNome).",
+    description: "Desativa um nome/termo de distribuição na Solucionare (DesativarNome). nomeRelacional e token são injetados automaticamente.",
     params: [],
     bodyParams: [
       { key: "serviceId", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
-      { key: "codNome", label: "Código do Nome (Solucionare)", placeholder: "41", required: true, type: "number" },
+      { key: "codNome", label: "Código do Nome (Solucionare)", placeholder: "83379", required: true, type: "number" },
+    ],
+  },
+  {
+    id: "dis-excluir-termo", label: "Excluir Termo", method: "DELETE", path: "manage-distribution-terms",
+    category: "management", authType: "jwt",
+    description: "Exclui um nome/termo de distribuição na Solucionare (ExcluirNome). nomeRelacional e token são injetados automaticamente.",
+    params: [],
+    bodyParams: [
+      { key: "serviceId", label: "ID do Serviço", placeholder: "uuid do partner_service", required: true },
+      { key: "codNome", label: "Código do Nome (Solucionare)", placeholder: "83379", required: true, type: "number" },
     ],
   },
   {
@@ -744,6 +754,7 @@ export const managementActionMap: Record<string, string> = {
   "dis-ativar-escritorio": "activateOffice",
   "dis-cadastrar-termo": "registerName",
   "dis-desativar-termo": "deactivateName",
+  "dis-excluir-termo": "deleteName",
   "dis-buscar-distribuicoes": "rest_buscar_distribuicoes",
   "dis-buscar-nomes": "listNames",
   // Publicações REST V2 (manage-search-terms)
