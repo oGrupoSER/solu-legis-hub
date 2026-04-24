@@ -666,6 +666,69 @@ export default function DistributionTerms() {
     onError: (error) => toast.error(`Erro ao desativar: ${error.message}`),
   });
 
+  // Delete mutation — exclui no parceiro e localmente
+  const deleteMutation = useMutation({
+    mutationFn: async (term: DistributionTerm) => {
+      const serviceId = term.partner_services?.id;
+      if (!term.solucionare_code || !serviceId) {
+        // Sem código no parceiro: apaga só local
+        await supabase.from("client_search_terms").delete().eq("search_term_id", term.id);
+        const { error } = await supabase.from("search_terms").delete().eq("id", term.id);
+        if (error) throw error;
+        return;
+      }
+      const { data, error } = await supabase.functions.invoke("manage-distribution-terms", {
+        body: { action: "deleteName", serviceId, codNome: term.solucionare_code, termo: term.term },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Erro ao excluir");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["distribution-terms"] });
+    },
+    onError: (error) => toast.error(`Erro ao excluir: ${error.message}`),
+  });
+
+  const runBulk = async (action: "deactivate" | "delete") => {
+    const ids = Array.from(selectedIds);
+    const items = terms.filter((t) => ids.includes(t.id));
+    let ok = 0, fail = 0;
+    setBulkAction(null);
+    setBulkConfirmText("");
+    for (let i = 0; i < items.length; i++) {
+      setBulkProgress({
+        current: i + 1,
+        total: items.length,
+        action: action === "delete" ? "Excluindo" : "Desativando",
+      });
+      try {
+        if (action === "delete") await deleteMutation.mutateAsync(items[i]);
+        else await deactivateMutation.mutateAsync(items[i]);
+        ok++;
+      } catch {
+        fail++;
+      }
+    }
+    setBulkProgress(null);
+    setSelectedIds(new Set());
+    queryClient.invalidateQueries({ queryKey: ["distribution-terms"] });
+    if (fail === 0) toast.success(`${ok} ${action === "delete" ? "excluídos" : "desativados"} com sucesso`);
+    else toast.warning(`Concluído: ${ok} sucesso, ${fail} falhas`);
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredTerms.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(filteredTerms.map((t) => t.id)));
+  };
+
   const filteredTerms = terms.filter((t) => {
     const matchesSearch = !searchQuery || t.term.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = filterStatus === "all" || (filterStatus === "active" ? t.is_active : !t.is_active);
