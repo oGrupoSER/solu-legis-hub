@@ -16,7 +16,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Plus, Search, Loader2, Download, RefreshCw, CheckCircle2, AlertCircle, Clock, Link2, Trash2, PlusCircle, Edit } from "lucide-react";
+import { Plus, Search, Loader2, Download, RefreshCw, CheckCircle2, AlertCircle, Clock, Link2, Trash2, PlusCircle, Edit, X } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { ClientBadges } from "@/components/shared/ClientBadges";
 import { ClientSelector } from "@/components/shared/ClientSelector";
@@ -573,6 +574,11 @@ export default function DistributionTerms() {
   const [newTermDialog, setNewTermDialog] = useState(false);
   const [editTerm, setEditTerm] = useState<DistributionTerm | null>(null);
   const [bulkLinkOpen, setBulkLinkOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkAction, setBulkAction] = useState<null | "deactivate" | "delete">(null);
+  const [bulkConfirmText, setBulkConfirmText] = useState("");
+  const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number; action: string } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<DistributionTerm | null>(null);
 
   // Fetch distribution terms
   const { data: terms = [], isLoading } = useQuery({
