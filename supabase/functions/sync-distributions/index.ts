@@ -207,47 +207,6 @@ async function syncDistributions(
 
   return syncedCount;
 }
-
-async function syncTermsFromDistributions(supabase: any, service: DistributionService, distributions: any[]) {
-  // Extract unique terms from distributions
-  const termsSet = new Set<string>();
-  for (const dist of distributions) {
-    const nome = dist.nomePesquisado;
-    if (nome) termsSet.add(nome);
-  }
-
-  // Get entitled clients
-  const { data: entitledClients } = await supabase
-    .from('client_system_services')
-    .select('client_system_id')
-    .eq('partner_service_id', service.id)
-    .eq('is_active', true);
-  const clientIds = (entitledClients || []).map((c: any) => c.client_system_id);
-
-  for (const termo of termsSet) {
-    const { data: existing } = await supabase.from('search_terms')
-      .select('id').eq('term', termo).eq('term_type', 'distribution')
-      .eq('partner_service_id', service.id).maybeSingle();
-
-    if (!existing) {
-      const { data: inserted } = await supabase.from('search_terms').insert({
-        term: termo, term_type: 'distribution',
-        partner_service_id: service.id, partner_id: service.partner_id,
-        is_active: true, solucionare_status: 'synced',
-      }).select('id').single();
-
-      if (inserted) {
-        for (const clientId of clientIds) {
-          await supabase.from('client_search_terms').upsert(
-            { search_term_id: inserted.id, client_system_id: clientId },
-            { onConflict: 'client_system_id,search_term_id' }
-          );
-        }
-      }
-    }
-  }
-}
-
 async function updateLastSync(supabase: any, serviceId: string): Promise<void> {
   await supabase
     .from('partner_services')
