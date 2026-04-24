@@ -224,7 +224,7 @@ Deno.serve(async (req) => {
     // Dispatch webhooks to notify clients of new data
     const webhookResults: any[] = [];
     try {
-      const webhookTasks: Promise<void>[] = [];
+      const webhookTasks: Promise<unknown>[] = [];
 
       if (summary.processes_synced > 0) {
         webhookTasks.push(
