@@ -754,6 +754,7 @@ export const managementActionMap: Record<string, string> = {
   "dis-ativar-escritorio": "activateOffice",
   "dis-cadastrar-termo": "registerName",
   "dis-desativar-termo": "deactivateName",
+  "dis-excluir-termo": "deleteName",
   "dis-buscar-distribuicoes": "rest_buscar_distribuicoes",
   "dis-buscar-nomes": "listNames",
   // Publicações REST V2 (manage-search-terms)
