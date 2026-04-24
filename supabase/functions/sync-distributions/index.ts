@@ -111,9 +111,6 @@ async function syncDistributions(
     return 0;
   }
 
-  // Also sync terms from the distributions
-  await syncTermsFromDistributions(supabase, service, distributions);
-
   let syncedCount = 0;
 
   for (const dist of distributions) {
