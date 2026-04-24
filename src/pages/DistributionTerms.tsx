@@ -16,7 +16,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Plus, Search, Loader2, Download, RefreshCw, CheckCircle2, AlertCircle, Clock, Link2, Trash2, PlusCircle, Edit } from "lucide-react";
+import { Plus, Search, Loader2, Download, RefreshCw, CheckCircle2, AlertCircle, Clock, Link2, Trash2, PlusCircle, Edit, X } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { ClientBadges } from "@/components/shared/ClientBadges";
 import { ClientSelector } from "@/components/shared/ClientSelector";
@@ -573,6 +574,11 @@ export default function DistributionTerms() {
   const [newTermDialog, setNewTermDialog] = useState(false);
   const [editTerm, setEditTerm] = useState<DistributionTerm | null>(null);
   const [bulkLinkOpen, setBulkLinkOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkAction, setBulkAction] = useState<null | "deactivate" | "delete">(null);
+  const [bulkConfirmText, setBulkConfirmText] = useState("");
+  const [bulkProgress, setBulkProgress] = useState<{ current: number; total: number; action: string } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<DistributionTerm | null>(null);
 
   // Fetch distribution terms
   const { data: terms = [], isLoading } = useQuery({
@@ -659,6 +665,69 @@ export default function DistributionTerms() {
     },
     onError: (error) => toast.error(`Erro ao desativar: ${error.message}`),
   });
+
+  // Delete mutation — exclui no parceiro e localmente
+  const deleteMutation = useMutation({
+    mutationFn: async (term: DistributionTerm) => {
+      const serviceId = term.partner_services?.id;
+      if (!term.solucionare_code || !serviceId) {
+        // Sem código no parceiro: apaga só local
+        await supabase.from("client_search_terms").delete().eq("search_term_id", term.id);
+        const { error } = await supabase.from("search_terms").delete().eq("id", term.id);
+        if (error) throw error;
+        return;
+      }
+      const { data, error } = await supabase.functions.invoke("manage-distribution-terms", {
+        body: { action: "deleteName", serviceId, codNome: term.solucionare_code, termo: term.term },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || "Erro ao excluir");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["distribution-terms"] });
+    },
+    onError: (error) => toast.error(`Erro ao excluir: ${error.message}`),
+  });
+
+  const runBulk = async (action: "deactivate" | "delete") => {
+    const ids = Array.from(selectedIds);
+    const items = terms.filter((t) => ids.includes(t.id));
+    let ok = 0, fail = 0;
+    setBulkAction(null);
+    setBulkConfirmText("");
+    for (let i = 0; i < items.length; i++) {
+      setBulkProgress({
+        current: i + 1,
+        total: items.length,
+        action: action === "delete" ? "Excluindo" : "Desativando",
+      });
+      try {
+        if (action === "delete") await deleteMutation.mutateAsync(items[i]);
+        else await deactivateMutation.mutateAsync(items[i]);
+        ok++;
+      } catch {
+        fail++;
+      }
+    }
+    setBulkProgress(null);
+    setSelectedIds(new Set());
+    queryClient.invalidateQueries({ queryKey: ["distribution-terms"] });
+    if (fail === 0) toast.success(`${ok} ${action === "delete" ? "excluídos" : "desativados"} com sucesso`);
+    else toast.warning(`Concluído: ${ok} sucesso, ${fail} falhas`);
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredTerms.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(filteredTerms.map((t) => t.id)));
+  };
 
   const filteredTerms = terms.filter((t) => {
     const matchesSearch = !searchQuery || t.term.toLowerCase().includes(searchQuery.toLowerCase());
@@ -753,6 +822,29 @@ export default function DistributionTerms() {
         </CardContent>
       </Card>
 
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <Card className="border-primary/40 bg-primary/5">
+          <CardContent className="py-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm">
+              <Badge variant="default">{selectedIds.size}</Badge>
+              <span>selecionado(s)</span>
+              <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())} className="h-7">
+                <X className="h-3.5 w-3.5 mr-1" /> Limpar
+              </Button>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" className="text-amber-600" onClick={() => setBulkAction("deactivate")}>
+                Desativar selecionados
+              </Button>
+              <Button size="sm" variant="outline" className="text-destructive" onClick={() => setBulkAction("delete")}>
+                <Trash2 className="h-3.5 w-3.5 mr-1" /> Excluir selecionados
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Table */}
       <Card>
         <CardContent className="p-0">
@@ -760,8 +852,14 @@ export default function DistributionTerms() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={filteredTerms.length > 0 && selectedIds.size === filteredTerms.length}
+                      onCheckedChange={toggleSelectAll}
+                      aria-label="Selecionar todos"
+                    />
+                  </TableHead>
                   <TableHead>Nome</TableHead>
-                  
                   <TableHead>Solucionare</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Cadastrado em</TableHead>
@@ -771,23 +869,26 @@ export default function DistributionTerms() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8">
+                    <TableCell colSpan={6} className="text-center py-8">
                       <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
                     </TableCell>
                   </TableRow>
                 ) : filteredTerms.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">Nenhum nome encontrado</TableCell>
+                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">Nenhum nome encontrado</TableCell>
                   </TableRow>
                 ) : (
                   filteredTerms.map((term) => {
-                    const clients = getClientNames(term);
-                    const meta = term.metadata as any;
-                    const tipoLabel = TIPO_CONSULTA_OPTIONS.find(o => o.value === String(meta?.codTipoConsulta))?.label || "-";
                     return (
-                      <TableRow key={term.id}>
+                      <TableRow key={term.id} data-state={selectedIds.has(term.id) ? "selected" : undefined}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedIds.has(term.id)}
+                            onCheckedChange={() => toggleSelect(term.id)}
+                            aria-label={`Selecionar ${term.term}`}
+                          />
+                        </TableCell>
                         <TableCell className="font-medium">{term.term}</TableCell>
-                        
                         <TableCell>
                           {term.solucionare_status === 'synced' ? (
                             <Badge variant="outline" className="bg-green-500/10 text-green-700 border-green-500/30 gap-1">
@@ -818,11 +919,14 @@ export default function DistributionTerms() {
                             </Button>
                             {term.is_active && (
                               <Button size="sm" variant="ghost" className="text-amber-600" onClick={() => {
-                                if (confirm("Tem certeza que deseja desativar este nome? Ele será desativado no parceiro.")) deactivateMutation.mutate(term);
+                                if (confirm("Desativar este nome no parceiro?")) deactivateMutation.mutate(term);
                               }}>
                                 Desativar
                               </Button>
                             )}
+                            <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleteConfirm(term)}>
+                              <Trash2 className="h-3.5 w-3.5 mr-1" /> Excluir
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -855,6 +959,93 @@ export default function DistributionTerms() {
         entityType="distribution_terms"
         onSuccess={() => queryClient.invalidateQueries({ queryKey: ["distribution-terms"] })}
       />
+
+      {/* Single delete confirmation */}
+      <Dialog open={!!deleteConfirm} onOpenChange={(o) => { if (!o) setDeleteConfirm(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir nome monitorado</DialogTitle>
+            <DialogDescription>
+              Esta ação removerá <strong>{deleteConfirm?.term}</strong> do parceiro Solucionare e do Hub. Não pode ser desfeita.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteConfirm(null)}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                const t = deleteConfirm!;
+                setDeleteConfirm(null);
+                try {
+                  await deleteMutation.mutateAsync(t);
+                  toast.success("Nome excluído");
+                } catch {}
+              }}
+            >
+              <Trash2 className="h-4 w-4 mr-1" /> Excluir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk action confirmation */}
+      <Dialog open={!!bulkAction} onOpenChange={(o) => { if (!o) { setBulkAction(null); setBulkConfirmText(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {bulkAction === "delete" ? "Excluir em lote" : "Desativar em lote"}
+            </DialogTitle>
+            <DialogDescription>
+              {bulkAction === "delete" ? (
+                <>
+                  Você está prestes a <strong>excluir {selectedIds.size} nome(s)</strong> do parceiro e do Hub.
+                  Esta ação é irreversível. Para confirmar, digite <strong>EXCLUIR</strong> abaixo.
+                </>
+              ) : (
+                <>Você está prestes a desativar <strong>{selectedIds.size} nome(s)</strong> no parceiro.</>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          {bulkAction === "delete" && (
+            <Input
+              placeholder="Digite EXCLUIR"
+              value={bulkConfirmText}
+              onChange={(e) => setBulkConfirmText(e.target.value)}
+              autoFocus
+            />
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setBulkAction(null); setBulkConfirmText(""); }}>Cancelar</Button>
+            <Button
+              variant={bulkAction === "delete" ? "destructive" : "default"}
+              disabled={bulkAction === "delete" && bulkConfirmText !== "EXCLUIR"}
+              onClick={() => runBulk(bulkAction!)}
+            >
+              {bulkAction === "delete" ? "Excluir" : "Desativar"} {selectedIds.size}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk progress (non-dismissible) */}
+      <Dialog open={!!bulkProgress}>
+        <DialogContent
+          className="max-w-md"
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Loader2 className="h-5 w-5 animate-spin" />
+              {bulkProgress?.action} {bulkProgress?.current} de {bulkProgress?.total}...
+            </DialogTitle>
+            <DialogDescription>
+              Aguarde, processando no parceiro Solucionare. Não feche esta janela.
+            </DialogDescription>
+          </DialogHeader>
+          <Progress value={bulkProgress ? (bulkProgress.current / bulkProgress.total) * 100 : 0} />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

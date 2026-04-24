@@ -10,7 +10,8 @@ import { SoapClient } from '../_shared/soap-client.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -163,17 +164,20 @@ serve(async (req) => {
       case 'listNames': {
         // Try fetching from API first
         let apiNames: any[] = [];
+        let apiSucceeded = false;
         console.log(`[listNames] Using officeCode=${officeCode}, partnerOfficeCode=${partnerOfficeCode}`);
         try {
           console.log(`[listNames] Trying BuscaNomesCadastrados with partnerOfficeCode=${partnerOfficeCode}`);
           const rawResponse = await apiRequest(service.service_url, `/BuscaNomesCadastrados?codEscritorio=${partnerOfficeCode}`, jwtToken);
           console.log(`[listNames] API returned ${Array.isArray(rawResponse) ? rawResponse.length : 0} names`);
           apiNames = Array.isArray(rawResponse) ? rawResponse : [];
+          apiSucceeded = true;
         } catch (e: any) {
           console.log(`[listNames] API error: ${e.message}, apiStatus: ${e.apiStatus}, apiBody: ${e.apiBody}`);
           if (e.apiStatus === 400 || e.message?.includes('400')) {
             console.log('[listNames] Treating 400 as empty result');
             apiNames = [];
+            apiSucceeded = true;
           } else {
             throw e;
           }
@@ -231,10 +235,11 @@ serve(async (req) => {
           }
         }
 
-        // Clean up orphan local terms not present in API (trim for encoding safety)
-        if (apiNames.length > 0) {
+        // Clean up orphan local terms not present in API — mirror fiel da Solucionare.
+        // Só executa se a chamada foi bem-sucedida (evita apagar tudo em caso de falha real).
+        if (apiSucceeded) {
           const apiTermNames = apiNames.map((n: any) => (n.nome || n.Nome || n.term || '').trim()).filter(Boolean);
-          console.log(`[listNames] API term names for orphan check: ${JSON.stringify(apiTermNames)}`);
+          console.log(`[listNames] API term names for orphan check: ${apiTermNames.length} names`);
           const { data: localTerms } = await supabase.from('search_terms')
             .select('id, term')
             .eq('term_type', 'distribution')
@@ -242,39 +247,12 @@ serve(async (req) => {
 
           const orphans = (localTerms || []).filter((lt: any) => !apiTermNames.includes((lt.term || '').trim()));
           if (orphans.length > 0) {
-            console.log(`[listNames] Removing ${orphans.length} orphan local terms: ${orphans.map((o: any) => o.term).join(', ')}`);
+            console.log(`[listNames] Removing ${orphans.length} orphan local terms`);
             for (const orphan of orphans) {
               await supabase.from('client_search_terms').delete().eq('search_term_id', orphan.id);
               await supabase.from('search_terms').delete().eq('id', orphan.id);
             }
           }
-        }
-
-        // Also populate from synced distributions (terms already returned by API but registered via legacy)
-        if (apiNames.length === 0) {
-          console.log('[listNames] API empty, populating from distributions table');
-          const { data: distTerms } = await supabase
-            .from('distributions')
-            .select('term')
-            .eq('partner_service_id', serviceId)
-            .not('term', 'is', null);
-
-          const uniqueTerms = [...new Set((distTerms || []).map((d: any) => d.term).filter(Boolean))];
-          console.log(`[listNames] Found ${uniqueTerms.length} unique terms from distributions`);
-
-          for (const termo of uniqueTerms) {
-            const { data: existing } = await supabase.from('search_terms')
-              .select('id').eq('term', termo as string).eq('term_type', 'distribution')
-              .eq('partner_service_id', serviceId).maybeSingle();
-
-            if (!existing) {
-              const { data: inserted } = await supabase.from('search_terms').insert({ term: termo as string, term_type: 'distribution', partner_service_id: serviceId, partner_id: service.partner_id, is_active: true }).select('id').single();
-              if (inserted) await linkTermToClients(inserted.id);
-            } else {
-              await linkTermToClients(existing.id);
-            }
-          }
-          apiNames = uniqueTerms.map(t => ({ nome: t }));
         }
 
         // RETRY: Re-send pending terms that failed to register with Solucionare
@@ -485,25 +463,33 @@ serve(async (req) => {
         const { codNome, termo } = params;
         if (!codNome) throw new Error('codNome is required');
 
-        // DEDUPLICATION: Check client links
-        const { data: termRecord } = await supabase.from('search_terms').select('id')
-          .eq('solucionare_code', codNome).eq('partner_service_id', serviceId).maybeSingle();
-
         let removedFromSolucionare = false;
 
-        if (termRecord && client_system_id) {
-          const noMoreClients = await unlinkAndCheck(supabase, termRecord.id, client_system_id);
-          if (noMoreClients) {
-            // CORRECTED: DELETE with body instead of query param
-            result = await apiRequest(service.service_url, '/ExcluirNome', jwtToken, 'DELETE', { codNome });
-            removedFromSolucionare = true;
-            await supabase.from('search_terms').update({ is_active: false }).eq('id', termRecord.id);
+        if (client_system_id) {
+          // API externa: lógica de deduplicação por cliente
+          const { data: termRecord } = await supabase.from('search_terms').select('id')
+            .eq('solucionare_code', codNome).eq('partner_service_id', serviceId).maybeSingle();
+          if (termRecord) {
+            const noMoreClients = await unlinkAndCheck(supabase, termRecord.id, client_system_id);
+            if (noMoreClients) {
+              await apiRequest(service.service_url, '/ExcluirNome', jwtToken, 'DELETE', { codNome });
+              removedFromSolucionare = true;
+              await supabase.from('search_terms').delete().eq('id', termRecord.id);
+            }
           }
         } else {
-          // CORRECTED: DELETE with body instead of query param
-          result = await apiRequest(service.service_url, '/ExcluirNome', jwtToken, 'DELETE', { codNome });
+          // UI Hub: sempre exclui no parceiro e remove localmente
+          await apiRequest(service.service_url, '/ExcluirNome', jwtToken, 'DELETE', { codNome });
           removedFromSolucionare = true;
-          if (termo) {
+          // Remove vínculos e o registro local
+          const { data: localTerm } = await supabase.from('search_terms').select('id')
+            .eq('partner_service_id', serviceId)
+            .eq('solucionare_code', codNome)
+            .maybeSingle();
+          if (localTerm) {
+            await supabase.from('client_search_terms').delete().eq('search_term_id', localTerm.id);
+            await supabase.from('search_terms').delete().eq('id', localTerm.id);
+          } else if (termo) {
             await supabase.from('search_terms').delete()
               .eq('partner_service_id', serviceId).eq('term', termo).eq('term_type', 'distribution');
           }
