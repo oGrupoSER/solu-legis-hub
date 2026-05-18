@@ -7,7 +7,7 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.manage-publication-terms]
-verify_jwt = true
+verify_jwt = false
 
 [functions.sync-publications]
 verify_jwt = true
