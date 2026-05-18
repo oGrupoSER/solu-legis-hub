@@ -34,7 +34,7 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.manage-distribution-terms]
-verify_jwt = true
+verify_jwt = false
 
 [functions.sync-diary-status]
 verify_jwt = true
