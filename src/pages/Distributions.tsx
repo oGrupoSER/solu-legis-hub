@@ -247,7 +247,15 @@ export default function Distributions() {
                     <TableHead>Número do Processo</TableHead>
                     <TableHead>Tribunal</TableHead>
                     <TableHead>Termo Monitorado</TableHead>
-                    <TableHead>Data Distribuição</TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none hover:text-foreground"
+                      onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        Data Distribuição
+                        {sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+                      </span>
+                    </TableHead>
                     <TableHead>Recebido em</TableHead>
                     <TableHead className="w-[80px]">Confirm.</TableHead>
                   </TableRow>
