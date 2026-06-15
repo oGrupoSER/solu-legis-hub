@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { RefreshCw, Search, FileText, Building2, Loader2, X } from "lucide-react";
+import { RefreshCw, Search, FileText, Building2, Loader2, X, ArrowUp, ArrowDown } from "lucide-react";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { DateRangePicker } from "@/components/publications/DateRangePicker";
 import { ConfirmationBadge } from "@/components/shared/ConfirmationBadge";
@@ -33,13 +33,14 @@ export default function Distributions() {
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
   const [confirmedIds, setConfirmedIds] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [selectedDistribution, setSelectedDistribution] = useState<any>(null);
-  const itemsPerPage = 10;
 
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterClient, filterConfirmation, dateRange]);
+  }, [searchTerm, filterClient, filterConfirmation, dateRange, itemsPerPage, sortDir]);
 
   // Fetch confirmed IDs
   useEffect(() => {
@@ -63,7 +64,7 @@ export default function Distributions() {
   });
 
   const { data: distributionsResult, isLoading } = useQuery({
-    queryKey: ["distributions", searchTerm, filterClient, filterConfirmation, dateRange],
+    queryKey: ["distributions", searchTerm, filterClient, filterConfirmation, dateRange, currentPage, itemsPerPage, sortDir],
     queryFn: async () => {
       // Client term filter
       let clientTermFilter: string[] | null = null;
@@ -93,23 +94,20 @@ export default function Distributions() {
         return q;
       };
 
-      // Real total count (no limit)
-      let countQuery: any = supabase.from("distributions").select("id", { count: "exact", head: true });
-      countQuery = applyFilters(countQuery);
-      const totalCount = countQuery === null ? 0 : (await countQuery).count || 0;
+      const from = (currentPage - 1) * itemsPerPage;
+      const to = from + itemsPerPage - 1;
 
-      // Rows for display (capped at 200)
       let rowsQuery: any = supabase
         .from("distributions")
-        .select("*, partner_services(service_name), partners(name)")
-        .order("created_at", { ascending: false })
-        .limit(200);
+        .select("*, partner_services(service_name), partners(name)", { count: "exact" })
+        .order("distribution_date", { ascending: sortDir === "asc", nullsFirst: false })
+        .range(from, to);
       rowsQuery = applyFilters(rowsQuery);
       if (rowsQuery === null) return { rows: [], total: 0 };
 
-      const { data, error } = await rowsQuery;
+      const { data, error, count } = await rowsQuery;
       if (error) throw error;
-      return { rows: data || [], total: totalCount };
+      return { rows: data || [], total: count || 0 };
     },
   });
 
@@ -140,9 +138,9 @@ export default function Distributions() {
 
   const hasActiveFilters = searchTerm || filterClient !== "all" || filterConfirmation !== "all" || dateRange.from;
 
-  const totalItems = distributions?.length || 0;
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
-  const paginatedDistributions = distributions?.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage) || [];
+  const totalItems = realTotal;
+  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
+  const paginatedDistributions = distributions || [];
 
   return (
     <div className="space-y-6">
@@ -164,9 +162,6 @@ export default function Distributions() {
           <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Total de Distribuições</CardTitle></CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{realTotal}</div>
-            {realTotal > totalItems && (
-              <p className="text-xs text-muted-foreground mt-1">Exibindo {totalItems} de {realTotal} (use filtros para refinar)</p>
-            )}
           </CardContent>
         </Card>
         <Card>
@@ -252,7 +247,15 @@ export default function Distributions() {
                     <TableHead>Número do Processo</TableHead>
                     <TableHead>Tribunal</TableHead>
                     <TableHead>Termo Monitorado</TableHead>
-                    <TableHead>Data Distribuição</TableHead>
+                    <TableHead
+                      className="cursor-pointer select-none hover:text-foreground"
+                      onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+                    >
+                      <span className="inline-flex items-center gap-1">
+                        Data Distribuição
+                        {sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+                      </span>
+                    </TableHead>
                     <TableHead>Recebido em</TableHead>
                     <TableHead className="w-[80px]">Confirm.</TableHead>
                   </TableRow>
@@ -283,13 +286,26 @@ export default function Distributions() {
                 </TableBody>
               </Table>
 
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mt-4">
+                <div className="flex items-center gap-3">
                   <p className="text-sm text-muted-foreground">
-                    Mostrando {(currentPage - 1) * itemsPerPage + 1} a{" "}
+                    Mostrando {totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1} a{" "}
                     {Math.min(currentPage * itemsPerPage, totalItems)} de {totalItems} distribuições
                   </p>
-                  <Pagination>
+                  <Select value={String(itemsPerPage)} onValueChange={(v) => setItemsPerPage(Number(v))}>
+                    <SelectTrigger className="w-[110px] h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10 / pág</SelectItem>
+                      <SelectItem value="25">25 / pág</SelectItem>
+                      <SelectItem value="50">50 / pág</SelectItem>
+                      <SelectItem value="100">100 / pág</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {totalPages > 1 && (
+                  <Pagination className="mx-0 w-auto">
                     <PaginationContent>
                       <PaginationItem>
                         <PaginationPrevious
@@ -319,8 +335,8 @@ export default function Distributions() {
                       </PaginationItem>
                     </PaginationContent>
                   </Pagination>
-                </div>
-              )}
+                )}
+              </div>
             </>
           )}
         </CardContent>
