@@ -64,7 +64,7 @@ export default function Distributions() {
   });
 
   const { data: distributionsResult, isLoading } = useQuery({
-    queryKey: ["distributions", searchTerm, filterClient, filterConfirmation, dateRange],
+    queryKey: ["distributions", searchTerm, filterClient, filterConfirmation, dateRange, currentPage, itemsPerPage, sortDir],
     queryFn: async () => {
       // Client term filter
       let clientTermFilter: string[] | null = null;
@@ -94,23 +94,20 @@ export default function Distributions() {
         return q;
       };
 
-      // Real total count (no limit)
-      let countQuery: any = supabase.from("distributions").select("id", { count: "exact", head: true });
-      countQuery = applyFilters(countQuery);
-      const totalCount = countQuery === null ? 0 : (await countQuery).count || 0;
+      const from = (currentPage - 1) * itemsPerPage;
+      const to = from + itemsPerPage - 1;
 
-      // Rows for display (capped at 200)
       let rowsQuery: any = supabase
         .from("distributions")
-        .select("*, partner_services(service_name), partners(name)")
-        .order("created_at", { ascending: false })
-        .limit(200);
+        .select("*, partner_services(service_name), partners(name)", { count: "exact" })
+        .order("distribution_date", { ascending: sortDir === "asc", nullsFirst: false })
+        .range(from, to);
       rowsQuery = applyFilters(rowsQuery);
       if (rowsQuery === null) return { rows: [], total: 0 };
 
-      const { data, error } = await rowsQuery;
+      const { data, error, count } = await rowsQuery;
       if (error) throw error;
-      return { rows: data || [], total: totalCount };
+      return { rows: data || [], total: count || 0 };
     },
   });
 
