@@ -138,9 +138,9 @@ export default function Distributions() {
 
   const hasActiveFilters = searchTerm || filterClient !== "all" || filterConfirmation !== "all" || dateRange.from;
 
-  const totalItems = distributions?.length || 0;
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
-  const paginatedDistributions = distributions?.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage) || [];
+  const totalItems = realTotal;
+  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
+  const paginatedDistributions = distributions || [];
 
   return (
     <div className="space-y-6">
