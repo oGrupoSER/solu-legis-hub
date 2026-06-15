@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { RefreshCw, Search, FileText, Building2, Loader2, X } from "lucide-react";
+import { RefreshCw, Search, FileText, Building2, Loader2, X, ArrowUp, ArrowDown } from "lucide-react";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { DateRangePicker } from "@/components/publications/DateRangePicker";
 import { ConfirmationBadge } from "@/components/shared/ConfirmationBadge";
