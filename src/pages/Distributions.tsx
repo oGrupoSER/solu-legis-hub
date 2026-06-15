@@ -286,13 +286,26 @@ export default function Distributions() {
                 </TableBody>
               </Table>
 
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mt-4">
+                <div className="flex items-center gap-3">
                   <p className="text-sm text-muted-foreground">
-                    Mostrando {(currentPage - 1) * itemsPerPage + 1} a{" "}
+                    Mostrando {totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1} a{" "}
                     {Math.min(currentPage * itemsPerPage, totalItems)} de {totalItems} distribuições
                   </p>
-                  <Pagination>
+                  <Select value={String(itemsPerPage)} onValueChange={(v) => setItemsPerPage(Number(v))}>
+                    <SelectTrigger className="w-[110px] h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10 / pág</SelectItem>
+                      <SelectItem value="25">25 / pág</SelectItem>
+                      <SelectItem value="50">50 / pág</SelectItem>
+                      <SelectItem value="100">100 / pág</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {totalPages > 1 && (
+                  <Pagination className="mx-0 w-auto">
                     <PaginationContent>
                       <PaginationItem>
                         <PaginationPrevious
@@ -322,8 +335,8 @@ export default function Distributions() {
                       </PaginationItem>
                     </PaginationContent>
                   </Pagination>
-                </div>
-              )}
+                )}
+              </div>
             </>
           )}
         </CardContent>
