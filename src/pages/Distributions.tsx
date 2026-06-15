@@ -62,7 +62,7 @@ export default function Distributions() {
     },
   });
 
-  const { data: distributions, isLoading } = useQuery({
+  const { data: distributionsResult, isLoading } = useQuery({
     queryKey: ["distributions", searchTerm, filterClient, filterConfirmation, dateRange],
     queryFn: async () => {
       // Client term filter
@@ -76,33 +76,45 @@ export default function Distributions() {
           clientTermFilter = [];
         }
       }
-      if (clientTermFilter !== null && clientTermFilter.length === 0) return [];
+      if (clientTermFilter !== null && clientTermFilter.length === 0) return { rows: [], total: 0 };
 
-      let query = supabase
+      const applyFilters = (q: any) => {
+        if (searchTerm) q = q.or(`process_number.ilike.%${searchTerm}%,term.ilike.%${searchTerm}%`);
+        if (clientTermFilter) q = q.in("term", clientTermFilter);
+        if (dateRange.from) q = q.gte("distribution_date", format(dateRange.from, "yyyy-MM-dd"));
+        if (dateRange.to) q = q.lte("distribution_date", format(dateRange.to, "yyyy-MM-dd"));
+        if (filterConfirmation === "confirmed") {
+          const ids = Array.from(confirmedIds);
+          if (ids.length === 0) return null;
+          q = q.in("id", ids);
+        } else if (filterConfirmation === "not_confirmed" && confirmedIds.size > 0) {
+          q = q.not("id", "in", `(${Array.from(confirmedIds).join(",")})`);
+        }
+        return q;
+      };
+
+      // Real total count (no limit)
+      let countQuery: any = supabase.from("distributions").select("id", { count: "exact", head: true });
+      countQuery = applyFilters(countQuery);
+      const totalCount = countQuery === null ? 0 : (await countQuery).count || 0;
+
+      // Rows for display (capped at 200)
+      let rowsQuery: any = supabase
         .from("distributions")
         .select("*, partner_services(service_name), partners(name)")
         .order("created_at", { ascending: false })
         .limit(200);
+      rowsQuery = applyFilters(rowsQuery);
+      if (rowsQuery === null) return { rows: [], total: 0 };
 
-      if (searchTerm) query = query.or(`process_number.ilike.%${searchTerm}%,term.ilike.%${searchTerm}%`);
-      if (clientTermFilter) query = query.in("term", clientTermFilter);
-      if (dateRange.from) query = query.gte("distribution_date", format(dateRange.from, "yyyy-MM-dd"));
-      if (dateRange.to) query = query.lte("distribution_date", format(dateRange.to, "yyyy-MM-dd"));
-
-      // Confirmation filter
-      if (filterConfirmation === "confirmed") {
-        const ids = Array.from(confirmedIds);
-        if (ids.length === 0) return [];
-        query = query.in("id", ids);
-      } else if (filterConfirmation === "not_confirmed" && confirmedIds.size > 0) {
-        query = query.not("id", "in", `(${Array.from(confirmedIds).join(",")})`);
-      }
-
-      const { data, error } = await query;
+      const { data, error } = await rowsQuery;
       if (error) throw error;
-      return data;
+      return { rows: data || [], total: totalCount };
     },
   });
+
+  const distributions = distributionsResult?.rows;
+  const realTotal = distributionsResult?.total || 0;
 
   const { data: services } = useQuery({
     queryKey: ["distribution-services"],
