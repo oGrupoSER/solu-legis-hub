@@ -162,9 +162,6 @@ export default function Distributions() {
           <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Total de Distribuições</CardTitle></CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{realTotal}</div>
-            {realTotal > totalItems && (
-              <p className="text-xs text-muted-foreground mt-1">Exibindo {totalItems} de {realTotal} (use filtros para refinar)</p>
-            )}
           </CardContent>
         </Card>
         <Card>
